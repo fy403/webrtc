@@ -1,0 +1,6 @@
+.vs/
+out/
+.mp4
+build/
+.vscode/
+__pycache__/

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>WebRTC Stream Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 1280px;
+            margin: 20px 0;
+        }
+
+        #videoElement {
+            width: 100%;
+            height: auto;
+            background: #000;
+            border-radius: 4px;
+        }
+
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>WebRTC Stream Viewer</h1>
+
+        <div class="controls">
+            <button id="connectBtn">Connect</button>
+            <button id="disconnectBtn" disabled>Disconnect</button>
+            <button id="requestStreamBtn" disabled>Request Stream</button>
+        </div>
+
+        <div id="status" class="status disconnected">
+            Disconnected
+        </div>
+
+        <div class="video-container">
+            <video id="videoElement" autoplay muted playsinline></video>
+        </div>
+
+        <div id="publisherList">
+            <h3>Available Publishers</h3>
+            <ul id="publishers"></ul>
+        </div>
+    </div>
+
+    <script>
+        class WebRTCViewer {
+            constructor() {
+                this.ws = null;
+                this.pc = null;
+                this.clientId = 'viewer_' + Math.random().toString(36).substr(2, 9);
+                this.availablePublishers = new Set();
+                this.selectedPublisher = null;
+                this.isConnected = false;
+                this.pendingIceCandidates = []; // 缓存 ICE 候
+
+                this.initializeElements();
+                this.setupEventListeners();
+            }
+
+            initializeElements() {
+                this.connectBtn = document.getElementById('connectBtn');
+                this.disconnectBtn = document.getElementById('disconnectBtn');
+                this.requestStreamBtn = document.getElementById('requestStreamBtn');
+                this.statusDiv = document.getElementById('status');
+                this.videoElement = document.getElementById('videoElement');
+                this.publishersList = document.getElementById('publishers');
+            }
+
+            setupEventListeners() {
+                this.connectBtn.addEventListener('click', () => this.connect());
+                this.disconnectBtn.addEventListener('click', () => this.disconnect());
+                this.requestStreamBtn.addEventListener('click', () => this.requestStream());
+                this.connect();
+            }
+
+            connect() {
+                try {
+                    this.ws = new WebSocket('ws://fy403.cn:1985');
+
+                    this.ws.onopen = () => {
+                        console.log('Connected to signaling server');
+                        this.updateStatus('connected', 'Connected to signaling server');
+                        this.isConnected = true;
+                        this.connectBtn.disabled = true;
+                        this.disconnectBtn.disabled = false;
+                        this.requestStreamBtn.disabled = false;
+
+                        // 注册为观看者
+                        this.sendMessage({
+                            type: 'register_viewer',
+                            client_id: this.clientId
+                        });
+
+                        // 自动播放视频
+                        this.videoElement.autoplay = true;
+                        this.videoElement.muted = true; // 避免自动播放限制
+                        this.videoElement.playsInline = true;
+                    };
+
+                    this.ws.onmessage = (event) => this.handleSignalingMessage(event);
+                    this.ws.onclose = () => {
+                        console.log('Disconnected from signaling server');
+                        this.updateStatus('disconnected', 'Disconnected from signaling server');
+                        this.isConnected = false;
+                        this.connectBtn.disabled = false;
+                        this.disconnectBtn.disabled = true;
+                        this.requestStreamBtn.disabled = true;
+                    };
+
+                    this.ws.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                        this.updateStatus('disconnected', 'Connection error');
+                    };
+
+                } catch (error) {
+                    console.error('Connection error:', error);
+                    this.updateStatus('disconnected', 'Connection failed');
+                }
+            }
+
+            disconnect() {
+                if (this.ws) {
+                    this.ws.close();
+                }
+                if (this.pc) {
+                    this.pc.close();
+                    this.pc = null;
+                }
+                this.availablePublishers.clear();
+                this.updatePublishersList();
+            }
+
+            // 替换 requestStream 方法
+            async requestStream() {
+                if (this.selectedPublisher) {
+                    await this.createOffer(this.selectedPublisher);
+                } else {
+                    alert('Please select a publisher from the list');
+                }
+            }
+
+            // 新增创建 offer 的方法
+            async createOffer(publisherId) {
+                try {
+                    console.log('Creating offer for publisher:', publisherId);
+
+                    // 创建新的 PeerConnection
+                    this.pc = new RTCPeerConnection({
+                        iceServers: [
+                            { urls: "stun:stun.l.google.com:19302" },
+                            { urls: "stun:stun1.l.google.com:19302" },
+                            { urls: "stun:stun2.l.google.com:19302" },
+                            // { urls: "stun:fy403.cn:3478" },
+                            {
+                                urls: "turn:192.168.137.1:5349",
+                                username: "passuser",
+                                credential: "rewqrecdscdscd",
+                                credentialType: "password"
+                            },
+                        ],
+                        iceTransportPolicy: 'all',
+                    });
+
+                    // 设置轨道处理
+                    this.pc.ontrack = (event) => {
+                        console.log('Received remote track:', event.track.kind);
+                        if (event.track.kind === 'video' && event.streams && event.streams[0]) {
+                            this.videoElement.srcObject = event.streams[0];
+                            console.log('Video stream attached to video element');
+
+                            this.videoElement.onloadedmetadata = () => {
+                                console.log('Video metadata loaded');
+                            };
+
+                            this.videoElement.oncanplay = () => {
+                                console.log('Video can start playing');
+                                this.videoElement.play().catch(e => {
+                                    console.log('Autoplay prevented:', e);
+                                    this.updateStatus('ready', 'Click to play video');
+                                });
+                            };
+
+                            this.videoElement.onplay = () => {
+                                console.log('Video started playing');
+                                this.updateStatus('connected', 'Video is playing');
+                            };
+                        }
+                    };
+
+                    this.pc.onicecandidate = (event) => {
+                        if (event.candidate) {
+                            console.log("Received ICE candidate: ", event.candidate)
+                            this.sendMessage({
+                                type: 'ice_candidate',
+                                client_id: this.clientId,
+                                candidate: {
+                                    candidate: event.candidate.candidate,
+                                    sdpMid: event.candidate.sdpMid,
+                                    sdpMLineIndex: event.candidate.sdpMLineIndex
+                                },
+                                target_id: publisherId
+                            });
+                        }
+                    };
+
+                    this.pc.onconnectionstatechange = () => {
+                        const state = this.pc.connectionState;
+                        console.log('Connection state:', state);
+                        this.updateStatus(state, `Peer connection: ${state}`);
+
+                        if (state === 'connected') {
+                            console.log('Successfully connected to publisher');
+                        }
+                    };
+
+                    this.pc.oniceconnectionstatechange = () => {
+                        console.log('ICE connection state:', this.pc.iceConnectionState);
+                    };
+
+                    // 创建 offer
+                    console.log('Creating offer...');
+                    const offer = await this.pc.createOffer({
+                        offerToReceiveVideo: true,
+                        offerToReceiveAudio: false
+                    });
+
+                    console.log('Offer created:', offer.type);
+
+                    await this.pc.setLocalDescription(offer);
+                    console.log('Local description set');
+
+                    // 发送 offer 到信令服务器
+                    this.sendMessage({
+                        type: 'offer',
+                        client_id: this.clientId,
+                        offer: {
+                            type: offer.type,
+                            sdp: offer.sdp
+                        },
+                        publisher_id: publisherId
+                    });
+
+                    console.log('Offer sent to publisher');
+
+                } catch (error) {
+                    console.error('Error creating offer:', error);
+                    this.updateStatus('failed', `Error: ${error.message}`);
+                }
+            }
+
+            // 修改处理 answer 的方法
+            async handleAnswer(answer, publisherId) {
+                try {
+                    console.log('Received answer from publisher:', publisherId);
+
+                    const remoteDescription = new RTCSessionDescription({
+                        type: answer.type,
+                        sdp: answer.sdp
+                    });
+
+                    console.log('Setting remote description...');
+                    await this.pc.setRemoteDescription(remoteDescription);
+                    console.log('Remote description set successfully');
+
+                    // 遍历缓冲的ICE
+                    for (const candidate of this.pendingIceCandidates) {
+                        console.log('Adding buffered ICE candidate...');
+                        await this.pc.addIceCandidate(candidate);
+                        console.log('Buffered ICE candidate added');
+                    }
+
+                } catch (error) {
+                    console.error('Error handling answer:', error);
+                    this.updateStatus('failed', `Error: ${error.message}`);
+                }
+            }
+
+            // 修改消息处理
+            handleSignalingMessage(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('Received message:', data);
+
+                    switch (data.type) {
+                        case 'new_publisher':
+                            this.availablePublishers.add(data.publisher_id);
+                            this.updatePublishersList();
+                            break;
+
+                        case 'publisher_disconnected':
+                            this.availablePublishers.delete(data.publisher_id);
+                            this.updatePublishersList();
+                            break;
+
+                        case 'answer':
+                            this.handleAnswer(data.answer, data.publisher_id);
+                            break;
+
+                        case 'ice_candidate':
+                            console.log('Received Remote ICE candidate:', data.candidate);
+                            this.handleIceCandidate(data.candidate);
+                            break;
+                    }
+                } catch (error) {
+                    console.error('Error handling signaling message:', error);
+                }
+            }
+            async handleIceCandidate(candidate) {
+                if (this.pc && this.pc.remoteDescription) {
+                    try {
+                        await this.pc.addIceCandidate(new RTCIceCandidate(candidate));
+                    } catch (error) {
+                        console.error('Error adding ICE candidate:', error);
+                    }
+                } else {
+                    // PeerConnection 还没有设置远程描述，缓存候选
+                    this.pendingIceCandidates.push(candidate);
+                }
+            }
+
+            sendMessage(message) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify(message));
+                }
+            }
+
+            updateStatus(status, message) {
+                this.statusDiv.textContent = message;
+                this.statusDiv.className = `status ${status}`;
+            }
+
+            updatePublishersList() {
+                this.publishersList.innerHTML = '';
+                this.availablePublishers.forEach(publisherId => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        ${publisherId} 
+                        <button onclick="viewer.selectPublisher('${publisherId}')">Select</button>
+                    `;
+                    this.publishersList.appendChild(li);
+                });
+            }
+
+            selectPublisher(publisherId) {
+                this.selectedPublisher = publisherId;
+                console.log('Selected publisher:', publisherId);
+                // 高亮选中的发布者
+                const items = this.publishersList.getElementsByTagName('li');
+                for (let item of items) {
+                    item.style.backgroundColor = item.textContent.includes(publisherId) ?
+                        '#e9ecef' : 'transparent';
+                }
+            }
+        }
+
+        // 初始化查看器
+        const viewer = new WebRTCViewer();
+    </script>
+</body>
+
+</html>
