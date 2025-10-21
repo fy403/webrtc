@@ -1,0 +1,30 @@
+[file name]: webrtc_viewer.html
+[file content begin]
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>WebRTC Viewer</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js"></script>
+</head>
+
+<body>
+    <h1>WebRTC Viewer</h1>
+    <h2>Local ID</h2>
+    <p id="localId"></p>
+    <h2>Send an offer through signaling</h2>
+    <input type="text" id="offerId" placeholder="remote ID" disabled>
+    <input type="button" id="offerBtn" value="Offer" disabled>
+    <br>
+    <h2>Send a message through DataChannel</h2>
+    <input type="text" id="sendMsg" placeholder="message" disabled>
+    <input type="button" id="sendBtn" value="Send" disabled>
+    <br>
+    <h2>Remote Video</h2>
+    <video id="remoteVideo" autoplay playsinline controls style="max-width: 100%; height: auto;"></video>
+    <div id="status">Status: Not connected</div>
+</body>
+
+</html>
