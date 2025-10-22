@@ -25,8 +25,10 @@ std::string av_error_string(int errnum)
     return std::string(errbuf);
 }
 
-VideoCapturer::VideoCapturer(const std::string &device, bool debug_enabled)
-    : device_(device), debug_enabled_(debug_enabled), is_running_(false), is_capturing_(false), is_paused_(false)
+VideoCapturer::VideoCapturer(const std::string &device, bool debug_enabled,
+                             size_t encode_queue_capacity, size_t send_queue_capacity)
+    : device_(device), debug_enabled_(debug_enabled), is_running_(false), is_capturing_(false), is_paused_(false),
+      encode_queue_(encode_queue_capacity), send_queue_(send_queue_capacity)
 {
     avdevice_register_all();
 }
@@ -199,6 +201,9 @@ void VideoCapturer::stop()
     // Notify all waiting threads
     encode_queue_.clear();
     send_queue_.clear();
+    // Push sentinel nullptrs to unblock waiters
+    encode_queue_.push(nullptr);
+    send_queue_.push(nullptr);
 
     // Notify condition variables to wake up waiting threads
     callback_cv_.notify_all();

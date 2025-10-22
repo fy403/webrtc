@@ -26,7 +26,8 @@ namespace rtc
 class VideoCapturer
 {
 public:
-    VideoCapturer(const std::string &device = "/dev/video1", bool debug_enabled = false);
+    VideoCapturer(const std::string &device = "/dev/video1", bool debug_enabled = false,
+                  size_t encode_queue_capacity = 512, size_t send_queue_capacity = 512);
     ~VideoCapturer();
     bool start();
     void stop();
