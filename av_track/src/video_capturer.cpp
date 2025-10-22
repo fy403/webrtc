@@ -58,8 +58,8 @@ bool VideoCapturer::start()
     std::string device_path = device_;
 
     AVDictionary *options = nullptr;
-    av_dict_set(&options, "video_size", "1280x720", 0);
-    av_dict_set(&options, "framerate", "15", 0);
+    av_dict_set(&options, "video_size", "640x480", 0);
+    av_dict_set(&options, "framerate", "30", 0);
     av_dict_set(&options, "input_format", "mjpeg", 0); // 关键修改
     // 移除 pixel_format 设置，让 ffmpeg 自动检测
     int ret = avformat_open_input(&format_context_, device_path.c_str(), input_format, &options);
@@ -93,12 +93,6 @@ bool VideoCapturer::start()
     }
 
     AVCodecParameters *codec_params = format_context_->streams[video_stream_index_]->codecpar;
-    // 在 start() 函数中找到解码器后添加
-    // if (codec_params->codec_id == AV_CODEC_ID_MJPEG)
-    // {
-    //     // MJPEG 解码器可能需要特殊处理
-    //     codec_context_->flags |= AV_CODEC_FLAG_LOW_DELAY;
-    // }
     const AVCodec *codec = avcodec_find_decoder(codec_params->codec_id);
     if (!codec)
     {
@@ -157,6 +151,7 @@ bool VideoCapturer::start()
     // 设置编码器参数
     av_opt_set(encoder_context_->priv_data, "preset", "ultrafast", 0);
     av_opt_set(encoder_context_->priv_data, "tune", "zerolatency", 0);
+    av_opt_set(encoder_context_->priv_data, "crf", "32", 0);
     av_opt_set(encoder_context_->priv_data, "profile", "baseline", 0);
 
     std::cout << "Encoder configured with GOP size: " << encoder_context_->gop_size << std::endl;

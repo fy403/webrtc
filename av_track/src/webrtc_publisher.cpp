@@ -136,15 +136,19 @@ shared_ptr<rtc::PeerConnection> createPeerConnection(const rtc::Configuration &c
                   {
         std::cout << "Track to " << id << " is now open" << std::endl;
         video_capturer.resume_capture();
-        video_capturer.set_track_callback([track](const std::byte *data, size_t size)
+        // Keep track of start time for timestamp calculation
+        uint64_t start_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        video_capturer.set_track_callback([track, start_time](const std::byte *data, size_t size)
                                           {
     if (track && track->isOpen())
     {
         try 
         {
-            // 现在数据会自动通过 H.264 RTP 打包器进行分片
-            track->send(reinterpret_cast<const std::byte*>(data), size);
-            // std::cout << "Sent H.264 packet size: " << size << std::endl;
+            // Calculate timestamp in microseconds since start
+            uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+            uint64_t timestamp_us = current_time - start_time;
+            // Send frame with timestamp like in the streamer example
+            track->sendFrame(reinterpret_cast<const std::byte*>(data), size, std::chrono::duration<double, std::micro>(timestamp_us));
         }
         catch (const std::exception& e)
         {
