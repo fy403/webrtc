@@ -88,10 +88,45 @@ shared_ptr<rtc::PeerConnection> createPeerConnection(const rtc::Configuration &c
 
     // Create video track and add to connection
     rtc::Description::Video media("video", rtc::Description::Direction::SendOnly);
-    media.addH264Codec(96); // Add H.264 codec
-    media.setBitrate(3000); // Set bitrate
+    media.addH264Codec(96); // Add H.264 codec with payload type 96
+
+    // 设置 H.264 参数（可选）
+    // media.addH264Codec(96, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f");
+
+    // 生成唯一的 SSRC 和 CNAME
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    static std::uniform_int_distribution<uint32_t> dis(1, 0xFFFFFFFF);
+    uint32_t ssrc = dis(gen);
+    std::string cname = "video_" + std::to_string(ssrc);
+    std::string msid = "stream_" + id;
+
+    media.addSSRC(ssrc, cname, msid, cname);
 
     auto track = pc->addTrack(media);
+
+    // 设置 H.264 RTP 媒体处理器
+    auto rtpConfig = std::make_shared<rtc::RtpPacketizationConfig>(
+        ssrc,
+        cname,
+        96, // H.264 payload type
+        rtc::H264RtpPacketizer::ClockRate);
+
+    // 创建 H.264 RTP 打包器
+    auto packetizer = std::make_shared<rtc::H264RtpPacketizer>(
+        rtc::NalUnit::Separator::StartSequence, // 使用长起始序列
+        rtpConfig);
+
+    // 添加 RTCP SR (Sender Report) 报告器
+    auto srReporter = std::make_shared<rtc::RtcpSrReporter>(rtpConfig);
+    packetizer->addToChain(srReporter);
+
+    // 添加 RTCP NACK 响应器
+    auto nackResponder = std::make_shared<rtc::RtcpNackResponder>();
+    packetizer->addToChain(nackResponder);
+
+    // 设置轨道的媒体处理器
+    track->setMediaHandler(packetizer);
 
     pc->onTrack([id](std::shared_ptr<rtc::Track> track)
                 { std::cout << "Track from " << id << " received with mid \"" << track->mid() << "\""
@@ -100,15 +135,16 @@ shared_ptr<rtc::PeerConnection> createPeerConnection(const rtc::Configuration &c
     track->onOpen([id, track, &video_capturer]()
                   {
         std::cout << "Track to " << id << " is now open" << std::endl;
+        video_capturer.resume_capture();
         video_capturer.set_track_callback([track](const std::byte *data, size_t size)
                                           {
     if (track && track->isOpen())
     {
         try 
         {
-            // Send the encoded H.264 packet to the track
+            // 现在数据会自动通过 H.264 RTP 打包器进行分片
             track->send(reinterpret_cast<const std::byte*>(data), size);
-            std::cout << "Sent packet size: " << size << std::endl;
+            std::cout << "Sent H.264 packet size: " << size << std::endl;
         }
         catch (const std::exception& e)
         {
@@ -120,8 +156,11 @@ shared_ptr<rtc::PeerConnection> createPeerConnection(const rtc::Configuration &c
         std::cout << "Track is not open" << std::endl;
     } }); });
 
-    track->onClosed([id]()
-                    { std::cout << "Track to " << id << " closed" << std::endl; });
+    track->onClosed([id, &video_capturer]()
+                    {
+                        std::cout << "Track to " << id << " closed" << std::endl;
+                        video_capturer.set_track_callback(nullptr);
+                        video_capturer.pause_capture(); });
 
     peerConnectionMap.emplace(id, pc);
     return pc;

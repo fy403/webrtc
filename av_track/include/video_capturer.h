@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <memory>
 #include <functional>
+#include "safe_queue.h"
 
 extern "C"
 {
@@ -29,16 +30,23 @@ public:
     ~VideoCapturer();
     bool start();
     void stop();
+    void pause_capture();
+    void resume_capture();
     using TrackCallback = std::function<void(const std::byte *data, size_t size)>;
     void set_track_callback(TrackCallback callback);
 
 private:
     void capture_loop();
-    void encode_and_send(AVFrame *frame);
+    void encode_loop();
+    void send_loop();
 
     std::string device_;
     std::atomic<bool> is_running_;
+    std::atomic<bool> is_capturing_;
+    std::atomic<bool> is_paused_;
     std::thread capture_thread_;
+    std::thread encode_thread_;
+    std::thread send_thread_;
     TrackCallback track_callback_;
 
     AVFormatContext *format_context_ = nullptr;
@@ -48,10 +56,14 @@ private:
     int video_stream_index_ = -1;
 
     std::shared_ptr<rtc::Track> track_;
-    
+
     // 添加互斥锁和条件变量用于同步回调函数的设置
     std::mutex callback_mutex_;
     std::condition_variable callback_cv_;
+
+    // Queues for async processing
+    SafeQueue<AVFrame *> encode_queue_;
+    SafeQueue<AVPacket *> send_queue_;
 };
 
 #endif // VIDEO_CAPTURER_H

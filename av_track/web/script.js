@@ -176,49 +176,126 @@ window.addEventListener('load', () => {
             }
         };
 
-        // 在 ontrack 事件中添加更多日志
         pc.ontrack = (e) => {
-            console.log('Received remote track:', e.track.kind, e.track.id);
+            console.log('Received remote track:', e.track.kind, e.track.id, e.track.readyState);
 
-            // 检查是否已经设置了视频源
-            if (remoteVideo.srcObject) {
-                console.log('Video source already set, skipping...');
+            // 如果是音频轨道，直接忽略（因为我们只关心视频）
+            if (e.track.kind === 'audio') {
+                console.log('Ignoring audio track');
                 return;
             }
 
-            if (e.streams && e.streams.length > 0) {
-                const stream = e.streams[0];
-                console.log('Setting remote video source');
+            // 检查是否已经设置了视频源
+            if (remoteVideo.srcObject) {
+                console.log('Video source already set, replacing track');
 
+                // 移除现有的视频轨道，只保留音频（如果有的话）
+                const stream = remoteVideo.srcObject;
+                const videoTracks = stream.getVideoTracks();
+
+                // 移除所有现有的视频轨道
+                videoTracks.forEach(track => {
+                    stream.removeTrack(track);
+                    track.stop(); // 停止旧的轨道
+                });
+
+                // 添加新的视频轨道
+                stream.addTrack(e.track);
+                console.log('Replaced video track');
+            } else {
+                // 创建新的媒体流，只包含这个视频轨道
+                console.log('Creating new stream with video track');
+                const stream = new MediaStream([e.track]);
                 remoteVideo.srcObject = stream;
-
-                // 添加播放事件监听
-                const playVideo = () => {
-                    remoteVideo.play().then(() => {
-                        console.log('Video playback started successfully');
-                    }).catch(err => {
-                        console.error('Error playing video:', err);
-                        // 如果自动播放失败，等待用户交互
-                        if (err.name === 'NotAllowedError') {
-                            console.log('Waiting for user interaction to play video');
-                            // 可以添加一个播放按钮让用户手动触发
-                        }
-                    });
-                };
-
-                // 如果视频已经可以播放，立即尝试播放
-                if (remoteVideo.readyState >= 2) { // HAVE_CURRENT_DATA
-                    playVideo();
-                } else {
-                    remoteVideo.onloadeddata = playVideo;
-                }
-
-                // 添加其他事件监听用于调试
-                remoteVideo.oncanplay = () => console.log('Video can play');
-                remoteVideo.oncanplaythrough = () => console.log('Video can play through');
-                remoteVideo.onerror = (e) => console.error('Video error:', e);
             }
+
+            // 强制取消视频静音
+            const videoTracks = remoteVideo.srcObject.getVideoTracks();
+            videoTracks.forEach(track => {
+                track.enabled = true;
+                console.log('Video track enabled:', track.enabled, 'muted:', track.muted);
+            });
+
+            // 设置视频属性
+            remoteVideo.muted = false; // 取消视频元素的静音
+            remoteVideo.volume = 0; // 音量设为0，因为我们没有音频
+
+            // 播放视频
+            const playVideo = () => {
+                console.log('Attempting to play video...');
+                remoteVideo.play().then(() => {
+                    console.log('Video playback started successfully');
+                    updateStatus('Video playing');
+
+                    // 再次检查轨道状态
+                    setTimeout(() => {
+                        const tracks = remoteVideo.srcObject.getTracks();
+                        tracks.forEach((track, index) => {
+                            console.log(`Track ${index}: kind=${track.kind}, enabled=${track.enabled}, muted=${track.muted}`);
+                        });
+                    }, 1000);
+
+                }).catch(err => {
+                    console.error('Error playing video:', err);
+                    updateStatus('Video play failed: ' + err.message);
+                });
+            };
+
+            // 添加视频事件监听
+            remoteVideo.onloadedmetadata = () => {
+                console.log('Video metadata loaded');
+                console.log('Video dimensions:', remoteVideo.videoWidth, 'x', remoteVideo.videoHeight);
+                updateVideoInfo(remoteVideo.srcObject);
+            };
+
+            remoteVideo.onloadeddata = () => {
+                console.log('Video data loaded');
+                playVideo();
+            };
+
+            // 立即尝试播放
+            setTimeout(playVideo, 100);
         };
+
+        function updateVideoInfo(stream) {
+            const videoInfo = document.getElementById('videoInfo');
+            if (!videoInfo) return;
+
+            const tracks = stream.getTracks();
+            const videoTracks = stream.getVideoTracks();
+            const audioTracks = stream.getAudioTracks();
+
+            let info = `
+        <p><strong>Total Tracks:</strong> ${tracks.length}</p>
+        <p><strong>Video Tracks:</strong> ${videoTracks.length}</p>
+        <p><strong>Audio Tracks:</strong> ${audioTracks.length}</p>
+        <p><strong>Video Ready State:</strong> ${remoteVideo.readyState}</p>
+        <p><strong>Video Dimensions:</strong> ${remoteVideo.videoWidth} x ${remoteVideo.videoHeight}</p>
+        <p><strong>Video Muted:</strong> ${remoteVideo.muted}</p>
+        <p><strong>Current Time:</strong> ${remoteVideo.currentTime}</p>
+        <p><strong>Network State:</strong> ${remoteVideo.networkState}</p>
+    `;
+
+            videoTracks.forEach((track, index) => {
+                info += `
+            <p><strong>Video Track ${index}:</strong> 
+                id=${track.id}, 
+                enabled=${track.enabled}, 
+                readyState=${track.readyState},
+                muted=${track.muted}
+            </p>
+        `;
+            });
+
+            videoInfo.innerHTML = info;
+        }
+
+        // 定期更新视频信息
+        setInterval(() => {
+            if (remoteVideo.srcObject) {
+                updateVideoInfo(remoteVideo.srcObject);
+            }
+        }, 2000);
 
         pc.ondatachannel = (e) => {
             const dc = e.channel;
@@ -328,4 +405,113 @@ window.addEventListener('load', () => {
         return [...Array(length)].map(pickRandom).join('');
     }
 
+
+    function playVideoWithRetry(retryCount = 0) {
+        if (retryCount > 5) {
+            console.error('Failed to play video after multiple attempts');
+            showPlayButton();
+            return;
+        }
+
+        // 确保视频元素就绪
+        if (!remoteVideo.srcObject) {
+            console.error('No video source available');
+            return;
+        }
+
+        const videoTracks = remoteVideo.srcObject.getVideoTracks();
+        if (videoTracks.length === 0) {
+            console.error('No video tracks in stream');
+            return;
+        }
+
+        console.log(`Play attempt ${retryCount + 1}, video readyState: ${remoteVideo.readyState}`);
+
+        remoteVideo.play().then(() => {
+            console.log('Video playback successful!');
+            updateStatus('Video playing');
+
+            // 检查视频是否真的在播放
+            setTimeout(() => checkVideoPlayback(), 500);
+
+        }).catch(err => {
+            console.error(`Play attempt ${retryCount + 1} failed:`, err.name, err.message);
+
+            if (err.name === 'NotAllowedError') {
+                updateStatus('Click anywhere to play video');
+                showPlayButton();
+            } else if (err.name === 'NotSupportedError') {
+                updateStatus('Video format not supported');
+                console.error('Video format may not be supported by browser');
+            } else {
+                // 其他错误，重试
+                setTimeout(() => playVideoWithRetry(retryCount + 1), 500);
+            }
+        });
+    }
+
+    function checkVideoPlayback() {
+        if (remoteVideo.paused) {
+            console.warn('Video is paused after successful play() call');
+            updateStatus('Video paused unexpectedly');
+        } else {
+            console.log('Video is actively playing');
+        }
+
+        if (remoteVideo.videoWidth === 0 || remoteVideo.videoHeight === 0) {
+            console.warn('Video dimensions are still 0x0 - possible decoding issue');
+
+            // 检查轨道状态
+            const tracks = remoteVideo.srcObject.getVideoTracks();
+            tracks.forEach(track => {
+                console.log('Track debug:', {
+                    id: track.id,
+                    kind: track.kind,
+                    enabled: track.enabled,
+                    muted: track.muted,
+                    readyState: track.readyState
+                });
+            });
+        } else {
+            console.log(`Video dimensions: ${remoteVideo.videoWidth}x${remoteVideo.videoHeight}`);
+            updateVideoInfo(remoteVideo.srcObject);
+        }
+    }
+
+    function showPlayButton() {
+        // 移除现有的播放按钮
+        const existingButton = document.getElementById('manualPlayButton');
+        if (existingButton) existingButton.remove();
+
+        // 创建播放按钮
+        const playButton = document.createElement('button');
+        playButton.id = 'manualPlayButton';
+        playButton.textContent = 'Click to Play Video';
+        playButton.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        padding: 15px 30px;
+        font-size: 18px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        z-index: 1000;
+    `;
+
+        playButton.onclick = () => {
+            remoteVideo.play().then(() => {
+                playButton.remove();
+                updateStatus('Video playing after manual start');
+            }).catch(e => {
+                console.error('Manual play failed:', e);
+                updateStatus('Manual play failed: ' + e.message);
+            });
+        };
+
+        document.body.appendChild(playButton);
+    }
 });

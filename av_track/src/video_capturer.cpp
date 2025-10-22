@@ -16,6 +16,86 @@ extern "C"
 
 #include "rtc/rtc.hpp"
 
+#include <fstream>
+#include <sstream>
+#include <iomanip>
+
+// 添加保存帧为图片的函数
+bool save_frame_to_ppm(const AVFrame *frame, const std::string &filename)
+{
+    if (!frame || !frame->data[0])
+    {
+        std::cerr << "Invalid frame data for saving: " << filename << std::endl;
+        return false;
+    }
+
+    std::ofstream file(filename, std::ios::binary);
+    if (!file.is_open())
+    {
+        std::cerr << "Cannot open file for writing: " << filename << std::endl;
+        return false;
+    }
+
+    // 写入 PPM 头
+    file << "P6\n"
+         << frame->width << " " << frame->height << "\n255\n";
+
+    // 写入 YUV 数据（PPM 需要 RGB，这里简单处理只保存 Y 分量作为灰度图）
+    for (int y = 0; y < frame->height; y++)
+    {
+        for (int x = 0; x < frame->width; x++)
+        {
+            uint8_t y_value = frame->data[0][y * frame->linesize[0] + x];
+            // 将 Y 分量复制到 RGB 三个通道，创建灰度图
+            file.put(y_value); // R
+            file.put(y_value); // G
+            file.put(y_value); // B
+        }
+    }
+
+    file.close();
+    std::cout << "Saved frame to: " << filename << std::endl;
+    return true;
+}
+
+bool save_frame_to_yuv(const AVFrame *frame, const std::string &filename)
+{
+    if (!frame || !frame->data[0])
+    {
+        std::cerr << "Invalid frame data for saving: " << filename << std::endl;
+        return false;
+    }
+
+    std::ofstream file(filename, std::ios::binary);
+    if (!file.is_open())
+    {
+        std::cerr << "Cannot open file for writing: " << filename << std::endl;
+        return false;
+    }
+
+    // 保存 Y 分量
+    for (int y = 0; y < frame->height; y++)
+    {
+        file.write(reinterpret_cast<const char *>(frame->data[0] + y * frame->linesize[0]), frame->width);
+    }
+
+    // 保存 U 分量
+    for (int y = 0; y < frame->height / 2; y++)
+    {
+        file.write(reinterpret_cast<const char *>(frame->data[1] + y * frame->linesize[1]), frame->width / 2);
+    }
+
+    // 保存 V 分量
+    for (int y = 0; y < frame->height / 2; y++)
+    {
+        file.write(reinterpret_cast<const char *>(frame->data[2] + y * frame->linesize[2]), frame->width / 2);
+    }
+
+    file.close();
+    std::cout << "Saved YUV frame to: " << filename << std::endl;
+    return true;
+}
+
 // 错误处理函数替代 av_err2str
 std::string av_error_string(int errnum)
 {
@@ -25,7 +105,7 @@ std::string av_error_string(int errnum)
 }
 
 VideoCapturer::VideoCapturer(const std::string &device)
-    : device_(device), is_running_(false)
+    : device_(device), is_running_(false), is_capturing_(false), is_paused_(false)
 {
     avdevice_register_all();
 }
@@ -44,24 +124,162 @@ void VideoCapturer::set_track_callback(TrackCallback callback)
     callback_cv_.notify_one();
 }
 
-bool VideoCapturer::start()
+// 用于 NALU 分析的临时变量
+int prev_start_offset = 0;
+int start_code_size = 0;
+int prev_nalu_type = 0;
+// 添加起始码类型的枚举
+enum class Separator
 {
-#if defined(_WIN32) || defined(WIN32)
-    AVInputFormat *input_format = av_find_input_format("dshow");
-    if (!input_format)
+    ShortStartSequence, // 3-byte start code (0x00 0x00 0x01)
+    LongStartSequence   // 4-byte start code (0x00 0x00 0x00 0x01)
+};
+
+void print_nalu_info(int nal_type, int nal_size, int index, Separator separator_type)
+{
+    std::string type_name;
+    switch (nal_type)
     {
-        std::cerr << "Cannot find dshow input format" << std::endl;
-        return false;
+    case 1:
+        type_name = "Coded slice of a non-IDR picture";
+        break;
+    case 5:
+        type_name = "Coded slice of an IDR picture";
+        break;
+    case 6:
+        type_name = "Supplemental enhancement information (SEI)";
+        break;
+    case 7:
+        type_name = "Sequence parameter set (SPS)";
+        break;
+    case 8:
+        type_name = "Picture parameter set (PPS)";
+        break;
+    default:
+        type_name = "Unknown NAL unit type";
+        break;
     }
 
-    // For Windows, we need to format the device name properly for DirectShow
-    // The device name should be in the format "video=DEVICE_NAME"
-    std::string device_path = device_;
-    if (device_.substr(0, 6) != "video=")
+    // 打印起始码类型
+    std::string separator_name = (separator_type == Separator::ShortStartSequence) ? "ShortStartSequence (0x00 0x00 0x01)" : "LongStartSequence (0x00 0x00 0x00 0x01)";
+
+    std::cout << "NALU[" << index << "]: Type=" << nal_type << " (" << type_name
+              << "), Size=" << nal_size << " bytes, StartCode=" << separator_name << std::endl;
+}
+
+void analyze_nal_units(const AVPacket *packet)
+{
+    const uint8_t *data = packet->data;
+    int size = packet->size;
+    int offset = 0;
+    int nalu_count = 0;
+    bool has_sps = false;
+    bool has_pps = false;
+    bool has_idr = false;
+
+    std::cout << "=== H.264 Packet Analysis ===" << std::endl;
+    std::cout << "Total packet size: " << size << " bytes" << std::endl;
+    std::cout << "Key frame: " << ((packet->flags & AV_PKT_FLAG_KEY) ? "YES" : "NO") << std::endl;
+    std::cout << "PTS: " << packet->pts << std::endl;
+    std::cout << "DTS: " << packet->dts << std::endl;
+
+    while (offset < size)
     {
-        device_path = "video=" + device_;
+        // 查找起始码
+        if (offset + 4 <= size &&
+            data[offset] == 0x00 &&
+            data[offset + 1] == 0x00 &&
+            data[offset + 2] == 0x00 &&
+            data[offset + 3] == 0x01)
+        {
+            // 4字节起始码
+            if (nalu_count > 0)
+            {
+                int prev_nalu_size = offset - prev_start_offset - start_code_size;
+                print_nalu_info(prev_nalu_type, prev_nalu_size, nalu_count - 1,
+                                (start_code_size == 3) ? Separator::ShortStartSequence : Separator::LongStartSequence);
+
+                // 检查关键参数集
+                if (prev_nalu_type == 7)
+                    has_sps = true;
+                if (prev_nalu_type == 8)
+                    has_pps = true;
+                if (prev_nalu_type == 5)
+                    has_idr = true;
+            }
+
+            prev_start_offset = offset;
+            start_code_size = 4;
+            offset += 4;
+
+            if (offset < size)
+            {
+                prev_nalu_type = data[offset] & 0x1F;
+            }
+            nalu_count++;
+        }
+        else if (offset + 3 <= size &&
+                 data[offset] == 0x00 &&
+                 data[offset + 1] == 0x00 &&
+                 data[offset + 2] == 0x01)
+        {
+            // 3字节起始码
+            if (nalu_count > 0)
+            {
+                int prev_nalu_size = offset - prev_start_offset - start_code_size;
+                print_nalu_info(prev_nalu_type, prev_nalu_size, nalu_count - 1,
+                                (start_code_size == 3) ? Separator::ShortStartSequence : Separator::LongStartSequence);
+
+                if (prev_nalu_type == 7)
+                    has_sps = true;
+                if (prev_nalu_type == 8)
+                    has_pps = true;
+                if (prev_nalu_type == 5)
+                    has_idr = true;
+            }
+
+            prev_start_offset = offset;
+            start_code_size = 3;
+            offset += 3;
+
+            if (offset < size)
+            {
+                prev_nalu_type = data[offset] & 0x1F;
+            }
+            nalu_count++;
+        }
+        else
+        {
+            offset++;
+        }
     }
-#else
+
+    // 处理最后一个 NALU
+    if (nalu_count > 0)
+    {
+        int last_nalu_size = size - prev_start_offset - start_code_size;
+        print_nalu_info(prev_nalu_type, last_nalu_size, nalu_count - 1,
+                        (start_code_size == 3) ? Separator::ShortStartSequence : Separator::LongStartSequence);
+
+        if (prev_nalu_type == 7)
+            has_sps = true;
+        if (prev_nalu_type == 8)
+            has_pps = true;
+        if (prev_nalu_type == 5)
+            has_idr = true;
+    }
+
+    std::cout << "=== Summary ===" << std::endl;
+    std::cout << "Total NAL units: " << nalu_count << std::endl;
+    std::cout << "Has SPS: " << (has_sps ? "YES" : "NO") << std::endl;
+    std::cout << "Has PPS: " << (has_pps ? "YES" : "NO") << std::endl;
+    std::cout << "Has IDR: " << (has_idr ? "YES" : "NO") << std::endl;
+    std::cout << "Is decodable: " << ((has_sps && has_pps) ? "YES" : "NO") << std::endl;
+    std::cout << "=============================" << std::endl
+              << std::endl;
+}
+bool VideoCapturer::start()
+{
     AVInputFormat *input_format = av_find_input_format("v4l2");
     if (!input_format)
     {
@@ -69,17 +287,12 @@ bool VideoCapturer::start()
         return false;
     }
     std::string device_path = device_;
-#endif
 
     AVDictionary *options = nullptr;
-    av_dict_set(&options, "video_size", "640x480", 0);
-    av_dict_set(&options, "framerate", "30", 0);
-#if defined(_WIN32) || defined(WIN32)
-    av_dict_set(&options, "pixel_format", "uyvy422", 0); // DirectShow typically uses uyvy422
-#else
-    av_dict_set(&options, "pixel_format", "yuyv422", 0);
-#endif
-
+    av_dict_set(&options, "video_size", "1280x720", 0);
+    av_dict_set(&options, "framerate", "15", 0);
+    av_dict_set(&options, "input_format", "mjpeg", 0); // 关键修改
+    // 移除 pixel_format 设置，让 ffmpeg 自动检测
     int ret = avformat_open_input(&format_context_, device_path.c_str(), input_format, &options);
     if (ret < 0)
     {
@@ -111,6 +324,12 @@ bool VideoCapturer::start()
     }
 
     AVCodecParameters *codec_params = format_context_->streams[video_stream_index_]->codecpar;
+    // 在 start() 函数中找到解码器后添加
+    // if (codec_params->codec_id == AV_CODEC_ID_MJPEG)
+    // {
+    //     // MJPEG 解码器可能需要特殊处理
+    //     codec_context_->flags |= AV_CODEC_FLAG_LOW_DELAY;
+    // }
     const AVCodec *codec = avcodec_find_decoder(codec_params->codec_id);
     if (!codec)
     {
@@ -128,43 +347,50 @@ bool VideoCapturer::start()
         return false;
     }
 
-    // 初始化 H.264 编码器
-    const AVCodec *h264_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+    // 在 video_capturer.cpp 的 start() 函数中修改编码器配置
+    const AVCodec *h264_codec = avcodec_find_encoder_by_name("libx264");
     if (!h264_codec)
     {
-        std::cerr << "Cannot find H.264 encoder" << std::endl;
-        return false;
+        h264_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+        if (!h264_codec)
+        {
+            std::cerr << "Cannot find H.264 encoder" << std::endl;
+            return false;
+        }
     }
 
     encoder_context_ = avcodec_alloc_context3(h264_codec);
-    encoder_context_->width = 320; // 降低分辨率
-    encoder_context_->height = 240;
+
+    // 基本配置
+    encoder_context_->width = 640;
+    encoder_context_->height = 480;
     encoder_context_->pix_fmt = AV_PIX_FMT_YUV420P;
     encoder_context_->time_base = {1, 30};
     encoder_context_->framerate = {30, 1};
-    encoder_context_->gop_size = 10;
-    encoder_context_->max_b_frames = 0; // 不要B帧
 
-    // 在初始化编码器的地方添加以下参数
-    encoder_context_->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    // 更频繁的关键帧
+    encoder_context_->gop_size = 15;   // 每15帧一个关键帧，确保快速启动
+    encoder_context_->keyint_min = 15; // 最小关键帧间隔
+
+    // 禁用 B 帧，确保低延迟和兼容性
     encoder_context_->max_b_frames = 0;
-    encoder_context_->gop_size = 30;
-    encoder_context_->keyint_min = 30;
+    encoder_context_->has_b_frames = 0;
 
-    // 设置码率控制参数来限制帧大小
-    encoder_context_->bit_rate = 500000; // 500 kbps
-    encoder_context_->rc_max_rate = 500000;
-    encoder_context_->rc_buffer_size = 1000000;
+    // 码率控制
+    encoder_context_->bit_rate = 800000;
+    encoder_context_->rc_max_rate = 800000;
+    encoder_context_->rc_buffer_size = 800000;
 
-    // 使用更严格的预设
+    // 强制使用 baseline profile
+    encoder_context_->profile = FF_PROFILE_H264_BASELINE;
+    encoder_context_->level = 31;
+
+    // 设置编码器参数
     av_opt_set(encoder_context_->priv_data, "preset", "ultrafast", 0);
     av_opt_set(encoder_context_->priv_data, "tune", "zerolatency", 0);
-    av_opt_set(encoder_context_->priv_data, "crf", "32", 0); // 质量因子
-
-    av_opt_set(encoder_context_->priv_data, "preset", "ultrafast", 0);
-    av_opt_set(encoder_context_->priv_data, "tune", "zerolatency", 0);
-
     av_opt_set(encoder_context_->priv_data, "profile", "baseline", 0);
+
+    std::cout << "Encoder configured with GOP size: " << encoder_context_->gop_size << std::endl;
 
     ret = avcodec_open2(encoder_context_, h264_codec, nullptr);
     if (ret < 0)
@@ -172,6 +398,9 @@ bool VideoCapturer::start()
         std::cerr << "Cannot open H.264 encoder: " << av_error_string(ret) << std::endl;
         return false;
     }
+
+    // 检查编码器是否支持全局头
+    std::cout << "Encoder supports global header: " << (encoder_context_->flags & AV_CODEC_FLAG_GLOBAL_HEADER) << std::endl;
 
     sws_context_ = sws_getContext(
         codec_context_->width, codec_context_->height, codec_context_->pix_fmt,
@@ -185,7 +414,10 @@ bool VideoCapturer::start()
     }
 
     is_running_ = true;
+    // 等待 track_callback_ 设置后再启动采集线程
     capture_thread_ = std::thread(&VideoCapturer::capture_loop, this);
+    encode_thread_ = std::thread(&VideoCapturer::encode_loop, this);
+    send_thread_ = std::thread(&VideoCapturer::send_loop, this);
 
     std::cout << "Video capture started successfully" << std::endl;
     return true;
@@ -194,9 +426,48 @@ bool VideoCapturer::start()
 void VideoCapturer::stop()
 {
     is_running_ = false;
+    is_capturing_ = false;
+    is_paused_ = false;
+
+    // Notify all waiting threads
+    encode_queue_.clear();
+    send_queue_.clear();
+
+    // Notify condition variables to wake up waiting threads
+    callback_cv_.notify_all();
+
     if (capture_thread_.joinable())
     {
         capture_thread_.join();
+    }
+
+    if (encode_thread_.joinable())
+    {
+        encode_thread_.join();
+    }
+
+    if (send_thread_.joinable())
+    {
+        send_thread_.join();
+    }
+
+    // Clean up queues
+    while (!encode_queue_.empty())
+    {
+        AVFrame *frame;
+        if (encode_queue_.pop(frame))
+        {
+            av_frame_free(&frame);
+        }
+    }
+
+    while (!send_queue_.empty())
+    {
+        AVPacket *packet;
+        if (send_queue_.pop(packet))
+        {
+            av_packet_free(&packet);
+        }
     }
 
     if (sws_context_)
@@ -226,43 +497,41 @@ void VideoCapturer::stop()
 
 void VideoCapturer::capture_loop()
 {
-
     AVPacket *packet = av_packet_alloc();
     AVFrame *frame = av_frame_alloc();
-    AVFrame *yuv_frame = av_frame_alloc();
 
-    yuv_frame->format = AV_PIX_FMT_YUV420P;
-    yuv_frame->width = 640;
-    yuv_frame->height = 480;
-    yuv_frame->pts = 0;
+    static int saved_count = 0;
 
-    int ret = av_frame_get_buffer(yuv_frame, 0);
-    if (ret < 0)
+    // 等待 track_callback_ 被设置
     {
-        std::cerr << "Cannot allocate frame buffer: " << av_error_string(ret) << std::endl;
-        av_frame_free(&yuv_frame);
+        std::unique_lock<std::mutex> lock(callback_mutex_);
+        callback_cv_.wait(lock, [this]
+                          { return track_callback_ || !is_running_; });
+    }
+
+    if (!is_running_)
+    {
         av_frame_free(&frame);
         av_packet_free(&packet);
         return;
     }
 
-    std::cout << "Starting video capture loop" << std::endl;
+    // 设置采集标志
+    is_capturing_ = true;
 
     while (is_running_)
     {
-        if (!track_callback_)
+        // 检查是否暂停
+        if (is_paused_)
         {
-            // 使用条件变量等待回调函数被设置
+            // 等待 track_callback_ 被设置或恢复采集
             std::unique_lock<std::mutex> lock(callback_mutex_);
             callback_cv_.wait(lock, [this]
-                              { return track_callback_ || !is_running_; });
-            if (!is_running_)
-            {
-                break;
-            }
+                              { return !is_paused_ || !is_running_; });
             continue;
         }
-        ret = av_read_frame(format_context_, packet);
+
+        int ret = av_read_frame(format_context_, packet);
         if (ret < 0)
         {
             if (ret != AVERROR(EAGAIN))
@@ -293,74 +562,131 @@ void VideoCapturer::capture_loop()
                     break;
                 }
 
-                // std::cout << "Got frame" << std::endl;
+                // // 保存前几帧用于调试
+                // if (saved_count < 5)
+                // {
+                //     std::stringstream filename;
+                //     filename << "captured_frame_" << saved_count << "_"
+                //              << frame->width << "x" << frame->height << ".ppm";
+                //     save_frame_to_ppm(frame, filename.str());
 
-                // 转换帧格式
+                //     std::stringstream yuv_filename;
+                //     yuv_filename << "captured_frame_" << saved_count << ".yuv";
+                //     save_frame_to_yuv(frame, yuv_filename.str());
+
+                //     saved_count++;
+                // }
+
+                // Convert frame format and put in encode queue
+                AVFrame *scaled_frame = av_frame_alloc();
+                scaled_frame->format = AV_PIX_FMT_YUV420P;
+                scaled_frame->width = encoder_context_->width;
+                scaled_frame->height = encoder_context_->height;
+
+                av_frame_get_buffer(scaled_frame, 0);
+
                 sws_scale(sws_context_,
                           frame->data, frame->linesize, 0, frame->height,
-                          yuv_frame->data, yuv_frame->linesize);
+                          scaled_frame->data, scaled_frame->linesize);
 
-                // 编码为 H.264
-                encode_and_send(yuv_frame);
+                scaled_frame->pts = frame->pts;
 
-                yuv_frame->pts++;
+                encode_queue_.push(scaled_frame);
             }
         }
 
         av_packet_unref(packet);
     }
 
-    av_frame_free(&yuv_frame);
     av_frame_free(&frame);
     av_packet_free(&packet);
 }
 
-void VideoCapturer::encode_and_send(AVFrame *frame)
+void VideoCapturer::encode_loop()
 {
-    // 确保帧有时间戳
-    if (frame->pts == AV_NOPTS_VALUE)
-    {
-        static int64_t pts = 0;
-        frame->pts = pts++;
-    }
-
-    // 设置时间基
-    frame->pkt_dts = frame->pts;
-    frame->pkt_pts = frame->pts;
-    frame->flags |= AV_PKT_FLAG_KEY;
-
     AVPacket *packet = av_packet_alloc();
-    if (!packet)
-        return;
 
-    int ret = avcodec_send_frame(encoder_context_, frame);
-    if (ret < 0)
+    while (is_running_)
     {
-        av_packet_free(&packet);
-        return;
+        AVFrame *frame = nullptr;
+
+        // Get frame from encode queue
+        encode_queue_.wait_and_pop(frame);
+
+        if (!frame)
+            continue;
+
+        // Ensure frame has timestamp
+        static int64_t pts = 0;
+        if (frame->pts == AV_NOPTS_VALUE)
+        {
+            frame->pts = pts++;
+        }
+
+        int ret = avcodec_send_frame(encoder_context_, frame);
+        av_frame_free(&frame);
+
+        if (ret < 0)
+        {
+            continue;
+        }
+
+        while (ret >= 0)
+        {
+            ret = avcodec_receive_packet(encoder_context_, packet);
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+            {
+                break;
+            }
+            else if (ret < 0)
+            {
+                std::cerr << "Error receiving packet from encoder: " << av_error_string(ret) << std::endl;
+                break;
+            }
+
+            std::cout << "packet size: " << packet->size
+                      << ", packet pts: " << packet->pts
+                      << ", keyframe: " << (packet->flags & AV_PKT_FLAG_KEY) << std::endl;
+            // 分析 NALU
+            analyze_nal_units(packet);
+
+            // Put packet in send queue
+            // Clone packet for sending thread
+            AVPacket *clone_packet = av_packet_alloc();
+            av_packet_ref(clone_packet, packet);
+            send_queue_.push(clone_packet);
+
+            av_packet_unref(packet);
+        }
     }
 
-    while (ret >= 0)
+    av_packet_free(&packet);
+}
+
+void VideoCapturer::send_loop()
+{
+    while (is_running_)
     {
-        ret = avcodec_receive_packet(encoder_context_, packet);
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+        AVPacket *packet = nullptr;
+
+        // Get packet from send queue
+        send_queue_.wait_and_pop(packet);
+
+        if (!packet)
+            continue;
+
+        // Wait for callback to be set
+        std::unique_lock<std::mutex> lock(callback_mutex_);
+        callback_cv_.wait(lock, [this]
+                          { return track_callback_ || !is_running_; });
+
+        if (!is_running_)
         {
-            break;
-        }
-        else if (ret < 0)
-        {
-            std::cerr << "Error receiving packet from encoder: " << av_error_string(ret) << std::endl;
+            av_packet_free(&packet);
             break;
         }
 
-        // 添加包信息调试
-        std::cout << "Encoded packet: size=" << packet->size
-                  << ", pts=" << packet->pts
-                  << ", dts=" << packet->dts
-                  << ", key_frame=" << (packet->flags & AV_PKT_FLAG_KEY)
-                  << std::endl;
-
-        // 使用回调发送数据
+        // Send data using callback
         if (track_callback_)
         {
             auto data = reinterpret_cast<const std::byte *>(packet->data);
@@ -371,8 +697,25 @@ void VideoCapturer::encode_and_send(AVFrame *frame)
             std::cout << "Drop packet! No callback set." << std::endl;
         }
 
-        av_packet_unref(packet);
+        av_packet_free(&packet);
     }
+}
 
-    av_packet_free(&packet);
+void VideoCapturer::pause_capture()
+{
+    is_paused_ = true;
+
+    // 清空队列
+    encode_queue_.clear();
+    send_queue_.clear();
+
+    std::cout << "Video capture paused and queues cleared" << std::endl;
+}
+
+void VideoCapturer::resume_capture()
+{
+    is_paused_ = false;
+    // 通知等待的线程，采集已恢复
+    callback_cv_.notify_all();
+    std::cout << "Video capture resumed" << std::endl;
 }

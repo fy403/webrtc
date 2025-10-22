@@ -4,6 +4,7 @@
 #include <string>
 #include <memory>
 #include <unordered_map>
+#include <random> // 添加随机数头文件
 
 #include "video_capturer.h"
 #include "parse_cl.h"
