@@ -47,6 +47,7 @@ private:
   std::string _i;
   bool _h;
   std::string _client_id; // 新添加的client_id参数
+  bool _debug; // 新添加的debug参数
 
   /* other stuff to keep track of */
   std::string _program_name;
@@ -76,6 +77,7 @@ public:
   std::string inputDevice () const { return _i; }
   bool h () const { return _h; }
   std::string clientId () const { return _client_id; } // 新添加的client_id getter
+  bool debug () const { return _debug; } // 新添加的debug getter
 };
 
 #endif

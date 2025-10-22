@@ -55,6 +55,7 @@ Cmdline::Cmdline (int argc, char *argv[]) // ISO C++17 not allowed: throw (std::
     {"turnPass", required_argument, NULL, 'P'},
     {"inputDevice", required_argument, NULL, 'i'},
     {"client_id", required_argument, NULL, 'c'}, // 新添加的client_id选项
+    {"debug", no_argument, NULL, 'd'}, // 新添加的debug选项
     {"help", no_argument, NULL, 'h'},
     {NULL, 0, NULL, 0}
   };
@@ -79,9 +80,10 @@ Cmdline::Cmdline (int argc, char *argv[]) // ISO C++17 not allowed: throw (std::
 #endif
   _h = false;
   _client_id = ""; // client_id默认값
+  _debug = false; // debug默认값
 
   optind = 0;
-  while ((c = getopt_long (argc, argv, "s:t:w:x:u:p:U:P:i:c:enmhv", long_options, &optind)) != - 1)
+  while ((c = getopt_long (argc, argv, "s:t:w:x:u:p:U:P:i:c:denmhv", long_options, &optind)) != - 1)
     {
       switch (c)
         {
@@ -169,6 +171,10 @@ Cmdline::Cmdline (int argc, char *argv[]) // ISO C++17 not allowed: throw (std::
           _client_id = optarg;
           break;
 
+        case 'd': // 처리debug参数
+          _debug = true;
+          break;
+
         case 'h':
           _h = true;
           this->usage (EXIT_SUCCESS);
@@ -230,6 +236,8 @@ libdatachannel client implementing WebRTC Data Channels with WebSocket signaling
           Input video device.\n\
    [ -c ] [ --client_id ] (type=STRING)\n\
           Client identifier.\n\
+   [ -d ] [ --debug ] (type=FLAG)\n\
+          Enable debug output.\n\
    [ -h ] [ --help ] (type=FLAG)\n\
           Display this help and exit.\n";
     }

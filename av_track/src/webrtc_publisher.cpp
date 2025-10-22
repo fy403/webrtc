@@ -144,7 +144,7 @@ shared_ptr<rtc::PeerConnection> createPeerConnection(const rtc::Configuration &c
         {
             // 现在数据会自动通过 H.264 RTP 打包器进行分片
             track->send(reinterpret_cast<const std::byte*>(data), size);
-            std::cout << "Sent H.264 packet size: " << size << std::endl;
+            // std::cout << "Sent H.264 packet size: " << size << std::endl;
         }
         catch (const std::exception& e)
         {
@@ -167,7 +167,7 @@ shared_ptr<rtc::PeerConnection> createPeerConnection(const rtc::Configuration &c
 }
 
 WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Cmdline params, const std::string &input_device)
-    : client_id_(client_id), params_(params), video_capturer_(input_device)
+    : client_id_(client_id), params_(params), video_capturer_(input_device, params.debug())
 {
     rtc::InitLogger(rtc::LogLevel::Info);
     localId = client_id;

@@ -26,7 +26,7 @@ namespace rtc
 class VideoCapturer
 {
 public:
-    VideoCapturer(const std::string &device = "/dev/video1");
+    VideoCapturer(const std::string &device = "/dev/video1", bool debug_enabled = false);
     ~VideoCapturer();
     bool start();
     void stop();
@@ -41,6 +41,7 @@ private:
     void send_loop();
 
     std::string device_;
+    bool debug_enabled_;
     std::atomic<bool> is_running_;
     std::atomic<bool> is_capturing_;
     std::atomic<bool> is_paused_;
