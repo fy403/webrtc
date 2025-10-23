@@ -44,9 +44,11 @@ private:
   int _turnPort;
   std::string _turnUser;
   std::string _turnPass;
+  std::string _usbPort;
   std::string _i;
   bool _h;
   std::string _client_id; // 新添加的client_id参数
+  bool _debug;            // 新添加的debug参数
 
   /* other stuff to keep track of */
   std::string _program_name;
@@ -54,28 +56,30 @@ private:
 
 public:
   /* constructor and destructor */
-  Cmdline (int, char **); // ISO C++17 not allowed: throw (std::string);
-  ~Cmdline (){}
+  Cmdline(int, char **); // ISO C++17 not allowed: throw (std::string);
+  ~Cmdline() {}
 
   /* usage function */
-  void usage (int status);
+  void usage(int status);
 
   /* return next (non-option) parameter */
-  int next_param () { return _optind; }
+  int next_param() { return _optind; }
 
-  bool noStun () const { return _n; }
-  bool udpMux () const { return _m; }
-  std::string stunServer () const { return _s; }
-  int stunPort () const { return _t; }
-  std::string webSocketServer () const { return _w; }
-  int webSocketPort () const { return _x; }
-  std::string turnServer () const { return _turnServer; }
-  int turnPort () const { return _turnPort; }
-  std::string turnUser () const { return _turnUser; }
-  std::string turnPass () const { return _turnPass; }
-  std::string inputDevice () const { return _i; }
-  bool h () const { return _h; }
-  std::string clientId () const { return _client_id; } // 新添加的client_id getter
+  bool noStun() const { return _n; }
+  bool udpMux() const { return _m; }
+  std::string stunServer() const { return _s; }
+  int stunPort() const { return _t; }
+  std::string webSocketServer() const { return _w; }
+  int webSocketPort() const { return _x; }
+  std::string turnServer() const { return _turnServer; }
+  int turnPort() const { return _turnPort; }
+  std::string turnUser() const { return _turnUser; }
+  std::string turnPass() const { return _turnPass; }
+  std::string inputDevice() const { return _i; }
+  std::string usbDevice() const { return _usbPort; }
+  bool h() const { return _h; }
+  std::string clientId() const { return _client_id; } // 新添加的client_id getter
+  bool debug() const { return _debug; }               // 新添加的debug getter
 };
 
 #endif

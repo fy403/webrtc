@@ -6,7 +6,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>Signal Control Client</title>
 	<link rel="stylesheet" href="style.css">
-	<script src="rtc.js"></script>
+	<script src="video_rtc.js"></script>
 </head>
 
 <body>
@@ -91,7 +91,8 @@
 					<div class="connection-info">
 						<div id="connStatus"><span class="status-dot dot-red"></span><span
 								class="mono">DISCONNECTED</span></div>
-						<div class="hint">目标: <span class="mono" id="endpointText">ws://fy403.cn:8766</span></div>
+						<div class="hint" style="visibility: hidden;">目标: <span class="mono"
+								id="endpointText">ws://fy403.cn:8766</span></div>
 					</div>
 
 					<div class="control-buttons">
@@ -126,7 +127,7 @@ MSG_SYSTEM_STATUS=0x20 (扩展帧12字节: 3:rx_speed_H,4:rx_speed_L,5:tx_speed_
 			</div> -->
 		</div>
 	</div>
-	<script src="control.js"></script>
+	<script src="ws_control.js"></script>
 </body>
 
 </html>

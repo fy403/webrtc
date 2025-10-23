@@ -13,7 +13,7 @@
  */
 
 #include "rtc/rtc.hpp"
-
+#include "rc_client.h"
 #include "parse_cl.h"
 
 #include <nlohmann/json.hpp>
@@ -27,30 +27,41 @@
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
-
 using namespace std::chrono_literals;
 using std::shared_ptr;
 using std::weak_ptr;
 template <class T>
 weak_ptr<T> make_weak_ptr(shared_ptr<T> ptr) { return ptr; }
-
 using nlohmann::json;
 
-std::string localId;
 std::unordered_map<std::string, shared_ptr<rtc::PeerConnection>> peerConnectionMap;
 std::unordered_map<std::string, shared_ptr<rtc::DataChannel>> dataChannelMap;
 
 shared_ptr<rtc::PeerConnection> createPeerConnection(const rtc::Configuration &config,
 													 weak_ptr<rtc::WebSocket> wws, std::string id);
 std::string randomId(size_t length);
-
-int main(int argc, char **argv)
+RCClient *global_client = nullptr;
+int rtc_main(int argc, char **argv)
 try
 {
 	Cmdline params(argc, argv);
 
+	// Use command line parameters or generate random ID
+	std::string client_id = params.clientId(); // Use new client_id parameter
+	if (client_id.empty())
+	{
+		client_id = randomId(4);
+		std::cout << "Generated client ID: " << client_id << std::endl;
+	}
+	else
+	{
+		std::cout << "Using specified client ID: " << client_id << std::endl;
+	}
+	std::string tty_port = params.usbDevice();
+	RCClient client(tty_port);
+	global_client = &client;
+	// rtc 初始化
 	rtc::InitLogger(rtc::LogLevel::Info);
-
 	rtc::Configuration config;
 	std::string stunServer = "";
 	if (params.noStun())
@@ -94,19 +105,6 @@ try
 	{
 		std::cout << "ICE UDP mux enabled" << std::endl;
 		config.enableIceUdpMux = true;
-	}
-
-	// 使用命令行参数或生成随机 ID
-	std::string client_id = params.clientId(); // 使用新的client_id参数
-	if (client_id.empty())
-	{
-		localId = randomId(4);
-		std::cout << "Generated client ID: " << localId << std::endl;
-	}
-	else
-	{
-		localId = client_id;
-		std::cout << "Using specified client ID: " << localId << std::endl;
 	}
 
 	auto ws = std::make_shared<rtc::WebSocket>();
@@ -169,64 +167,22 @@ try
 	const std::string wsPrefix =
 		params.webSocketServer().find("://") == std::string::npos ? "ws://" : "";
 	const std::string url = wsPrefix + params.webSocketServer() + ":" +
-							std::to_string(params.webSocketPort()) + "/" + localId;
+							std::to_string(params.webSocketPort()) + "/" + client_id;
 
 	std::cout << "WebSocket URL is " << url << std::endl;
 	ws->open(url);
 
 	std::cout << "Waiting for signaling to be connected..." << std::endl;
 	wsFuture.get();
-
+	// 无限睡眠
 	while (true)
 	{
-		std::string id;
-		std::cout << "Enter a remote ID to send an offer:" << std::endl;
-		std::cin >> id;
-		std::cin.ignore();
-
-		if (id.empty())
-			break;
-
-		if (id == localId)
-		{
-			std::cout << "Invalid remote ID (This is the local ID)" << std::endl;
-			continue;
-		}
-
-		std::cout << "Offering to " + id << std::endl;
-		auto pc = createPeerConnection(config, ws, id);
-
-		// We are the offerer, so create a data channel to initiate the process
-		const std::string label = "test";
-		std::cout << "Creating DataChannel with label \"" << label << "\"" << std::endl;
-		auto dc = pc->createDataChannel(label);
-
-		dc->onOpen([id, wdc = make_weak_ptr(dc)]()
-				   {
-			std::cout << "DataChannel from " << id << " open" << std::endl;
-			if (auto dc = wdc.lock())
-				dc->send("Hello from " + localId); });
-
-		dc->onClosed([id]()
-					 { std::cout << "DataChannel from " << id << " closed" << std::endl; });
-
-		dc->onMessage([id, wdc = make_weak_ptr(dc)](auto data)
-					  {
-			// data holds either std::string or rtc::binary
-			if (std::holds_alternative<std::string>(data))
-				std::cout << "Message from " << id << " received: " << std::get<std::string>(data)
-				          << std::endl;
-			else
-				std::cout << "Binary message from " << id
-				          << " received, size=" << std::get<rtc::binary>(data).size() << std::endl; });
-
-		dataChannelMap.emplace(id, dc);
+		std::this_thread::sleep_for(std::chrono::hours(24)); // 每次睡24小时
 	}
-
 	std::cout << "Cleaning up..." << std::endl;
-
 	dataChannelMap.clear();
 	peerConnectionMap.clear();
+	global_client = nullptr;
 	return 0;
 }
 catch (const std::exception &e)
@@ -274,9 +230,9 @@ shared_ptr<rtc::PeerConnection> createPeerConnection(const rtc::Configuration &c
 		std::cout << "DataChannel from " << id << " received with label \"" << dc->label() << "\""
 		          << std::endl;
 
-		dc->onOpen([wdc = make_weak_ptr(dc)]() {
-			if (auto dc = wdc.lock())
-				dc->send("Hello from " + localId);
+		dc->onOpen([id, dc]() {
+			std::cout << "DataChannel from " << id << " open" << std::endl;
+			global_client->setDataChannel(dc);
 		});
 
 		dc->onClosed([id]() { std::cout << "DataChannel from " << id << " closed" << std::endl; });
@@ -289,6 +245,19 @@ shared_ptr<rtc::PeerConnection> createPeerConnection(const rtc::Configuration &c
 			else
 				std::cout << "Binary message from " << id
 				          << " received, size=" << std::get<rtc::binary>(data).size() << std::endl;
+			
+			if (global_client && global_client->getDataChannel() != nullptr) {
+				// Handle both string and binary data
+				if (std::holds_alternative<std::string>(data)) {
+					const std::string& str_data = std::get<std::string>(data);
+					global_client->parseFrame(reinterpret_cast<const uint8_t*>(str_data.data()));
+				} else {
+					const rtc::binary& bin_data = std::get<rtc::binary>(data);
+					global_client->parseFrame(reinterpret_cast<const uint8_t*>(bin_data.data()));
+				}
+			} else {
+				std::cout << "DataChannel not ready" << std::endl;
+			}
 		});
 
 		dataChannelMap.emplace(id, dc); });

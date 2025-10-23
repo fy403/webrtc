@@ -1,5 +1,5 @@
 [Unit]
-Description=AV Track RTC Service with Health Checks
+Description=DATA Track RTC Service with Health Checks
 After=network.target
 Wants=network.target
 Requires=network-online.target
@@ -8,13 +8,13 @@ Requires=network-online.target
 Type=simple
 User=root
 # Group=video
-WorkingDirectory=/home/pi/av_track
-ExecStart=/home/pi/av_track/av_track_rtc.sh
+WorkingDirectory=/home/pi/data_track
+ExecStart=/home/pi/data_track/data_track_rtc.sh
 Restart=always
 RestartSec=1
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=av-track-rtc
+SyslogIdentifier=data-track-rtc
 
 #[Install]
 #WantedBy=multi-user.target

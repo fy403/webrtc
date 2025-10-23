@@ -1,54 +1,80 @@
-cmake_minimum_required(VERSION 3.13)
-if(POLICY CMP0079)
-	cmake_policy(SET CMP0079 NEW)
-endif()
+cmake_minimum_required(VERSION 3.10)
+project(WebRTCPublisher)
 
-set(CLIENT_SOURCES
-	main.cpp
-	parse_cl.cpp
-	parse_cl.h
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Find pkg-config
+find_package(PkgConfig REQUIRED)
+
+# Find libav libraries - SINGLE call with all required components
+pkg_check_modules(LIBAV REQUIRED
+	libavformat
+	libavcodec
+	libavutil
+	libswscale
+	libavdevice
 )
 
-set(GETOPT_SOURCES
-	getopt.cpp
-	getopt.h
+# Find libdatachannel
+find_library(LIBDATACHANNEL_LIBRARY
+	NAMES datachannel
+	PATHS /usr/local/lib
+	NO_DEFAULT_PATH
+	REQUIRED
 )
 
-set(CLIENT_UWP_RESOURCES
-	uwp/Logo.png
-	uwp/package.appxManifest
-	uwp/SmallLogo.png
-	uwp/SmallLogo44x44.png
-	uwp/SplashScreen.png
-	uwp/StoreLogo.png
-	uwp/Windows_TemporaryKey.pfx
+find_path(LIBDATACHANNEL_INCLUDE_DIR
+	NAMES rtc/rtc.h
+	PATHS /usr/local/include
+	NO_DEFAULT_PATH
+	REQUIRED
 )
 
+message(STATUS "Found libdatachannel library: ${LIBDATACHANNEL_LIBRARY}")
+message(STATUS "Found libav libraries: ${LIBAV_LIBRARIES}")
+
+# Add executable
+add_executable(webrtc_publisher
+	src/4GTty.cpp
+	src/getopt.cpp
+	src/main.cpp
+	src/parse_cl.cpp
+	src/rc_client.cpp
+	src/motor_controller.cpp
+	src/system_monitor.cpp
+	src/motor_driver.cpp
+	src/throttle_levels.cpp
+	src/message_handler.cpp
+	src/rtc.cpp
+)
+
+# Include directories
+target_include_directories(webrtc_publisher PRIVATE
+	${LIBAV_INCLUDE_DIRS}
+	${LIBDATACHANNEL_INCLUDE_DIR}
+	include
+)
+
+# Link libraries
+target_link_libraries(webrtc_publisher
+	${LIBAV_LIBRARIES}
+	${LIBDATACHANNEL_LIBRARY}
+	ssl
+	crypto
+)
+
+# Windows specific libraries
 if(WIN32)
-	if(CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
-		add_executable(datachannel-client ${CLIENT_SOURCES} ${GETOPT_SOURCES} ${CLIENT_UWP_RESOURCES})
-	else()
-	    add_executable(datachannel-client ${CLIENT_SOURCES} ${GETOPT_SOURCES})
-	endif()
-	target_compile_definitions(datachannel-client PUBLIC STATIC_GETOPT)
+	target_link_libraries(webrtc_publisher
+		ws2_32
+		crypt32
+	)
 else()
-	add_executable(datachannel-client ${CLIENT_SOURCES})
-endif()
-
-set_target_properties(datachannel-client PROPERTIES
-	CXX_STANDARD 17
-	OUTPUT_NAME client)
-
-set_target_properties(datachannel-client PROPERTIES
-	XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER com.github.paullouisageneau.libdatachannel.examples.client)
-
-find_package(Threads REQUIRED)
-target_link_libraries(datachannel-client LibDataChannel::LibDataChannel Threads::Threads nlohmann_json::nlohmann_json)
-
-if(MSVC)
-	add_custom_command(TARGET datachannel-client POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-		"$<TARGET_FILE_DIR:datachannel>/datachannel.dll"
-		$<TARGET_FILE_DIR:datachannel-client>
+	target_link_libraries(webrtc_publisher
+		pthread
 	)
 endif()
+
+# C++17 is already set globally, but you can also set it per target
+target_compile_features(webrtc_publisher PRIVATE cxx_std_17)
