@@ -1,4 +1,5 @@
 #include "video_capturer.h"
+#include "encoder.h"
 #include "debug_utils.h"
 #include <iostream>
 #include <functional>
@@ -28,7 +29,7 @@ std::string av_error_string(int errnum)
 VideoCapturer::VideoCapturer(const std::string &device, bool debug_enabled,
                              size_t encode_queue_capacity, size_t send_queue_capacity)
     : device_(device), debug_enabled_(debug_enabled), is_running_(false), is_capturing_(false), is_paused_(false),
-      encode_queue_(encode_queue_capacity), send_queue_(send_queue_capacity)
+      encode_queue_(encode_queue_capacity), send_queue_(send_queue_capacity), encoder_(std::make_unique<H264Encoder>(debug_enabled))
 {
     avdevice_register_all();
 }
@@ -110,65 +111,16 @@ bool VideoCapturer::start()
         return false;
     }
 
-    // 在 video_capturer.cpp 的 start() 函数中修改编码器配置
-    const AVCodec *h264_codec = avcodec_find_encoder_by_name("libx264");
-    if (!h264_codec)
+    // Initialize encoder
+    if (!encoder_->open_encoder(640, 480, 30))
     {
-        h264_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
-        if (!h264_codec)
-        {
-            std::cerr << "Cannot find H.264 encoder" << std::endl;
-            return false;
-        }
-    }
-
-    encoder_context_ = avcodec_alloc_context3(h264_codec);
-
-    // 基本配置
-    encoder_context_->width = 640;
-    encoder_context_->height = 480;
-    encoder_context_->pix_fmt = AV_PIX_FMT_YUV420P;
-    encoder_context_->time_base = {1, 30};
-    encoder_context_->framerate = {30, 1};
-
-    // 更频繁的关键帧
-    encoder_context_->gop_size = 15;   // 每15帧一个关键帧，确保快速启动
-    encoder_context_->keyint_min = 15; // 最小关键帧间隔
-
-    // 禁用 B 帧，确保低延迟和兼容性
-    encoder_context_->max_b_frames = 0;
-    encoder_context_->has_b_frames = 0;
-
-    // 码率控制
-    encoder_context_->bit_rate = 800000;
-    encoder_context_->rc_max_rate = 800000;
-    encoder_context_->rc_buffer_size = 800000;
-
-    // 强制使用 baseline profile
-    encoder_context_->profile = FF_PROFILE_H264_BASELINE;
-    encoder_context_->level = 31;
-
-    // 设置编码器参数
-    av_opt_set(encoder_context_->priv_data, "preset", "ultrafast", 0);
-    av_opt_set(encoder_context_->priv_data, "tune", "zerolatency", 0);
-    av_opt_set(encoder_context_->priv_data, "crf", "32", 0);
-    av_opt_set(encoder_context_->priv_data, "profile", "baseline", 0);
-
-    std::cout << "Encoder configured with GOP size: " << encoder_context_->gop_size << std::endl;
-
-    ret = avcodec_open2(encoder_context_, h264_codec, nullptr);
-    if (ret < 0)
-    {
-        std::cerr << "Cannot open H.264 encoder: " << av_error_string(ret) << std::endl;
+        std::cerr << "Cannot open H.264 encoder" << std::endl;
         return false;
     }
-
-    // 检查编码器是否支持全局头
-    std::cout << "Encoder supports global header: " << (encoder_context_->flags & AV_CODEC_FLAG_GLOBAL_HEADER) << std::endl;
-
+    AVCodecContext *encoder_context = encoder_->get_context();
     sws_context_ = sws_getContext(
         codec_context_->width, codec_context_->height, codec_context_->pix_fmt,
-        encoder_context_->width, encoder_context_->height, encoder_context_->pix_fmt,
+        encoder_context->width, encoder_context->height, encoder_context->pix_fmt,
         SWS_BILINEAR, nullptr, nullptr, nullptr);
 
     if (!sws_context_)
@@ -243,11 +195,8 @@ void VideoCapturer::stop()
         sws_context_ = nullptr;
     }
 
-    if (encoder_context_)
-    {
-        avcodec_free_context(&encoder_context_);
-        encoder_context_ = nullptr;
-    }
+    // Encoder context is managed by the Encoder class
+    encoder_->close_encoder();
 
     if (codec_context_)
     {
@@ -351,8 +300,8 @@ void VideoCapturer::capture_loop()
                 // Convert frame format and put in encode queue
                 AVFrame *scaled_frame = av_frame_alloc();
                 scaled_frame->format = AV_PIX_FMT_YUV420P;
-                scaled_frame->width = encoder_context_->width;
-                scaled_frame->height = encoder_context_->height;
+                scaled_frame->width = encoder_->get_context()->width;
+                scaled_frame->height = encoder_->get_context()->height;
 
                 av_frame_get_buffer(scaled_frame, 0);
 
@@ -387,43 +336,11 @@ void VideoCapturer::encode_loop()
         if (!frame)
             continue;
 
-        // Ensure frame has timestamp
-        static int64_t pts = 0;
-        if (frame->pts == AV_NOPTS_VALUE)
-        {
-            frame->pts = pts++;
-        }
-
-        int ret = avcodec_send_frame(encoder_context_, frame);
+        bool encoded = encoder_->encode_frame(frame, packet);
         av_frame_free(&frame);
 
-        if (ret < 0)
+        if (encoded)
         {
-            continue;
-        }
-
-        while (ret >= 0)
-        {
-            ret = avcodec_receive_packet(encoder_context_, packet);
-            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-            {
-                break;
-            }
-            else if (ret < 0)
-            {
-                std::cerr << "Error receiving packet from encoder: " << av_error_string(ret) << std::endl;
-                break;
-            }
-
-            if (debug_enabled_)
-            {
-                std::cout << "packet size: " << packet->size
-                          << ", packet pts: " << packet->pts
-                          << ", keyframe: " << (packet->flags & AV_PKT_FLAG_KEY) << std::endl;
-                // 分析 NALU
-                DebugUtils::analyze_nal_units(packet);
-            }
-
             // Put packet in send queue
             // Clone packet for sending thread
             AVPacket *clone_packet = av_packet_alloc();

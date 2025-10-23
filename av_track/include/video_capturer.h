@@ -10,6 +10,9 @@
 #include <functional>
 #include "safe_queue.h"
 
+// Forward declarations
+class Encoder;
+
 extern "C"
 {
 #include <libavformat/avformat.h>
@@ -53,9 +56,10 @@ private:
 
     AVFormatContext *format_context_ = nullptr;
     AVCodecContext *codec_context_ = nullptr;
-    AVCodecContext *encoder_context_ = nullptr;
     SwsContext *sws_context_ = nullptr;
     int video_stream_index_ = -1;
+
+    std::unique_ptr<Encoder> encoder_;
 
     std::shared_ptr<rtc::Track> track_;
 

@@ -39,6 +39,7 @@ add_executable(webrtc_publisher
     src/main.cpp
     src/webrtc_publisher.cpp
     src/video_capturer.cpp
+    src/encoder.cpp
     src/debug_utils.cpp
     src/parse_cl.cpp
     src/getopt.cpp
