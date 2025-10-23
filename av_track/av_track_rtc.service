@@ -1,0 +1,20 @@
+[Unit]
+Description=AV Track RTC Service with Health Checks
+After=network.target
+Wants=network.target
+Requires=network-online.target
+
+[Service]
+Type=simple
+User=root
+# Group=video
+WorkingDirectory=/home/pi/av_track
+ExecStart=/home/pi/av_track/av_track_rtc.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=av-track-rtc
+
+#[Install]
+#WantedBy=multi-user.target

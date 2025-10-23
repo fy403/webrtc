@@ -25,8 +25,11 @@ int main(int argc, char *argv[])
         WebRTCPublisher publisher(client_id, params, params.inputDevice());
         publisher.start();
 
-        std::cout << "WebRTC Publisher started. Press Enter to exit..." << std::endl;
-        std::cin.get();
+        // 无限睡眠
+        while (true)
+        {
+            std::this_thread::sleep_for(std::chrono::hours(24)); // 每次睡24小时
+        }
 
         publisher.stop();
     }

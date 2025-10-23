@@ -12,8 +12,23 @@ window.addEventListener('load', () => {
 
     const config = {
         iceServers: [{
-            urls: 'stun:stun1.l.google.com:19302',
-        }],
+                "urls": ["stun:stun.cloudflare.com:3478",
+                    // "stun:stun.cloudflare.com:53"
+                ]
+            },
+            {
+                "urls": [
+                    "turn:turn.cloudflare.com:3478?transport=udp",
+                    // "turn:turn.cloudflare.com:3478?transport=tcp",
+                    // "turns:turn.cloudflare.com:5349?transport=tcp",
+                    // "turn:turn.cloudflare.com:53?transport=udp",
+                    // "turn:turn.cloudflare.com:80?transport=tcp",
+                    // "turns:turn.cloudflare.com:443?transport=tcp"
+                ],
+                "username": "g035d939b93f4d9303ff74e5c5135deb891345ee621b1ac4cde334f062450e4a",
+                "credential": "95575f4a4dc4f54f465372dc2b44999e7a61013545fc5a8d1930bc20a981c70e"
+            },
+        ],
     };
 
     const localId = randomId(4);
@@ -40,10 +55,16 @@ window.addEventListener('load', () => {
             offerId.disabled = false;
             offerBtn.disabled = false;
             offerBtn.onclick = () => offerPeerConnection(ws, offerId.value);
+            if (offerId.value) {
+                offerBtn.click();
+            }
         })
         .catch((err) => {
             console.error(err);
             updateStatus('Signaling connection failed: ' + err.message);
+            if (offerId.value) {
+                offerBtn.click();
+            }
         });
 
     function updateStatus(message) {
@@ -257,46 +278,6 @@ window.addEventListener('load', () => {
             setTimeout(playVideo, 100);
         };
 
-        function updateVideoInfo(stream) {
-            const videoInfo = document.getElementById('videoInfo');
-            if (!videoInfo) return;
-
-            const tracks = stream.getTracks();
-            const videoTracks = stream.getVideoTracks();
-            const audioTracks = stream.getAudioTracks();
-
-            let info = `
-        <p><strong>Total Tracks:</strong> ${tracks.length}</p>
-        <p><strong>Video Tracks:</strong> ${videoTracks.length}</p>
-        <p><strong>Audio Tracks:</strong> ${audioTracks.length}</p>
-        <p><strong>Video Ready State:</strong> ${remoteVideo.readyState}</p>
-        <p><strong>Video Dimensions:</strong> ${remoteVideo.videoWidth} x ${remoteVideo.videoHeight}</p>
-        <p><strong>Video Muted:</strong> ${remoteVideo.muted}</p>
-        <p><strong>Current Time:</strong> ${remoteVideo.currentTime}</p>
-        <p><strong>Network State:</strong> ${remoteVideo.networkState}</p>
-    `;
-
-            videoTracks.forEach((track, index) => {
-                info += `
-            <p><strong>Video Track ${index}:</strong> 
-                id=${track.id}, 
-                enabled=${track.enabled}, 
-                readyState=${track.readyState},
-                muted=${track.muted}
-            </p>
-        `;
-            });
-
-            videoInfo.innerHTML = info;
-        }
-
-        // 定期更新视频信息
-        setInterval(() => {
-            if (remoteVideo.srcObject) {
-                updateVideoInfo(remoteVideo.srcObject);
-            }
-        }, 2000);
-
         pc.ondatachannel = (e) => {
             const dc = e.channel;
             console.log(`DataChannel from ${id} received with label "${dc.label}"`);
@@ -398,120 +379,50 @@ window.addEventListener('load', () => {
         }));
     }
 
+    function updateVideoInfo(stream) {
+        const videoInfo = document.getElementById('videoInfo');
+        if (!videoInfo) return;
+
+        const tracks = stream.getTracks();
+        const videoTracks = stream.getVideoTracks();
+        const audioTracks = stream.getAudioTracks();
+
+        let info = `
+        <p><strong>Total Tracks:</strong> ${tracks.length}</p>
+        <p><strong>Video Tracks:</strong> ${videoTracks.length}</p>
+        <p><strong>Audio Tracks:</strong> ${audioTracks.length}</p>
+        <p><strong>Video Ready State:</strong> ${remoteVideo.readyState}</p>
+        <p><strong>Video Dimensions:</strong> ${remoteVideo.videoWidth} x ${remoteVideo.videoHeight}</p>
+        <p><strong>Video Muted:</strong> ${remoteVideo.muted}</p>
+        <p><strong>Current Time:</strong> ${remoteVideo.currentTime}</p>
+        <p><strong>Network State:</strong> ${remoteVideo.networkState}</p>
+    `;
+
+        videoTracks.forEach((track, index) => {
+            info += `
+            <p><strong>Video Track ${index}:</strong> 
+                id=${track.id}, 
+                enabled=${track.enabled}, 
+                readyState=${track.readyState},
+                muted=${track.muted}
+            </p>
+        `;
+        });
+
+        videoInfo.innerHTML = info;
+    }
+
+    // 定期更新视频信息
+    setInterval(() => {
+        if (remoteVideo.srcObject) {
+            updateVideoInfo(remoteVideo.srcObject);
+        }
+    }, 2000);
+
     // Helper function to generate a random ID
     function randomId(length) {
         const characters = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
         const pickRandom = () => characters.charAt(Math.floor(Math.random() * characters.length));
         return [...Array(length)].map(pickRandom).join('');
-    }
-
-
-    function playVideoWithRetry(retryCount = 0) {
-        if (retryCount > 5) {
-            console.error('Failed to play video after multiple attempts');
-            showPlayButton();
-            return;
-        }
-
-        // 确保视频元素就绪
-        if (!remoteVideo.srcObject) {
-            console.error('No video source available');
-            return;
-        }
-
-        const videoTracks = remoteVideo.srcObject.getVideoTracks();
-        if (videoTracks.length === 0) {
-            console.error('No video tracks in stream');
-            return;
-        }
-
-        console.log(`Play attempt ${retryCount + 1}, video readyState: ${remoteVideo.readyState}`);
-
-        remoteVideo.play().then(() => {
-            console.log('Video playback successful!');
-            updateStatus('Video playing');
-
-            // 检查视频是否真的在播放
-            setTimeout(() => checkVideoPlayback(), 500);
-
-        }).catch(err => {
-            console.error(`Play attempt ${retryCount + 1} failed:`, err.name, err.message);
-
-            if (err.name === 'NotAllowedError') {
-                updateStatus('Click anywhere to play video');
-                showPlayButton();
-            } else if (err.name === 'NotSupportedError') {
-                updateStatus('Video format not supported');
-                console.error('Video format may not be supported by browser');
-            } else {
-                // 其他错误，重试
-                setTimeout(() => playVideoWithRetry(retryCount + 1), 500);
-            }
-        });
-    }
-
-    function checkVideoPlayback() {
-        if (remoteVideo.paused) {
-            console.warn('Video is paused after successful play() call');
-            updateStatus('Video paused unexpectedly');
-        } else {
-            console.log('Video is actively playing');
-        }
-
-        if (remoteVideo.videoWidth === 0 || remoteVideo.videoHeight === 0) {
-            console.warn('Video dimensions are still 0x0 - possible decoding issue');
-
-            // 检查轨道状态
-            const tracks = remoteVideo.srcObject.getVideoTracks();
-            tracks.forEach(track => {
-                console.log('Track debug:', {
-                    id: track.id,
-                    kind: track.kind,
-                    enabled: track.enabled,
-                    muted: track.muted,
-                    readyState: track.readyState
-                });
-            });
-        } else {
-            console.log(`Video dimensions: ${remoteVideo.videoWidth}x${remoteVideo.videoHeight}`);
-            updateVideoInfo(remoteVideo.srcObject);
-        }
-    }
-
-    function showPlayButton() {
-        // 移除现有的播放按钮
-        const existingButton = document.getElementById('manualPlayButton');
-        if (existingButton) existingButton.remove();
-
-        // 创建播放按钮
-        const playButton = document.createElement('button');
-        playButton.id = 'manualPlayButton';
-        playButton.textContent = 'Click to Play Video';
-        playButton.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        padding: 15px 30px;
-        font-size: 18px;
-        background: #007bff;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        z-index: 1000;
-    `;
-
-        playButton.onclick = () => {
-            remoteVideo.play().then(() => {
-                playButton.remove();
-                updateStatus('Video playing after manual start');
-            }).catch(e => {
-                console.error('Manual play failed:', e);
-                updateStatus('Manual play failed: ' + e.message);
-            });
-        };
-
-        document.body.appendChild(playButton);
     }
 });
