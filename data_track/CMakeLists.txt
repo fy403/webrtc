@@ -36,7 +36,7 @@ message(STATUS "Found libav libraries: ${LIBAV_LIBRARIES}")
 
 # Add executable
 add_executable(webrtc_publisher
-	src/4GTty.cpp
+	src/4g_tty.cpp
 	src/getopt.cpp
 	src/main.cpp
 	src/parse_cl.cpp

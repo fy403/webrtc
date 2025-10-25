@@ -4,3 +4,6 @@ out/
 build/
 .vscode/
 __pycache__/
+.idea
+av_track/.idea
+data_track/.idea

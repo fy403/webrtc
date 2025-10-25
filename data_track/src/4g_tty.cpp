@@ -1,4 +1,4 @@
-#include "4GTty.h"
+#include "4g_tty.h"
 #include <iostream>
 #include <fcntl.h>
 #include <unistd.h>

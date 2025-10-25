@@ -5,7 +5,7 @@
 #include <chrono>
 #include <memory>
 #include <array>
-#include "4GTty.h"
+#include "4g_tty.h"
 
 class SystemMonitor
 {
@@ -17,10 +17,10 @@ public:
 
     // Network statistics
     bool getNetworkStats(double &rx_speed, double &tx_speed);
-    
+
     // CPU usage
     bool getCPUUsage(double &cpu_usage);
-    
+
     // Service status
     bool checkServiceStatus(const std::string &service_name);
 

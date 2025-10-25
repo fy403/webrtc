@@ -30,6 +30,7 @@ class VideoCapturer
 {
 public:
     VideoCapturer(const std::string &device = "/dev/video1", bool debug_enabled = false,
+                  const std::string &resolution = "640x480", int framerate = 30,
                   size_t encode_queue_capacity = 512, size_t send_queue_capacity = 512);
     ~VideoCapturer();
     bool start();
@@ -46,6 +47,8 @@ private:
 
     std::string device_;
     bool debug_enabled_;
+    std::string resolution_;
+    int framerate_;
     std::atomic<bool> is_running_;
     std::atomic<bool> is_capturing_;
     std::atomic<bool> is_paused_;

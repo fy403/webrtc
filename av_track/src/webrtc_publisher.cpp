@@ -171,7 +171,7 @@ shared_ptr<rtc::PeerConnection> createPeerConnection(const rtc::Configuration &c
 }
 
 WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Cmdline params, const std::string &input_device)
-    : client_id_(client_id), params_(params), video_capturer_(input_device, params.debug())
+    : client_id_(client_id), params_(params), video_capturer_(input_device, params.debug(), params.resolution(), params.framerate())
 {
     rtc::InitLogger(rtc::LogLevel::Info);
     localId = client_id;
@@ -258,7 +258,8 @@ void WebRTCPublisher::start()
         wsPromise.set_exception(std::make_exception_ptr(std::runtime_error(s))); });
 
     ws_->onClosed([]()
-                  { std::cout << "WebSocket closed" << std::endl; });
+                  { std::cout << "WebSocket closed" << std::endl; 
+                  exit(5); });
 
     ws_->onMessage([config, wws = make_weak_ptr(ws_), this](auto data)
                    {
@@ -282,7 +283,18 @@ void WebRTCPublisher::start()
 
         shared_ptr<rtc::PeerConnection> pc;
         if (auto jt = peerConnectionMap.find(id); jt != peerConnectionMap.end()) {
-            pc = jt->second;
+            if (type == "offer")
+            {
+                std::cout << "Release old pc" << std::endl;
+                peerConnectionMap[id].reset();
+                peerConnectionMap.erase(id);
+                std::cout << "Answering to " + id << std::endl;
+                pc = createPeerConnection(config, wws, id, video_capturer_);
+            }
+            else
+            {
+                pc = jt->second;
+            }
         } else if (type == "offer") {
             std::cout << "Answering to " + id << std::endl;
             pc = createPeerConnection(config, wws, id, video_capturer_);

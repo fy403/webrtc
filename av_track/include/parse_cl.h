@@ -48,6 +48,8 @@ private:
   bool _h;
   std::string _client_id; // 新添加的client_id参数
   bool _debug; // 新添加的debug参数
+  std::string _resolution; // 新添加的resolution参数
+  int _framerate; // 新添加的framerate参数
 
   /* other stuff to keep track of */
   std::string _program_name;
@@ -78,6 +80,8 @@ public:
   bool h () const { return _h; }
   std::string clientId () const { return _client_id; } // 新添加的client_id getter
   bool debug () const { return _debug; } // 新添加的debug getter
+  std::string resolution() const { return _resolution; } // 新添加的resolution getter
+  int framerate() const { return _framerate; } // 新添加的framerate getter
 };
 
 #endif

@@ -123,7 +123,8 @@ try
 		wsPromise.set_exception(std::make_exception_ptr(std::runtime_error(s))); });
 
 	ws->onClosed([]()
-				 { std::cout << "WebSocket closed" << std::endl; });
+				 { std::cout << "WebSocket closed" << std::endl; 
+				 exit(5); });
 
 	ws->onMessage([&config, wws = make_weak_ptr(ws)](auto data)
 				  {
@@ -147,7 +148,17 @@ try
 
 		shared_ptr<rtc::PeerConnection> pc;
 		if (auto jt = peerConnectionMap.find(id); jt != peerConnectionMap.end()) {
-			pc = jt->second;
+			if (type == "offer"){
+				std::cout << "Release old pc" << std::endl;
+				dataChannelMap[id].reset();
+				peerConnectionMap[id].reset();
+				peerConnectionMap.erase(id);
+				dataChannelMap.erase(id);
+				std::cout << "Answering to " + id << std::endl;
+				pc = createPeerConnection(config, wws, id);
+			}else{
+				pc = jt->second;
+			}
 		} else if (type == "offer") {
 			std::cout << "Answering to " + id << std::endl;
 			pc = createPeerConnection(config, wws, id);

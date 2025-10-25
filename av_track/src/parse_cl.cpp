@@ -56,6 +56,8 @@ Cmdline::Cmdline (int argc, char *argv[]) // ISO C++17 not allowed: throw (std::
     {"inputDevice", required_argument, NULL, 'i'},
     {"client_id", required_argument, NULL, 'c'}, // 新添加的client_id选项
     {"debug", no_argument, NULL, 'd'}, // 新添加的debug选项
+    {"resolution", required_argument, NULL, 'r'}, // 新添加的resolution选项
+    {"framerate", required_argument, NULL, 'f'}, // 新添加的framerate选项
     {"help", no_argument, NULL, 'h'},
     {NULL, 0, NULL, 0}
   };
@@ -81,9 +83,11 @@ Cmdline::Cmdline (int argc, char *argv[]) // ISO C++17 not allowed: throw (std::
   _h = false;
   _client_id = ""; // client_id默认값
   _debug = false; // debug默认값
+  _resolution = "640x480"; // resolution默认값
+  _framerate = 30; // framerate默认값
 
   optind = 0;
-  while ((c = getopt_long (argc, argv, "s:t:w:x:u:p:U:P:i:c:denmhv", long_options, &optind)) != - 1)
+  while ((c = getopt_long (argc, argv, "s:t:w:x:u:p:U:P:i:c:r:f:denmhv", long_options, &optind)) != - 1)
     {
       switch (c)
         {
@@ -171,6 +175,20 @@ Cmdline::Cmdline (int argc, char *argv[]) // ISO C++17 not allowed: throw (std::
           _client_id = optarg;
           break;
 
+        case 'r': // 처리resolution参数
+          _resolution = optarg;
+          break;
+
+        case 'f': // 처리framerate参数
+          _framerate = atoi(optarg);
+          if (_framerate < 1 || _framerate > 120)
+            {
+              std::string err;
+              err += "parameter range error: framerate must be between 1 and 120";
+              throw (std::range_error(err));
+            }
+          break;
+
         case 'd': // 처리debug参数
           _debug = true;
           break;
@@ -238,6 +256,10 @@ libdatachannel client implementing WebRTC Data Channels with WebSocket signaling
           Client identifier.\n\
    [ -d ] [ --debug ] (type=FLAG)\n\
           Enable debug output.\n\
+   [ -r ] [ --resolution ] (type=STRING, default=640x480)\n\
+          Video resolution in WIDTHxHEIGHT format.\n\
+   [ -f ] [ --framerate ] (type=INTEGER, range=1...120, default=30)\n\
+          Video encoding framerate.\n\
    [ -h ] [ --help ] (type=FLAG)\n\
           Display this help and exit.\n";
     }

@@ -128,7 +128,7 @@ void RCClient::sendSystemStatus()
     bool net_ok = system_monitor_.getNetworkStats(rx_speed, tx_speed);
     bool cpu_ok = system_monitor_.getCPUUsage(cpu_usage);
 
-    bool tty_service = system_monitor_.checkServiceStatus("tty_client_starter.service");
+    bool tty_service = system_monitor_.checkServiceStatus("data_track_rtc.service");
     bool rtsp_service = system_monitor_.checkServiceStatus("av_track_rtc.service");
 
     std::string signal = system_monitor_.gsm.getSignalQuality();

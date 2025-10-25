@@ -27,8 +27,9 @@ std::string av_error_string(int errnum)
 }
 
 VideoCapturer::VideoCapturer(const std::string &device, bool debug_enabled,
+                             const std::string &resolution, int framerate,
                              size_t encode_queue_capacity, size_t send_queue_capacity)
-    : device_(device), debug_enabled_(debug_enabled), is_running_(false), is_capturing_(false), is_paused_(false),
+    : device_(device), debug_enabled_(debug_enabled), resolution_(resolution), framerate_(framerate), is_running_(false), is_capturing_(false), is_paused_(false),
       encode_queue_(encode_queue_capacity), send_queue_(send_queue_capacity), encoder_(std::make_unique<H264Encoder>(debug_enabled))
 {
     avdevice_register_all();
@@ -59,8 +60,8 @@ bool VideoCapturer::start()
     std::string device_path = device_;
 
     AVDictionary *options = nullptr;
-    av_dict_set(&options, "video_size", "640x480", 0);
-    av_dict_set(&options, "framerate", "30", 0);
+    av_dict_set(&options, "video_size", resolution_.c_str(), 0);
+    av_dict_set(&options, "framerate", std::to_string(framerate_).c_str(), 0);
     av_dict_set(&options, "input_format", "mjpeg", 0); // 关键修改
     // 移除 pixel_format 设置，让 ffmpeg 自动检测
     int ret = avformat_open_input(&format_context_, device_path.c_str(), input_format, &options);
@@ -111,8 +112,12 @@ bool VideoCapturer::start()
         return false;
     }
 
+    // Parse resolution
+    int width = 640, height = 480; // Default values
+    sscanf(resolution_.c_str(), "%dx%d", &width, &height);
+    
     // Initialize encoder
-    if (!encoder_->open_encoder(640, 480, 30))
+    if (!encoder_->open_encoder(width, height, framerate_))
     {
         std::cerr << "Cannot open H.264 encoder" << std::endl;
         return false;

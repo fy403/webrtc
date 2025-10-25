@@ -15,12 +15,24 @@ STUN_SERVER="stun.l.google.com"
 STUN_SERVER_PORT=19302
 TURN_SERVER="turn.cloudflare.com"
 TURN_SERVER_PORT=3478
+RESOLUTION="1280x720"
+FPS=20
 
 # Path to font file - adjust according to your system
 FONT_FILE="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 # Test if VIDEO_DEVICE works with ffmpeg, if not use VIDEO_DEVICE_BAK
 test_video_device() {
+    # Automatically detect the first USB camera device
+    FIRST_USB_DEVICE=$(v4l2-ctl --list-devices 2>/dev/null | awk '/USB Cam:/,/^$/{if(/\/dev\/video/) {print $1; exit}}')
+    
+    if [ -n "$FIRST_USB_DEVICE" ]; then
+        echo "$(date): Detected first USB camera device: $FIRST_USB_DEVICE"
+        VIDEO_DEVICE="$FIRST_USB_DEVICE"
+    else
+        echo "$(date): No USB camera detected, using default device $VIDEO_DEVICE"
+    fi
+
     echo "$(date): Testing video device $VIDEO_DEVICE..."
     if ffmpeg -f v4l2 -video_size 640x480 -framerate 30 -input_format mjpeg -i "$VIDEO_DEVICE" -vframes 1 -f null - 2>/dev/null; then
         echo "$(date): Primary video device $VIDEO_DEVICE works fine"
@@ -38,7 +50,6 @@ test_video_device() {
         fi
     fi
 }
-
 # Check if host is reachable (IPv4/IPv6)
 check_host() {
     if ping -${IP_TYPE} -c 3 -W 2 "$TARGET_HOST" > /dev/null 2>&1; then
@@ -69,7 +80,8 @@ run_rtc() {
     -u $TURN_SERVER -p $TURN_SERVER_PORT -U $USER \
     -P $PASSWD \
     -w $TARGET_HOST -x $TARGET_PORT \
-    -c $CLIENT_ID -i $VIDEO_DEVICE
+    -c $CLIENT_ID -i $VIDEO_DEVICE \
+    -r $RESOLUTION -f $FPS
     
     local exit_code=$?
     echo "$(date): RTC exited with code $exit_code"

@@ -16,5 +16,6 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=av-track-rtc
 
-#[Install]
-#WantedBy=multi-user.target
+
+[Install]
+WantedBy=multi-user.target
