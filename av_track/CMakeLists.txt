@@ -14,6 +14,7 @@ pkg_check_modules(LIBAV REQUIRED
     libavutil
     libswscale
     libavdevice
+    libswresample
 )
 
 # Find libdatachannel
@@ -39,7 +40,10 @@ add_executable(webrtc_publisher
     src/main.cpp
     src/webrtc_publisher.cpp
     src/video_capturer.cpp
+    src/audio_capturer.cpp
+    src/capture.cpp
     src/encoder.cpp
+    src/opus_encoder.cpp
     src/debug_utils.cpp
     src/parse_cl.cpp
     src/getopt.cpp

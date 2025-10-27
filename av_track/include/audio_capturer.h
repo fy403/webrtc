@@ -1,5 +1,5 @@
-#ifndef VIDEO_CAPTURER_H
-#define VIDEO_CAPTURER_H
+#ifndef AUDIO_CAPTURER_H
+#define AUDIO_CAPTURER_H
 
 #include "capture.h"
 #include <memory>
@@ -10,24 +10,32 @@ class Encoder;
 
 extern "C" {
 #include <libavcodec/avcodec.h>
-#include <libavdevice/avdevice.h>
 #include <libavformat/avformat.h>
-#include <libswscale/swscale.h>
 }
+
+// 音频设备参数结构
+struct AudioDeviceParams {
+  std::string device;
+  int sample_rate;
+  int channels;
+  std::string input_format;
+
+  AudioDeviceParams() : sample_rate(0), channels(0), input_format("") {}
+
+  bool is_valid() const { return !device.empty(); }
+};
 
 namespace rtc {
 class Track;
 }
 
-class VideoCapturer : public Capture {
+class AudioCapturer : public Capture {
 public:
-  VideoCapturer(const std::string &device = "/dev/video1",
-                bool debug_enabled = false,
-                const std::string &resolution = "640x480", int framerate = 30,
-                const std::string &video_format = "mjpeg",
+  AudioCapturer(const AudioDeviceParams &params, bool debug_enabled = false,
                 size_t encode_queue_capacity = 512,
                 size_t send_queue_capacity = 512);
-  ~VideoCapturer();
+  ~AudioCapturer();
+
   bool start() override;
   void stop() override;
 
@@ -36,16 +44,12 @@ private:
   void encode_loop() override;
   void send_loop() override;
 
-  std::string device_;
-  std::string resolution_;
-  int framerate_;
-  std::string video_format_;
+  AudioDeviceParams audio_params_;
   AVFormatContext *format_context_ = nullptr;
   AVCodecContext *codec_context_ = nullptr;
-  SwsContext *sws_context_ = nullptr;
-  int video_stream_index_ = -1;
+  int audio_stream_index_ = -1;
 
   std::shared_ptr<rtc::Track> track_;
 };
 
-#endif // VIDEO_CAPTURER_H
+#endif // AUDIO_CAPTURER_H

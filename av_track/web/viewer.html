@@ -6,6 +6,7 @@
     <title>WebRTC Viewer</title>
     <link rel="stylesheet" href="rtc.css">
     <script src="rtc.js"></script>
+    <script src="rc/video_rtc.js"></script>
 </head>
 
 <body>
@@ -27,9 +28,15 @@
     <input type="button" id="offerBtn" value="Offer" disabled>
     <br>
     <div id="status">Status: Not connected</div>
-    <video id="remoteVideo" autoplay playsinline controls
-        style="max-width: 100%; height: auto; background: black; border: 2px solid red;">
-    </video>
+    <div id="autoplayOverlay" style="position: relative; display: none;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10; background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+            <p>点击按钮开始播放音视频</p>
+            <button id="playButton" onclick="playMedia()" style="font-size: 18px; padding: 10px 20px; cursor: pointer;">播放</button>
+        </div>
+        <video id="remoteVideo" autoplay playsinline controls
+            style="max-width: 100%; height: auto; background: black; border: 2px solid red;">
+        </video>
+    </div>
     <div id="debugInfo" style="margin-top: 20px; padding: 10px; background: #f5f5f5; border-radius: 5px;">
         <h3>Debug Information</h3>
         <div id="videoInfo"></div>

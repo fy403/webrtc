@@ -22,7 +22,7 @@ int main(int argc, char *argv[])
 
         localId = client_id;
 
-        WebRTCPublisher publisher(client_id, params, params.inputDevice());
+        WebRTCPublisher publisher(client_id, params);
         publisher.start();
 
         // 无限睡眠

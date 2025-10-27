@@ -14,21 +14,23 @@ window.addEventListener('load', () => {
     const url = `ws://fy403.cn:8000/${localId}`;
     const config = {
         iceServers: [{
-                "urls": ["stun:stun.cloudflare.com:3478",
-                    // "stun:stun.cloudflare.com:53"
-                ]
-            },
+            "urls": [
+                "stun:stun.l.google.com:19302",
+                "stun:stun.cloudflare.com:3478",
+                // "stun:stun.cloudflare.com:53"
+            ]
+        },
             {
                 "urls": [
-                    "turn:turn.cloudflare.com:3478?transport=udp",
+                    // "turn:turn.cloudflare.com:3478?transport=udp",
                     // "turn:turn.cloudflare.com:3478?transport=tcp",
                     // "turns:turn.cloudflare.com:5349?transport=tcp",
-                    // "turn:turn.cloudflare.com:53?transport=udp",
+                    "turn:turn.cloudflare.com:53?transport=udp",
                     // "turn:turn.cloudflare.com:80?transport=tcp",
                     // "turns:turn.cloudflare.com:443?transport=tcp"
                 ],
-                "username": "g035d939b93f4d9303ff74e5c5135deb891345ee621b1ac4cde334f062450e4a",
-                "credential": "95575f4a4dc4f54f465372dc2b44999e7a61013545fc5a8d1930bc20a981c70e"
+                "username": "g01ca9a98e4b987d196492b8da9873bde96eb447d5587a708916ffad6daa4ac5",
+                "credential": "ad5db8205573fa6f8b2a93c1c04fecceab6dc8b3b4ec9bb5db5c386305e49610"
             },
         ],
     };
@@ -216,101 +218,16 @@ window.addEventListener('load', () => {
         pc.ontrack = (e) => {
             console.log('Received remote track:', e.track.kind, e.track.id, e.track.readyState);
 
-            // 如果是音频轨道，直接忽略（因为我们只关心视频）
+            // 处理音频和视频轨道
             if (e.track.kind === 'audio') {
-                console.log('Ignoring audio track');
-                return;
+                console.log('Processing audio track');
+                // 音频轨道处理
+                handleAudioTrack(e.track);
+            } else if (e.track.kind === 'video') {
+                console.log('Processing video track');
+                // 视频轨道处理
+                handleVideoTrack(e.track);
             }
-
-            // 检查是否已经设置了视频源
-            if (remoteVideo.srcObject) {
-                console.log('Video source already set, replacing track');
-
-                // 移除现有的视频轨道，只保留音频（如果有的话）
-                const stream = remoteVideo.srcObject;
-                const videoTracks = stream.getVideoTracks();
-
-                // 移除所有现有的视频轨道
-                videoTracks.forEach(track => {
-                    stream.removeTrack(track);
-                    track.stop(); // 停止旧的轨道
-                });
-
-                // 添加新的视频轨道
-                stream.addTrack(e.track);
-                console.log('Replaced video track');
-            } else {
-                // 创建新的媒体流，只包含这个视频轨道
-                console.log('Creating new stream with video track');
-                const stream = new MediaStream([e.track]);
-                remoteVideo.srcObject = stream;
-                toggleNoSignalOverlay(false); // Hide "No Signal" overlay when video stream is set
-            }
-
-            // 强制取消视频静音
-            const videoTracks = remoteVideo.srcObject.getVideoTracks();
-            videoTracks.forEach(track => {
-                track.enabled = true;
-                console.log('Video track enabled:', track.enabled, 'muted:', track.muted);
-            });
-
-            // 设置视频属性
-            remoteVideo.muted = false; // 取消视频元素的静音
-            remoteVideo.volume = 0; // 音量设为0，因为我们没有音频
-
-            // 添加视频事件监听
-            remoteVideo.onloadedmetadata = () => {
-                console.log('Video metadata loaded');
-                console.log('Video dimensions:', remoteVideo.videoWidth, 'x', remoteVideo.videoHeight);
-                updateVideoInfo(remoteVideo.srcObject);
-            };
-
-            remoteVideo.onloadeddata = () => {
-                console.log('Video data loaded');
-                playVideo();
-            };
-
-            remoteVideo.onpause = () => {
-                console.log('Video paused');
-                // Only show no signal if there's actually no stream
-                if (!remoteVideo.srcObject || remoteVideo.srcObject.getVideoTracks().length === 0) {
-                    toggleNoSignalOverlay(true);
-                }
-            };
-
-            remoteVideo.onended = () => {
-                console.log('Video ended');
-                toggleNoSignalOverlay(true);
-            };
-
-            // 播放视频
-            const playVideo = () => {
-                console.log('Attempting to play video...');
-                remoteVideo.play().then(() => {
-                    console.log('Video playback started successfully');
-                    updateStatus('Video playing');
-                    toggleNoSignalOverlay(false); // Hide "No Signal" overlay when video plays
-
-                    // 再次检查轨道状态
-                    setTimeout(() => {
-                        const tracks = remoteVideo.srcObject.getTracks();
-                        tracks.forEach((track, index) => {
-                            console.log(`Track ${index}: kind=${track.kind}, enabled=${track.enabled}, muted=${track.muted}`);
-                        });
-                    }, 1000);
-
-                }).catch(err => {
-                    console.error('Error playing video:', err);
-                    updateStatus('Video play failed: ' + err.message);
-                    // If autoplay failed, we might still have a stream but can't play it
-                    if (!remoteVideo.srcObject) {
-                        toggleNoSignalOverlay(true);
-                    }
-                });
-            };
-
-            // 立即尝试播放
-            setTimeout(playVideo, 100);
         };
 
         pc.ondatachannel = (e) => {
@@ -324,6 +241,173 @@ window.addEventListener('load', () => {
 
         peerConnectionMap[id] = pc;
         return pc;
+    }
+
+    // 处理音频轨道
+    function handleAudioTrack(track) {
+        const audioElement = document.getElementById('remoteAudio');
+
+        // 为音频元素创建独立的媒体流
+        let stream = audioElement.srcObject;
+        if (!stream) {
+            stream = new MediaStream();
+            audioElement.srcObject = stream;
+        } else {
+            // 清除现有的音频轨道
+            const audioTracks = stream.getAudioTracks();
+            audioTracks.forEach(t => stream.removeTrack(t));
+        }
+
+        // 添加新的音频轨道到音频流中
+        stream.addTrack(track);
+        console.log('Added audio track to audio stream');
+
+        // 更新音频信息显示
+        updateAudioInfo(stream);
+
+        // 尝试播放音频
+        const playPromise = audioElement.play();
+        if (playPromise !== undefined) {
+            playPromise
+                .then(() => {
+                    console.log('Audio playback started successfully');
+                    updateStatus('Audio playing');
+                })
+                .catch(err => {
+                    console.error('Error playing audio:', err);
+                    updateStatus('Audio play failed: ' + err.message);
+                    // 显示用户需要交互的提示
+                    if (err.name === 'NotAllowedError') {
+                        showAudioPermissionPrompt(audioElement);
+                    }
+                });
+        }
+    }
+
+    // 显示音频权限提示
+    function showAudioPermissionPrompt(audioElement) {
+        // 查找或创建提示元素
+        let prompt = document.getElementById('audio-permission-prompt');
+        if (!prompt) {
+            prompt = document.createElement('div');
+            prompt.id = 'audio-permission-prompt';
+            prompt.innerHTML = `
+                <div style="position: fixed; bottom: 20px; right: 20px; background: #333; color: white; padding: 15px; border-radius: 5px; z-index: 1000;">
+                    <p>音频需要用户交互才能播放</p>
+                    <button id="play-audio-btn" style="background: #4CAF50; border: none; color: white; padding: 10px 15px; cursor: pointer; border-radius: 3px;">点击播放音频</button>
+                </div>
+            `;
+            document.body.appendChild(prompt);
+
+            // 添加按钮事件监听器
+            document.getElementById('play-audio-btn').addEventListener('click', () => {
+                const playPromise = audioElement.play();
+                if (playPromise !== undefined) {
+                    playPromise
+                        .then(() => {
+                            console.log('Audio playback started successfully after user interaction');
+                            // 移除提示
+                            if (prompt.parentNode) {
+                                prompt.parentNode.removeChild(prompt);
+                            }
+                        })
+                        .catch(err => {
+                            console.error('Error playing audio after user interaction:', err);
+                        });
+                }
+            });
+        }
+    }
+
+    // 处理视频轨道
+    function handleVideoTrack(track) {
+        // 检查是否已经设置了视频源
+        if (remoteVideo.srcObject) {
+            console.log('Video source already set, replacing track');
+
+            // 获取视频元素的流并移除现有的视频轨道
+            const stream = remoteVideo.srcObject;
+            const videoTracks = stream.getVideoTracks();
+
+            // 移除所有现有的视频轨道
+            videoTracks.forEach(track => {
+                stream.removeTrack(track);
+                track.stop(); // 停止旧的轨道
+            });
+
+            // 添加新的视频轨道
+            stream.addTrack(track);
+            console.log('Replaced video track');
+        } else {
+            // 创建新的媒体流，仅包含这个视频轨道
+            console.log('Creating new stream with video track');
+            const stream = new MediaStream([track]);
+            remoteVideo.srcObject = stream;
+            toggleNoSignalOverlay(false); // Hide "No Signal" overlay when video stream is set
+        }
+
+        // 强制启用视频轨道
+        track.enabled = true;
+        console.log('Video track enabled:', track.enabled, 'muted:', track.muted);
+
+        // 设置视频属性
+        remoteVideo.muted = false; // 取消视频元素的静音
+
+        // 添加视频事件监听
+        remoteVideo.onloadedmetadata = () => {
+            console.log('Video metadata loaded');
+            console.log('Video dimensions:', remoteVideo.videoWidth, 'x', remoteVideo.videoHeight);
+            updateVideoInfo(remoteVideo.srcObject);
+        };
+
+        remoteVideo.onloadeddata = () => {
+            console.log('Video data loaded');
+            playVideo();
+        };
+
+        remoteVideo.onpause = () => {
+            console.log('Video paused');
+            // Only show no signal if there's actually no stream
+            if (!remoteVideo.srcObject || remoteVideo.srcObject.getVideoTracks().length === 0) {
+                toggleNoSignalOverlay(true);
+            }
+        };
+
+        remoteVideo.onended = () => {
+            console.log('Video ended');
+            toggleNoSignalOverlay(true);
+        };
+
+        // 播放视频
+        const playVideo = () => {
+            console.log('Attempting to play video...');
+            remoteVideo.play().then(() => {
+                console.log('Video playback started successfully');
+                updateStatus('Video playing');
+                toggleNoSignalOverlay(false); // Hide "No Signal" overlay when video plays
+
+                // 再次检查轨道状态
+                setTimeout(() => {
+                    if (remoteVideo.srcObject) {
+                        const tracks = remoteVideo.srcObject.getTracks();
+                        tracks.forEach((track, index) => {
+                            console.log(`Video Track ${index}: kind=${track.kind}, enabled=${track.enabled}, muted=${track.muted}`);
+                        });
+                    }
+                }, 1000);
+
+            }).catch(err => {
+                console.error('Error playing video:', err);
+                updateStatus('Video play failed: ' + err.message);
+                // If autoplay failed, we might still have a stream but can't play it
+                if (!remoteVideo.srcObject) {
+                    toggleNoSignalOverlay(true);
+                }
+            });
+        };
+
+        // 立即尝试播放
+        setTimeout(playVideo, 100);
     }
 
     // Setup a DataChannel
@@ -359,7 +443,7 @@ window.addEventListener('load', () => {
         } : {};
 
         (type == 'offer' ? pc.createOffer(options) : pc.createAnswer())
-        .then((desc) => {
+            .then((desc) => {
                 console.log(`Created ${type}:`, desc.sdp);
                 return pc.setLocalDescription(desc);
             })
@@ -428,6 +512,28 @@ window.addEventListener('load', () => {
         });
 
         videoInfo.innerHTML = info;
+    }
+
+    function updateAudioInfo(stream) {
+        const audioInfo = document.getElementById('audioInfo');
+        if (!audioInfo) return;
+
+        const audioTracks = stream.getAudioTracks();
+
+        let info = `<h4>Audio Track Info:</h4>`;
+
+        audioTracks.forEach((track, index) => {
+            info += `
+            <p><strong>Audio Track ${index}:</strong> 
+                id=${track.id}, 
+                enabled=${track.enabled}, 
+                readyState=${track.readyState},
+                muted=${track.muted}
+            </p>
+        `;
+        });
+
+        audioInfo.innerHTML = info;
     }
 
     // 定期更新视频信息
