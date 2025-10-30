@@ -16,7 +16,7 @@
 class RCClient
 {
 public:
-    RCClient(const std::string &tty_port = "/dev/ttyUSB0");
+    RCClient(const std::string &tty_port = "/dev/ttyUSB0", const std::string &gsm_port = "/dev/ttyACM0", int gsm_baudrate = 115200);
     ~RCClient();
 
     void run();

@@ -45,7 +45,10 @@ try
 		std::cout << "Using specified client ID: " << client_id << std::endl;
 	}
 	std::string tty_port = params.usbDevice();
-	RCClient client(tty_port);
+	std::string gsm_port = params.gsmPort();
+	int gsm_baudrate = params.gsmBaudrate();
+	
+	RCClient client(tty_port, gsm_port, gsm_baudrate);
 	global_client = &client;
 	// rtc 初始化
 	rtc::InitLogger(rtc::LogLevel::Info);

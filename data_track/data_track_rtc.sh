@@ -1,14 +1,19 @@
 #!/bin/bash
 TARGET_HOST="fy403.cn" 
 TARGET_PORT=8000
-USER="g035d939b93f4d9303ff74e5c5135deb891345ee621b1ac4cde334f062450e4a"
-PASSWD="95575f4a4dc4f54f465372dc2b44999e7a61013545fc5a8d1930bc20a981c70e"
+IP_TYPE=4
+USER="g0xxxxxxxxxxx"
+PASSWD="95yyyyyyyyy"
 CHECK_INTERVAL=2  # Health check interval (seconds)
 CLIENT_ID="dataTrack"
 STUN_SERVER="stun.l.google.com"
 STUN_SERVER_PORT=19302
 TURN_SERVER="turn.cloudflare.com"
 TURN_SERVER_PORT=3478
+TTY_PORT=/dev/ttyUSB0 # 电机驱动板usb端口
+TTY_BAUDRATE=115200 # 电机驱动板串口波特率
+GSM_PORT=/dev/ttyACM0 # 4g模块usb端口
+GSM_BAUDRATE=115200 # 4g模块串口波特率
 
 # Path to font file - adjust according to your system
 FONT_FILE="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -43,6 +48,8 @@ run_rtc() {
     -u $TURN_SERVER -p $TURN_SERVER_PORT -U $USER \
     -P $PASSWD \
     -w $TARGET_HOST -x $TARGET_PORT \
+    -I $TTY_PORT -T $TTY_BAUDRATE \
+    -g $GSM_PORT -G $GSM_BAUDRATE \
     -c $CLIENT_ID
     
     local exit_code=$?

@@ -51,6 +51,10 @@ private:
   bool _debug;            // 新添加的debug参数
   int _port;              // 新添加的port参数
   std::string _device;    // 新添加的device参数
+  std::string _ttyPort;   // 新添加的ttyPort参数
+  int _ttyBaudrate;       // 新添加的ttyBaudrate参数
+  std::string _gsmPort;   // 新添加的gsmPort参数
+  int _gsmBaudrate;       // 新添加的gsmBaudrate参数
 
   /* other stuff to keep track of */
   std::string _program_name;
@@ -82,6 +86,10 @@ public:
   bool h() const { return _h; }
   std::string clientId() const { return _client_id; } // 新添加的client_id getter
   bool debug() const { return _debug; }               // 新添加的debug getter
+  std::string ttyPort() const { return _ttyPort; }    // 新添加的ttyPort getter
+  int ttyBaudrate() const { return _ttyBaudrate; }    // 新添加的ttyBaudrate getter
+  std::string gsmPort() const { return _gsmPort; }    // 新添加的gsmPort getter
+  int gsmBaudrate() const { return _gsmBaudrate; }    // 新添加的gsmBaudrate getter
 };
 
 #endif

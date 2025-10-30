@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cstring>
 
-SystemMonitor::SystemMonitor()
+SystemMonitor::SystemMonitor(const std::string &gsm_port, int gsm_baudrate)
 {
     last_net_time_ = std::chrono::steady_clock::now();
     last_cpu_time_ = std::chrono::steady_clock::now();
@@ -16,7 +16,7 @@ SystemMonitor::SystemMonitor()
     last_tx_bytes_ = 0;
     last_total_jiffies_ = 0;
     last_work_jiffies_ = 0;
-    gsm.open("/dev/ttyACM0", 115200);
+    gsm.open(gsm_port, gsm_baudrate);
 }
 
 std::string SystemMonitor::executeCommand(const std::string &command)

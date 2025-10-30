@@ -2,10 +2,10 @@ window.addEventListener('load', () => {
 
     const config = {
         iceServers: [{
-            "urls": ["stun:stun.cloudflare.com:3478",
-                // "stun:stun.cloudflare.com:53"
-            ]
-        },
+                "urls": ["stun:stun.cloudflare.com:3478",
+                    // "stun:stun.cloudflare.com:53"
+                ]
+            },
             {
                 "urls": [
                     "turn:turn.cloudflare.com:3478?transport=udp",
@@ -15,8 +15,8 @@ window.addEventListener('load', () => {
                     // "turn:turn.cloudflare.com:80?transport=tcp",
                     // "turns:turn.cloudflare.com:443?transport=tcp"
                 ],
-                "username": "g035d939b93f4d9303ff74e5c5135deb891345ee621b1ac4cde334f062450e4a",
-                "credential": "95575f4a4dc4f54f465372dc2b44999e7a61013545fc5a8d1930bc20a981c70e"
+                "username": "g0xxxxxxxxxxx",
+                "credential": "95yyyyyyyyy"
             },
         ],
     };
@@ -331,7 +331,7 @@ window.addEventListener('load', () => {
         } : {};
 
         (type == 'offer' ? pc.createOffer(options) : pc.createAnswer())
-            .then((desc) => {
+        .then((desc) => {
                 console.log(`Created ${type}:`, desc.sdp);
                 return pc.setLocalDescription(desc);
             })

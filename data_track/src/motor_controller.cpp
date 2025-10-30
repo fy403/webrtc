@@ -4,7 +4,7 @@
 #include <chrono>
 #include <cstring>
 
-MotorControllerTTY::MotorControllerTTY(const std::string &port = "/dev/ttyUSB0")
+MotorControllerTTY::MotorControllerTTY(const std::string &port)
 {
     // 初始化电机速度
     for (int i = 0; i < 4; i++)

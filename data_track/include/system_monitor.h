@@ -13,7 +13,7 @@ public:
     // 4G ttyACM0
     FourGTty gsm;
 
-    SystemMonitor();
+    SystemMonitor(const std::string &gsm_port = "/dev/ttyACM0", int gsm_baudrate = 115200);
 
     // Network statistics
     bool getNetworkStats(double &rx_speed, double &tx_speed);

@@ -1,18 +1,21 @@
 #!/bin/bash
-# Configuration parameters
 TARGET_HOST="fy403.cn" # 信令服务器地址
 TARGET_PORT=8000 # 信令服务器端口
+IP_TYPE=4 # ipv4 or ipv6
 VIDEO_DEVICE="/dev/video1" # 首选摄像头设备
 VIDEO_DEVICE_BAK="/dev/video0" # 备选摄像头设备
 AUDIO_DEVICE="hw:CARD=Audio,DEV=0" # 音频设备
+SAMPLE_RATE=48000 # 音频采样率
+CHANNELS=1 # 音频通道数
+AUDIO_FORMAT="S16LE" # 音频格式
 CHECK_INTERVAL=2  # Health check interval (seconds)
-CLIENT_ID="usbcam" # 客户端ID
+CLIENT_ID="usbcam" # 客户端ID：不填写使用随机值
 STUN_SERVER="stun.l.google.com" # STUN服务器地址
 STUN_SERVER_PORT=19302 # STUN服务器端口
 TURN_SERVER="turn.cloudflare.com" # TURN服务器地址
 TURN_SERVER_PORT=3478 # TURN服务器端口
-USER="g035d939b93f4d9303ff74e5c5135deb891345ee621b1ac4cde334f062450e4a" # TURN服务器用户名
-PASSWD="95575f4a4dc4f54f465372dc2b44999e7a61013545fc5a8d1930bc20a981c70e" # TURN服务器密码
+USER="g0xxxxxxxxxxx" # TURN服务器用户名
+PASSWD="95yyyyyyyyy" # TURN服务器密码
 RESOLUTION="1280x720" # 画面分辨率
 FPS=20 # 画面帧率
 
@@ -81,7 +84,10 @@ run_rtc() {
     -w $TARGET_HOST -x $TARGET_PORT \
     -c $CLIENT_ID -i $VIDEO_DEVICE \
     -r $RESOLUTION -F $FPS \
-    -a $AUDIO_DEVICE
+    -a $AUDIO_DEVICE \
+    -r $SAMPLE_RATE \
+    -C $CHANNELS \
+    -f $AUDIO_FORMAT
 
     local exit_code=$?
     echo "$(date): RTC exited with code $exit_code"
@@ -96,9 +102,9 @@ turn.cloudflare.com
 -p
 3478
 -U
-g035d939b93f4d9303ff74e5c5135deb891345ee621b1ac4cde334f062450e4a
+g0xxxxxxxxxxx
 -P
-95575f4a4dc4f54f465372dc2b44999e7a61013545fc5a8d1930bc20a981c70e
+95yyyyyyyyy
 -w
 fy403.cn
 -x

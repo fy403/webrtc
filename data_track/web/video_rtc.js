@@ -1,4 +1,3 @@
-
 window.addEventListener('load', () => {
 
     const localId = randomId(4);
@@ -18,8 +17,8 @@ window.addEventListener('load', () => {
                     // "turn:turn.cloudflare.com:80?transport=tcp",
                     // "turns:turn.cloudflare.com:443?transport=tcp"
                 ],
-                "username": "g035d939b93f4d9303ff74e5c5135deb891345ee621b1ac4cde334f062450e4a",
-                "credential": "95575f4a4dc4f54f465372dc2b44999e7a61013545fc5a8d1930bc20a981c70e"
+                "username": "g0xxxxxxxxxxx",
+                "credential": "95yyyyyyyyy"
             },
         ],
     };
@@ -97,7 +96,7 @@ window.addEventListener('load', () => {
         playButton.style.cursor = 'pointer';
         playButton.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
 
-        playButton.onclick = function() {
+        playButton.onclick = function () {
             const video = document.getElementById('remoteVideo');
             if (video && video.srcObject) {
                 video.play().then(() => {

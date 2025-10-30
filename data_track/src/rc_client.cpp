@@ -12,9 +12,10 @@
 // Global variable for signal handling
 extern RCClient *global_client;
 
-RCClient::RCClient(const std::string &tty_port)
+RCClient::RCClient(const std::string &tty_port, const std::string &gsm_port, int gsm_baudrate)
     : running_(false), has_timeout_(false), heartbeat_timeout_(3.0),
-      motor_controller_(new MotorControllerTTY(tty_port)), data_channel_(nullptr)
+      motor_controller_(new MotorControllerTTY(tty_port)), data_channel_(nullptr),
+      system_monitor_(gsm_port, gsm_baudrate)
 {
     last_heartbeat_ = std::chrono::steady_clock::now();
     last_status_time_ = std::chrono::steady_clock::now();

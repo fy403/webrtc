@@ -9,8 +9,8 @@
 #include <vector>
 #include <sstream>
 
-FourGTty::FourGTty()
-    : serial_fd_(-1), device_("/dev/ttyACM0"), baudrate_(115200)
+FourGTty::FourGTty(const std::string &device, int baudrate)
+    : serial_fd_(-1), device_(device), baudrate_(baudrate)
 {
 }
 

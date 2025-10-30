@@ -13,7 +13,7 @@ class MotorControllerTTY
 {
 public:
     // In motor_controller.cpp, line 7 should be:
-    MotorControllerTTY(const std::string &port);
+    MotorControllerTTY(const std::string &port = "/dev/ttyUSB0");
     ~MotorControllerTTY();
 
     void setNeutral();

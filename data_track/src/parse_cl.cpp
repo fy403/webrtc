@@ -55,8 +55,12 @@ Cmdline::Cmdline(int argc, char *argv[]) // ISO C++17 not allowed: throw (std::s
           {"turnPass", required_argument, NULL, 'P'},
           {"inputDevice", required_argument, NULL, 'i'},
           {"usbDevice", required_argument, NULL, 'I'},
-          {"client_id", required_argument, NULL, 'c'}, // 新添加的client_id选项
-          {"debug", no_argument, NULL, 'd'},           // 新添加的debug选项
+          {"client_id", required_argument, NULL, 'c'},
+          {"debug", no_argument, NULL, 'd'},
+          {"ttyPort", required_argument, NULL, 'I'},
+          {"ttyBaudrate", required_argument, NULL, 'T'},
+          {"gsmPort", required_argument, NULL, 'g'},
+          {"gsmBaudrate", required_argument, NULL, 'G'},
           {"help", no_argument, NULL, 'h'},
           {NULL, 0, NULL, 0}};
 
@@ -82,9 +86,13 @@ Cmdline::Cmdline(int argc, char *argv[]) // ISO C++17 not allowed: throw (std::s
   _h = false;
   _client_id = ""; // client_id默认값
   _debug = false;  // debug默认값
+  _ttyPort = "/dev/ttyUSB0";
+  _ttyBaudrate = 115200;
+  _gsmPort = "/dev/ttyACM0";
+  _gsmBaudrate = 115200;
 
   optind = 0;
-  while ((c = getopt_long(argc, argv, "s:t:w:x:u:p:U:P:i:c:denmhv", long_options, &optind)) != -1)
+  while ((c = getopt_long(argc, argv, "s:t:w:x:u:p:U:P:i:c:dI:T:B:g:G:nehmv", long_options, &optind)) != -1)
   {
     switch (c)
     {
@@ -168,11 +176,11 @@ Cmdline::Cmdline(int argc, char *argv[]) // ISO C++17 not allowed: throw (std::s
       _i = optarg;
       break;
 
-    case 'c': // 처리client_id参数
+    case 'c': // 처리client_id파라미터
       _client_id = optarg;
       break;
 
-    case 'd': // 처리debug参数
+    case 'd': // 처리debug파라미터
       _debug = true;
       break;
 
@@ -182,6 +190,19 @@ Cmdline::Cmdline(int argc, char *argv[]) // ISO C++17 not allowed: throw (std::s
       break;
     case 'I':
       _usbPort = optarg;
+      _ttyPort = optarg;
+      break;
+
+    case 'T':
+      _ttyBaudrate = atoi(optarg);
+      break;
+
+    case 'g':
+      _gsmPort = optarg;
+      break;
+
+    case 'G':
+      _gsmBaudrate = atoi(optarg);
       break;
 
     default:
@@ -238,6 +259,14 @@ libdatachannel client implementing WebRTC Data Channels with WebSocket signaling
 #endif
     std::cout << ")\n\
           Input video device.\n\
+   [ -I ] [ --ttyPort ] (type=STRING, default=/dev/ttyUSB0)\n\
+          TTY port for motor controller.\n\
+   [ -T ] [ --ttyBaudrate ] (type=INTEGER, default=115200)\n\
+          TTY baudrate for motor controller.\n\
+   [ -g ] [ --gsmPort ] (type=STRING, default=/dev/ttyACM0)\n\
+          GSM port for 4G module.\n\
+   [ -G ] [ --gsmBaudrate ] (type=INTEGER, default=115200)\n\
+          GSM baudrate for 4G module.\n\
    [ -c ] [ --client_id ] (type=STRING)\n\
           Client identifier.\n\
    [ -d ] [ --debug ] (type=FLAG)\n\

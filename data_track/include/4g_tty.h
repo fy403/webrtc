@@ -8,7 +8,7 @@ class FourGTty
 {
 public:
     // Constructor and destructor
-    FourGTty();
+    FourGTty(const std::string &device = "/dev/ttyACM0", int baudrate = 115200);
     ~FourGTty();
 
     // Serial operations
