@@ -1,16 +1,3 @@
-/**
- * libdatachannel client example
- * Copyright (c) 2019-2020 Paul-Louis Ageneau
- * Copyright (c) 2019 Murat Dogan
- * Copyright (c) 2020 Will Munn
- * Copyright (c) 2020 Nico Chatzi
- * Copyright (c) 2020 Lara Mackey
- * Copyright (c) 2020 Erik Cota-Robles
- *
- * This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at https://mozilla.org/MPL/2.0/.
- */
 
 #include "rtc/rtc.hpp"
 #include "rc_client.h"

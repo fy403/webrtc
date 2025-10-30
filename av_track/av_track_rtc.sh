@@ -1,22 +1,21 @@
 #!/bin/bash
 # Configuration parameters
-#TARGET_HOST="[ipv6.fy403.cn]"  # Replace with actual IPv6 address
-# IP_TYPE=6
-TARGET_HOST="fy403.cn" 
-IP_TYPE=4
-TARGET_PORT=8000
-USER="g035d939b93f4d9303ff74e5c5135deb891345ee621b1ac4cde334f062450e4a"
-PASSWD="95575f4a4dc4f54f465372dc2b44999e7a61013545fc5a8d1930bc20a981c70e"
-VIDEO_DEVICE="/dev/video1"
-VIDEO_DEVICE_BAK="/dev/video0"
+TARGET_HOST="fy403.cn" # 信令服务器地址
+TARGET_PORT=8000 # 信令服务器端口
+VIDEO_DEVICE="/dev/video1" # 首选摄像头设备
+VIDEO_DEVICE_BAK="/dev/video0" # 备选摄像头设备
+AUDIO_DEVICE="hw:CARD=Audio,DEV=0" # 音频设备
 CHECK_INTERVAL=2  # Health check interval (seconds)
-CLIENT_ID="usbcam"
-STUN_SERVER="stun.l.google.com"
-STUN_SERVER_PORT=19302
-TURN_SERVER="turn.cloudflare.com"
-TURN_SERVER_PORT=3478
-RESOLUTION="1280x720"
-FPS=20
+CLIENT_ID="usbcam" # 客户端ID
+STUN_SERVER="stun.l.google.com" # STUN服务器地址
+STUN_SERVER_PORT=19302 # STUN服务器端口
+TURN_SERVER="turn.cloudflare.com" # TURN服务器地址
+TURN_SERVER_PORT=3478 # TURN服务器端口
+USER="g035d939b93f4d9303ff74e5c5135deb891345ee621b1ac4cde334f062450e4a" # TURN服务器用户名
+PASSWD="95575f4a4dc4f54f465372dc2b44999e7a61013545fc5a8d1930bc20a981c70e" # TURN服务器密码
+RESOLUTION="1280x720" # 画面分辨率
+FPS=20 # 画面帧率
+
 
 # Path to font file - adjust according to your system
 FONT_FILE="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -81,11 +80,38 @@ run_rtc() {
     -P $PASSWD \
     -w $TARGET_HOST -x $TARGET_PORT \
     -c $CLIENT_ID -i $VIDEO_DEVICE \
-    -r $RESOLUTION -f $FPS
-    
+    -r $RESOLUTION -F $FPS \
+    -a $AUDIO_DEVICE
+
     local exit_code=$?
     echo "$(date): RTC exited with code $exit_code"
     return $exit_code
+
+    -s
+stun.l.google.com
+-t
+19302
+-u
+turn.cloudflare.com
+-p
+3478
+-U
+g035d939b93f4d9303ff74e5c5135deb891345ee621b1ac4cde334f062450e4a
+-P
+95575f4a4dc4f54f465372dc2b44999e7a61013545fc5a8d1930bc20a981c70e
+-w
+fy403.cn
+-x
+8000
+-c
+usbcam
+-i
+/dev/video1
+-F
+20
+-a
+"hw:CARD=Audio,DEV=0"
+--debug
 }
 
 # Main loop

@@ -49,6 +49,8 @@ private:
   bool _h;
   std::string _client_id; // 新添加的client_id参数
   bool _debug;            // 新添加的debug参数
+  int _port;              // 新添加的port参数
+  std::string _device;    // 新添加的device参数
 
   /* other stuff to keep track of */
   std::string _program_name;

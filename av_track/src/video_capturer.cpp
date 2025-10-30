@@ -1,6 +1,7 @@
 #include "video_capturer.h"
 #include "debug_utils.h"
 #include "encoder.h"
+#include "h264_encoder.h"
 #include <algorithm>
 #include <chrono>
 #include <cstring>

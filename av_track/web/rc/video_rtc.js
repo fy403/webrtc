@@ -1,13 +1,3 @@
-/*
- * libdatachannel example web client
- * Copyright (C) 2020 Lara Mackey
- * Copyright (C) 2020 Paul-Louis Ageneau
- *
- * This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at https://mozilla.org/MPL/2.0/.
- */
-
 window.addEventListener('load', () => {
 
     const localId = randomId(4);

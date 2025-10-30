@@ -1,21 +1,11 @@
-/*
- * libdatachannel example web client
- * Copyright (C) 2020 Lara Mackey
- * Copyright (C) 2020 Paul-Louis Ageneau
- *
- * This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at https://mozilla.org/MPL/2.0/.
- */
-
 window.addEventListener('load', () => {
 
     const config = {
         iceServers: [{
-                "urls": ["stun:stun.cloudflare.com:3478",
-                    // "stun:stun.cloudflare.com:53"
-                ]
-            },
+            "urls": ["stun:stun.cloudflare.com:3478",
+                // "stun:stun.cloudflare.com:53"
+            ]
+        },
             {
                 "urls": [
                     "turn:turn.cloudflare.com:3478?transport=udp",
@@ -341,7 +331,7 @@ window.addEventListener('load', () => {
         } : {};
 
         (type == 'offer' ? pc.createOffer(options) : pc.createAnswer())
-        .then((desc) => {
+            .then((desc) => {
                 console.log(`Created ${type}:`, desc.sdp);
                 return pc.setLocalDescription(desc);
             })

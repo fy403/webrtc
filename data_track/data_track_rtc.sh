@@ -1,9 +1,5 @@
 #!/bin/bash
-# Configuration parameters
-#TARGET_HOST="[ipv6.fy403.cn]"  # Replace with actual IPv6 address
-# IP_TYPE=6
 TARGET_HOST="fy403.cn" 
-IP_TYPE=4
 TARGET_PORT=8000
 USER="g035d939b93f4d9303ff74e5c5135deb891345ee621b1ac4cde334f062450e4a"
 PASSWD="95575f4a4dc4f54f465372dc2b44999e7a61013545fc5a8d1930bc20a981c70e"
