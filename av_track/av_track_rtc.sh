@@ -83,7 +83,7 @@ run_rtc() {
     -P $PASSWD \
     -w $TARGET_HOST -x $TARGET_PORT \
     -c $CLIENT_ID -i $VIDEO_DEVICE \
-    -r $RESOLUTION -F $FPS \
+    -R $RESOLUTION -F $FPS \
     -a $AUDIO_DEVICE \
     -r $SAMPLE_RATE \
     -C $CHANNELS \
@@ -92,32 +92,6 @@ run_rtc() {
     local exit_code=$?
     echo "$(date): RTC exited with code $exit_code"
     return $exit_code
-
-    -s
-stun.l.google.com
--t
-19302
--u
-turn.cloudflare.com
--p
-3478
--U
-g0xxxxxxxxxxx
--P
-95yyyyyyyyy
--w
-fy403.cn
--x
-8000
--c
-usbcam
--i
-/dev/video1
--F
-20
--a
-"hw:CARD=Audio,DEV=0"
---debug
 }
 
 # Main loop

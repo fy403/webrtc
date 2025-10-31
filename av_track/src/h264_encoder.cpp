@@ -57,7 +57,7 @@ bool H264Encoder::open_encoder(int width, int height, int fps) {
   // 设置编码器参数
   av_opt_set(encoder_context_->priv_data, "preset", "ultrafast", 0);
   av_opt_set(encoder_context_->priv_data, "tune", "zerolatency", 0);
-  // av_opt_set(encoder_context_->priv_data, "crf", "32", 0);
+  av_opt_set(encoder_context_->priv_data, "crf", "29", 0);
   av_opt_set(encoder_context_->priv_data, "profile", "baseline", 0);
 
   std::cout << "Encoder configured with GOP size: "
