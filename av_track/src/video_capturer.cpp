@@ -50,6 +50,14 @@ bool VideoCapturer::start() {
   }
   std::string device_path = device_;
 
+  // Parse resolution
+  int width = 640, height = 480; // Default values
+  sscanf(resolution_.c_str(), "%dx%d", &width, &height);
+  std::cout << "Resolution: " << width << "x" << height << std::endl;
+  if (width < height) {
+    resolution_ = std::to_string(height) + "x" + std::to_string(width);
+  }
+
   AVDictionary *options = nullptr;
   av_dict_set(&options, "video_size", resolution_.c_str(), 0);
   av_dict_set(&options, "framerate", std::to_string(framerate_).c_str(), 0);
@@ -102,14 +110,8 @@ bool VideoCapturer::start() {
     return false;
   }
 
-  // Parse resolution
-  int width = 640, height = 480; // Default values
-  sscanf(resolution_.c_str(), "%dx%d", &width, &height);
-  std::cout << "Resolution: " << width << "x" << height << std::endl;
-
   // Initialize encoder
-  if (!encoder_->open_encoder(codec_context_->width, codec_context_->height,
-                              framerate_)) {
+  if (!encoder_->open_encoder(width, height, framerate_)) {
     std::cerr << "Cannot open H.264 encoder" << std::endl;
     return false;
   }
