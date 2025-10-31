@@ -395,13 +395,12 @@ const ThrottleLevel THROTTLE_LEVELS[] = {
 
 如果自定义了client_id，则需要修改此处。修改后点击Send可以重新建立P2P连接
 
-![image-20251030141913114](README.assets\image-20251030141913114.png)
+<img src="README.assets\image-20251030141913114.png" alt="image-20251030141913114" style="zoom:80%;" />
 
 ## 技术细节
 
 ### 1.系统架构图
-
-![image-20251030170418827](README.assets\image-20251030170418827.png)
+<img src="README.assets\image-20251030170418827.png" alt="image-20251030170418827" style="zoom:80%;" />
 WebRTC（Web Real-Time Communication）是一种开源技术，支持浏览器、移动端和嵌入式设备之间的实时音视频和数据传输。其核心目标是通过点对点（P2P）连接实现低延迟通信，无需安装插件或中间媒介。可以参考[WebRTC连接原理](https://blog.csdn.net/yanceyxin/article/details/149752514)
 
 在本案例中，将音视频数据通道和控制信号通道分离，分别在不同的RTP连接中传递数据。避免彼此相互干扰。使用WebRTC的主要目的在于：
@@ -446,8 +445,7 @@ WebRTC的连接建立分为以下几个阶段：
 > 尽量选择带GPU的开发板子，并且还需要获取板子安装驱动的文档。这样音视频编解码速度快，也能缓解CPU的压力。
 >
 > 代码里面是不带GPU加速，仍然是软编码(效果还可以)。板子是4H1G，正常工作CPU利用率平均30%，内存占用300MB，音视频码率1.8Mbps。
->
-> ![image-20251030135634832](README.assets\image-20251030135634832.png)
+><img src="README.assets\image-20251030135634832.png" alt="image-20251030135634832" style="zoom:80%;" />
 
 <img src="README.assets\image-20251029180420095.png" alt="image-20251029180420095" style="zoom: 50%;" />
 
