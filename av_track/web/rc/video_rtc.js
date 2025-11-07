@@ -35,6 +35,13 @@ window.addEventListener('load', () => {
     const statusDiv = document.getElementById('status');
     _localId.textContent = localId;
 
+    // 视频监控相关变量
+    let lastVideoTime = 0;
+    let videoStuckCount = 0;
+    let monitoringInterval = null;
+    let currentWs = null;
+    let currentOfferId = null;
+
     // Initialize with "No Signal" overlay visible
     toggleNoSignalOverlay(true);
 
@@ -43,6 +50,7 @@ window.addEventListener('load', () => {
         .then((ws) => {
             console.log('WebSocket connected, signaling ready');
             updateStatus('Signaling connected');
+            currentWs = ws;
             offerId.disabled = false;
             offerBtn.disabled = false;
             offerBtn.onclick = () => offerPeerConnection(ws, offerId.value);
@@ -142,6 +150,10 @@ window.addEventListener('load', () => {
             return;
         }
 
+        // 记录当前的websocket和offerId用于重连
+        currentWs = ws;
+        currentOfferId = id;
+
         // Create PeerConnection
         console.log(`Offering to ${id}`);
         updateStatus(`Offering to ${id}`);
@@ -156,6 +168,95 @@ window.addEventListener('load', () => {
         // Send offer
         updateStatus(`Creating offer for ${id}`);
         sendLocalDescription(ws, id, pc, 'offer');
+        
+        // 启动视频监控
+        startVideoMonitoring(id);
+    }
+
+    // 启动视频监控
+    function startVideoMonitoring(id) {
+        // 清除之前的监控
+        if (monitoringInterval) {
+            clearInterval(monitoringInterval);
+        }
+        
+        // 初始化监控变量
+        lastVideoTime = 0;
+        videoStuckCount = 0;
+        
+        // 启动新的监控
+        monitoringInterval = setInterval(() => {
+            monitorVideoPlayback(id);
+        }, 3000); // 每3秒检查一次
+        
+        console.log('Started video monitoring');
+    }
+
+    // 监控视频播放状态
+    function monitorVideoPlayback(id) {
+        // 检查视频元素是否存在且有数据源
+        if (!remoteVideo || !remoteVideo.srcObject) {
+            console.log('No video source detected');
+            return;
+        }
+        
+        // 检查是否有视频轨道
+        const videoTracks = remoteVideo.srcObject.getVideoTracks();
+        if (videoTracks.length === 0) {
+            console.log('No video tracks detected');
+            attemptRecovery(id);
+            return;
+        }
+        
+        // 检查视频是否正在播放
+        if (remoteVideo.paused || remoteVideo.ended) {
+            console.log('Video is paused or ended');
+            attemptRecovery(id);
+            return;
+        }
+        
+        // 检查视频时间是否在变化（判断是否卡住）
+        if (remoteVideo.currentTime > 0) {
+            if (remoteVideo.currentTime === lastVideoTime) {
+                videoStuckCount++;
+                console.log(`Video time not changing: stuck for ${videoStuckCount} checks`);
+                
+                // 如果连续3次检查时间都没变，则认为卡住了
+                if (videoStuckCount >= 3) {
+                    console.log('Video appears to be stuck, attempting recovery');
+                    attemptRecovery(id);
+                }
+            } else {
+                // 时间在变化，重置计数器
+                videoStuckCount = 0;
+            }
+            
+            lastVideoTime = remoteVideo.currentTime;
+        }
+    }
+
+    // 尝试恢复视频连接
+    function attemptRecovery(id) {
+        console.log(`Attempting to recover connection for ${id}`);
+        updateStatus(`Attempting to recover connection for ${id}`);
+        
+        // 清除当前连接
+        if (peerConnectionMap[id]) {
+            peerConnectionMap[id].close();
+            delete peerConnectionMap[id];
+        }
+        
+        if (dataChannelMap[id]) {
+            delete dataChannelMap[id];
+        }
+        
+        // 重新发送offer
+        if (currentWs && currentOfferId) {
+            console.log('Resending offer');
+            offerPeerConnection(currentWs, currentOfferId);
+        } else {
+            console.log('Cannot resend offer: no active WebSocket or offer ID');
+        }
     }
 
     // Create and setup a PeerConnection

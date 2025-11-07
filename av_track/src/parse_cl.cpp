@@ -98,8 +98,9 @@ Cmdline::Cmdline(int argc,
   _framerate = 30;         // framerate
 
   optind = 0;
-  while ((c = getopt_long(argc, argv, "a:s:t:w:x:u:p:U:R:P:i:c:r:f:F:V:denmhv",
-                          long_options, &optind)) != -1) {
+  while (
+      (c = getopt_long(argc, argv, "a:s:t:w:x:u:p:U:R:P:C:i:c:r:f:F:V:denmhv",
+                       long_options, &optind)) != -1) {
     switch (c) {
     case 'n':
       _n = true;
