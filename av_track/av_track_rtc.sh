@@ -7,7 +7,7 @@ VIDEO_DEVICE_BAK="/dev/video0" # 备选摄像头设备
 AUDIO_DEVICE="hw:CARD=Audio,DEV=0" # 音频设备
 SAMPLE_RATE=48000 # 音频采样率
 CHANNELS=1 # 音频通道数
-AUDIO_FORMAT="S16LE" # 音频格式
+AUDIO_FORMAT="alsa" # 音频输入格式
 CHECK_INTERVAL=2  # Health check interval (seconds)
 CLIENT_ID="usbcam" # 客户端ID：不填写使用随机值
 STUN_SERVER="stun.l.google.com" # STUN服务器地址
@@ -16,7 +16,7 @@ TURN_SERVER="turn.cloudflare.com" # TURN服务器地址
 TURN_SERVER_PORT=3478 # TURN服务器端口
 USER="g0xxxxxxxxxxx" # TURN服务器用户名
 PASSWD="95yyyyyyyyy" # TURN服务器密码
-RESOLUTION="1280x720" # 画面分辨率
+RESOLUTION="640x480" # 画面分辨率
 FPS=20 # 画面帧率
 
 

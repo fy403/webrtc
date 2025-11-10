@@ -17,11 +17,16 @@ Capture::Capture(bool debug_enabled, size_t encode_queue_capacity,
     : debug_enabled_(debug_enabled), is_running_(false), is_paused_(false),
       encode_queue_(encode_queue_capacity), send_queue_(send_queue_capacity) {
   avdevice_register_all();
+  encode_queue_.set_deleter([](AVFrame *frame) { av_frame_free(&frame); });
+  send_queue_.set_deleter([](AVPacket *packet) { av_packet_free(&packet); });
 }
 
 Capture::~Capture() { stop(); }
 
-bool Capture::is_running() { return is_running_; }
+bool Capture::is_running() { 
+  return is_running_.load(); 
+}
+
 void Capture::set_track_callback(TrackCallback callback) {
   {
     std::lock_guard<std::mutex> lock(callback_mutex_);
@@ -31,19 +36,22 @@ void Capture::set_track_callback(TrackCallback callback) {
 }
 
 void Capture::stop() {
+  // 先标记为停止运行
   is_running_ = false;
   is_paused_ = false;
 
-  // Notify all waiting threads
+  // 通知所有等待的线程
+  callback_cv_.notify_all();
+
+  // 清空队列
   encode_queue_.clear();
   send_queue_.clear();
-  // Push sentinel nullptrs to unblock waiters
+  
+  // 推送空指针以解除阻塞的消费者
   encode_queue_.push(nullptr);
   send_queue_.push(nullptr);
 
-  // Notify condition variables to wake up waiting threads
-  callback_cv_.notify_all();
-
+  // 等待所有线程完成
   if (capture_thread_.joinable()) {
     capture_thread_.join();
   }
@@ -56,7 +64,7 @@ void Capture::stop() {
     send_thread_.join();
   }
 
-  // Clean up queues
+  // 清理队列中剩余的元素
   while (!encode_queue_.empty()) {
     AVFrame *frame;
     if (encode_queue_.pop(frame)) {

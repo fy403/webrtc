@@ -239,14 +239,6 @@ shared_ptr<rtc::PeerConnection> createPeerConnection(const rtc::Configuration &c
 		dc->onClosed([id]() { std::cout << "DataChannel from " << id << " closed" << std::endl; });
 
 		dc->onMessage([id](auto data) {
-			// data holds either std::string or rtc::binary
-			if (std::holds_alternative<std::string>(data))
-				std::cout << "Message from " << id << " received: " << std::get<std::string>(data)
-				          << std::endl;
-			else
-				std::cout << "Binary message from " << id
-				          << " received, size=" << std::get<rtc::binary>(data).size() << std::endl;
-			
 			if (global_client && global_client->getDataChannel() != nullptr) {
 				// Handle both string and binary data
 				if (std::holds_alternative<std::string>(data)) {

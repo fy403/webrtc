@@ -37,7 +37,9 @@ VideoCapturer::VideoCapturer(const std::string &device, bool debug_enabled,
   encoder_ = std::make_unique<H264Encoder>(debug_enabled);
 }
 
-VideoCapturer::~VideoCapturer() { stop(); }
+VideoCapturer::~VideoCapturer() { 
+  stop(); 
+}
 
 // Inherited from Capture base class
 // void VideoCapturer::set_track_callback(TrackCallback callback)

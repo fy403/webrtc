@@ -150,8 +150,11 @@ createPeerConnection(const rtc::Configuration &config,
 
     video_track->onClosed([id, video_capturer]() {
       std::cout << "Video Track to " << id << " closed" << std::endl;
-      video_capturer->pause_capture();
-      video_capturer->set_track_callback(nullptr);
+      // 检查capturer是否仍然有效
+      if (video_capturer) {
+        video_capturer->pause_capture();
+        video_capturer->set_track_callback(nullptr);
+      }
     });
   }
 
@@ -225,8 +228,11 @@ createPeerConnection(const rtc::Configuration &config,
 
     audio_track->onClosed([id, audio_capturer]() {
       std::cout << "Audio Track to " << id << " closed" << std::endl;
-      audio_capturer->pause_capture();
-      audio_capturer->set_track_callback(nullptr);
+      // 检查capturer是否仍然有效
+      if (audio_capturer) {
+        audio_capturer->pause_capture();
+        audio_capturer->set_track_callback(nullptr);
+      }
     });
   }
 
@@ -237,6 +243,7 @@ createPeerConnection(const rtc::Configuration &config,
             state == rtc::PeerConnection::State::Failed ||
             state == rtc::PeerConnection::State::Closed) {
           std::cout << "PeerConnection closed, stopping captures!" << std::endl;
+          // 检查capturer是否仍然有效
           if (video_capturer && video_capturer->is_running()) {
             video_capturer->set_track_callback(nullptr);
             video_capturer->pause_capture();
@@ -444,19 +451,31 @@ void WebRTCPublisher::start() {
 }
 
 void WebRTCPublisher::stop() {
+  // 关闭所有PeerConnection以确保回调被清理
+  for (auto &pair : peerConnectionMap) {
+    if (pair.second) {
+      pair.second->close();
+    }
+  }
+  peerConnectionMap.clear();
+
+  if (ws_) {
+    ws_->close();
+    ws_.reset();
+  }
+
+  // 等待一小段时间确保所有回调都已完成
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
   if (video_capturer_ != nullptr) {
     video_capturer_->stop();
     delete video_capturer_;
+    video_capturer_ = nullptr;
   }
 
   if (audio_capturer_ != nullptr) {
     audio_capturer_->stop();
     delete audio_capturer_;
-  }
-
-  peerConnectionMap.clear();
-
-  if (ws_) {
-    ws_->close();
+    audio_capturer_ = nullptr;
   }
 }

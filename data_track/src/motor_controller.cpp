@@ -189,7 +189,9 @@ void MotorControllerTTY::updateMotors()
         speed_front_back = 0;
         speed_left_right = 0;
     }
-
+    // 归中
+    setMotorSpeed(MOTOR_FRONT_BACK, 0);
+    setMotorSpeed(MOTOR_LEFT_RIGHT, 0);
     setMotorSpeed(MOTOR_FRONT_BACK, speed_front_back);
     setMotorSpeed(MOTOR_LEFT_RIGHT, speed_left_right);
     printStatus();
