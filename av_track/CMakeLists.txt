@@ -32,8 +32,12 @@ find_path(LIBDATACHANNEL_INCLUDE_DIR
         REQUIRED
 )
 
+# Find SDL2
+pkg_check_modules(SDL2 REQUIRED sdl2)
+
 message(STATUS "Found libdatachannel library: ${LIBDATACHANNEL_LIBRARY}")
 message(STATUS "Found libav libraries: ${LIBAV_LIBRARIES}")
+message(STATUS "Found SDL2 libraries: ${SDL2_LIBRARIES}")
 
 # Add executable
 add_executable(webrtc_publisher
@@ -41,9 +45,11 @@ add_executable(webrtc_publisher
         src/webrtc_publisher.cpp
         src/video_capturer.cpp
         src/audio_capturer.cpp
+        src/audio_player.cpp
         src/capture.cpp
         src/encoder.cpp
         src/opus_encoder.cpp
+        src/opus_decoder.cpp
         src/debug_utils.cpp
         src/parse_cl.cpp
         src/getopt.cpp
@@ -54,6 +60,7 @@ add_executable(webrtc_publisher
 target_include_directories(webrtc_publisher PRIVATE
         ${LIBAV_INCLUDE_DIRS}
         ${LIBDATACHANNEL_INCLUDE_DIR}
+        ${SDL2_INCLUDE_DIRS}
         include
 )
 
@@ -61,6 +68,7 @@ target_include_directories(webrtc_publisher PRIVATE
 target_link_libraries(webrtc_publisher
         ${LIBAV_LIBRARIES}
         ${LIBDATACHANNEL_LIBRARY}
+        ${SDL2_LIBRARIES}
         ssl
         crypto
 )

@@ -2,6 +2,7 @@
 #define DEBUG_UTILS_H
 
 #include <string>
+#include <vector>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -24,6 +25,16 @@ bool initialize_raw_audio_writer(const std::string &filename);
 bool save_raw_audio_packet(const AVPacket *packet, std::string debug_filename);
 void finalize_raw_audio_file();
 
+// 音频帧保存函数
+bool initialize_raw_audio_writer2(const std::string &filename);
+bool save_raw_audio_frame2(const AVFrame *frame, const std::string &filename);
+void finalize_raw_audio_frame_file2();
+
+// 保存opus packet到ogg文件
+bool initialize_opus_ogg_writer(const std::string &filename);
+bool save_opus_packet_to_ogg(const AVPacket *packet,
+                             const std::string &filename);
+void finalize_opus_ogg_file();
 } // namespace DebugUtils
 
 #endif // DEBUG_UTILS_H

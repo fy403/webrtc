@@ -192,7 +192,7 @@ window.addEventListener('load', () => {
         dataUpdateKeyVisual();
         dataSendFrame(MSG_KEY, kc, 1);
       }
-    } else if (ev.code === 'KeyT') {
+    } else if (ev.code === 'KeyE') {
       dataSendFrame(MSG_EMERGENCY_STOP, 0, 0);
     } else if (ev.code === 'KeyF') {
       dataSendFrame(MSG_CYCLE_THROTTLE, 0, 0);
@@ -630,12 +630,12 @@ window.addEventListener('load', () => {
     };
 
     dc.onmessage = (ev) => {
-      console.log(`Message from ${id} received:`, ev.data);
+      // console.log(`Message from ${id} received:`, ev.data);
 
       if (ev.data instanceof ArrayBuffer) {
         // 处理二进制数据
         const data = new Uint8Array(ev.data);
-        console.log('二进制数据长度:', data.length);
+        // console.log('二进制数据长度:', data.length);
 
         // 解析系统状态帧
         const statusData = dataParseSystemStatusFrame(data);
