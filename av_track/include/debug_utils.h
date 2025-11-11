@@ -2,6 +2,7 @@
 #define DEBUG_UTILS_H
 
 #include <string>
+#include <vector>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -23,7 +24,7 @@ void analyze_nal_units(const AVPacket *packet);
 bool initialize_raw_audio_writer(const std::string &filename);
 bool save_raw_audio_packet(const AVPacket *packet, std::string debug_filename);
 void finalize_raw_audio_file();
-
+void logAudioData(const std::vector<uint8_t> &data, const std::string &prefix);
 } // namespace DebugUtils
 
 #endif // DEBUG_UTILS_H

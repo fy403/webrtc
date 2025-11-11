@@ -5,6 +5,7 @@
 #include <future>
 #include <iostream>
 
+#include "audio_player.h"
 #include "opus_encoder.h"
 #include "rtc/rtc.hpp"
 #include <algorithm>
@@ -36,7 +37,7 @@ shared_ptr<rtc::PeerConnection>
 createPeerConnection(const rtc::Configuration &config,
                      weak_ptr<rtc::WebSocket> wws, std::string id,
                      VideoCapturer *video_capturer,
-                     AudioCapturer *audio_capturer) {
+                     AudioCapturer *audio_capturer, AudioPlayer *audio_player) {
   auto pc = std::make_shared<rtc::PeerConnection>(config);
 
   pc->onGatheringStateChange([](rtc::PeerConnection::GatheringState state) {
@@ -161,7 +162,7 @@ createPeerConnection(const rtc::Configuration &config,
   // Handle audio track if audio capturer exists
   if (audio_capturer != nullptr && audio_capturer->is_running()) {
     rtc::Description::Audio audio_media("audio",
-                                        rtc::Description::Direction::SendOnly);
+                                        rtc::Description::Direction::SendRecv);
     audio_media.addOpusCodec(111); // Add Opus codec with payload type 111
 
     uint32_t audio_ssrc = dis(gen);
@@ -193,6 +194,19 @@ createPeerConnection(const rtc::Configuration &config,
 
     // 设置轨道的媒体处理器
     audio_track->setMediaHandler(audio_packetizer);
+
+    // 收到音频数据时
+    audio_track->onMessage(
+        [id, audio_player](const rtc::binary &data) {
+          std::cout << "Audio track to " << id
+                    << " received binary audio data, size: " << data.size()
+                    << std::endl;
+          // 将接收到的音频数据发送到音频播放器
+          if (audio_player != nullptr) {
+            audio_player->receiveAudioData(data);
+          }
+        },
+        nullptr);
 
     audio_track->onOpen([id, audio_track, audio_capturer]() {
       std::cout << "Audio track to " << id << " is now open" << std::endl;
@@ -287,6 +301,10 @@ WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Cmdline params)
   } else {
     audio_capturer_ = nullptr;
   }
+
+  // Initialize audio player with the specified playback device
+  audio_player_ = new AudioPlayer(params.speakerDevice());
+
   std::cout << "WebRTCPublisher init..." << std::endl;
 }
 
@@ -361,6 +379,12 @@ void WebRTCPublisher::start() {
     std::cout << "No audio device is specified" << std::endl;
   }
 
+  // 启动音频播放器
+  if (audio_player_ != nullptr) {
+    audio_player_->start();
+    std::cout << "Audio player started" << std::endl;
+  }
+
   ws_ = std::make_shared<rtc::WebSocket>();
 
   std::promise<void> wsPromise;
@@ -408,7 +432,7 @@ void WebRTCPublisher::start() {
         peerConnectionMap.erase(id);
         std::cout << "Answering to " + id << std::endl;
         pc = createPeerConnection(config, wws, id, this->video_capturer_,
-                                  this->audio_capturer_);
+                                  this->audio_capturer_, this->audio_player_);
 
       } else {
         pc = jt->second;
@@ -416,7 +440,7 @@ void WebRTCPublisher::start() {
     } else if (type == "offer") {
       std::cout << "Answering to " + id << std::endl;
       pc = createPeerConnection(config, wws, id, this->video_capturer_,
-                                this->audio_capturer_);
+                                this->audio_capturer_, this->audio_player_);
 
     } else {
       return;
@@ -477,5 +501,11 @@ void WebRTCPublisher::stop() {
     audio_capturer_->stop();
     delete audio_capturer_;
     audio_capturer_ = nullptr;
+  }
+
+  if (audio_player_ != nullptr) {
+    audio_player_->stop();
+    delete audio_player_;
+    audio_player_ = nullptr;
   }
 }

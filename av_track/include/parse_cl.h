@@ -44,7 +44,8 @@ private:
   std::string _turnUser;
   std::string _turnPass;
   std::string _i;
-  std::string _a; // Audio device parameter
+  std::string _a; // Audio device parameter (microphone)
+  std::string _speakerDevice; // Speaker device parameter
   int _r;         // Audio sample rate
   int _c;         // Audio channels
   std::string _f; // Audio input_format
@@ -81,7 +82,8 @@ public:
   std::string turnUser() const { return _turnUser; }
   std::string turnPass() const { return _turnPass; }
   std::string inputDevice() const { return _i; }
-  std::string audioDevice() const { return _a; } // Audio device getter
+  std::string audioDevice() const { return _a; } // Audio device getter (microphone)
+  std::string speakerDevice() const { return _speakerDevice; } // Speaker device getter
   int sampleRate() const { return _r; }          // Audio sample rate getter
   int channels() const { return _c; }            // Audio channels getter
   std::string audioFormat() const { return _f; } // Audio input_format getter

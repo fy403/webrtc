@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include "audio_capturer.h"
+#include "audio_player.h"
 #include "nlohmann/json.hpp"
 #include "parse_cl.h"
 #include "rtc/rtc.hpp"
@@ -40,6 +41,7 @@ public:
 
   VideoCapturer *video_capturer_ = nullptr;
   AudioCapturer *audio_capturer_ = nullptr;
+  AudioPlayer *audio_player_ = nullptr;
 
 private:
   std::string client_id_;
