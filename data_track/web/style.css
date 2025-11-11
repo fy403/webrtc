@@ -385,3 +385,94 @@
 				grid-template-columns: 1fr;
 			}
 		}
+		
+		/* 新增的飞控风格状态显示样式 */
+		.header-info {
+			display: flex;
+			justify-content: space-between;
+			flex-wrap: wrap;
+			gap: 10px;
+		}
+		
+		.video-with-overlay {
+			position: relative;
+			width: 100%;
+		}
+		
+		.status-overlay {
+			position: absolute;
+			z-index: 20;
+			background: rgba(18, 24, 51, 0.0);
+			border-radius: 8px;
+			padding: 10px;
+			backdrop-filter: blur(4px);
+		}
+		
+		.left-overlay {
+			top: 15px;
+			left: 15px;
+			width: 130px;
+		}
+		
+		.right-overlay {
+			top: 15px;
+			right: 5px;
+			width: 120px;
+		}
+		
+		.bottom-overlay {
+			bottom: 15px;
+			left: 50%;
+			transform: translateX(-50%);
+			display: flex;
+			align-items: center;
+			gap: 20px;
+			padding: 8px 15px;
+		}
+		
+		.status-group {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+		}
+		
+		.status-item-inline .hint {
+			font-size: 11px;
+			margin-bottom: 2px;
+		}
+		
+		.status-item-inline .mono {
+			font-size: 12px;
+			font-weight: bold;
+		}
+		
+		.signal-indicator-container {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		
+		.last-update .hint {
+			font-size: 11px;
+			white-space: nowrap;
+		}
+		
+		@media (max-width: 768px) {
+			.left-overlay, .right-overlay {
+				width: 100px;
+			}
+			
+			.status-item-inline .hint {
+				font-size: 10px;
+			}
+			
+			.status-item-inline .mono {
+				font-size: 11px;
+			}
+			
+			.bottom-overlay {
+				width: 90%;
+				left: 5%;
+				transform: none;
+			}
+		}

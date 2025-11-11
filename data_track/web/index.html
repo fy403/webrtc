@@ -15,55 +15,46 @@
 		<!-- 视频层 - 最高层 -->
 		<div class="video-layer">
 			<div class="card">
-				<div>
-					<h2>Local ID</h2>
-					<p id="localId"></p>
-				</div>
-				<div id="status">Status: Not connected</div>
-				<div>
-					<h2>Local ID</h2>
-					<p id="dataLocalId"></p>
-				</div>
-				<div id="dataStatus">Status: Not connected</div>
-				<div class="video-container">
-					<video id="remoteVideo" autoplay playsinline style=";"></video>
-					<div id="noSignalOverlay" class="no-signal-overlay">
-						<div class="no-signal-text">无信号</div>
+				<div class="video-with-overlay">
+					<!-- 左侧状态面板 -->
+					<div class="status-overlay left-overlay">
+						<div class="status-group">
+							<div class="status-item-inline">
+								<div class="hint">上行网速</div>
+								<div class="mono" id="txSpeed">0.00 KB/s</div>
+							</div>
+							<div class="status-item-inline">
+								<div class="hint">下行网速</div>
+								<div class="mono" id="rxSpeed">0.00 KB/s</div>
+							</div>
+							<div class="status-item-inline">
+								<div class="hint">CPU使用率</div>
+								<div class="mono" id="cpuUsage">0.00%</div>
+							</div>
+						</div>
 					</div>
-				</div>
-				<br>
-				<div class="video-controls">
-					<span class="badge">Send offer to:</span>
-					<input id="offerId" class="input mono" placeholder="remote ID" value="usbcam" />
-					<button id="offerBtn" class="btn">Send</button>
-				</div>
-				<div class="video-controls">
-					<span class="badge">Send offer to:</span>
-					<input id="dataOfferId" class="input mono" placeholder="remote ID" value="dataTrack" />
-					<button id="dataOfferBtn" class="btn">Send</button>
-				</div>
-		</div>
-		<!-- 控制层 - 下层 -->
-		<div class="control-layer">
-			<div class="card">
-				<span class="badge">系统状态</span>
-				<div class="system-status" style="margin-top: 12px;">
-					<div class="status-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-						<div class="status-item">
-							<div class="hint">上行网速</div>
-							<div class="mono" id="txSpeed">0.00 KB/s</div>
+					
+					<!-- 右侧状态面板 -->
+					<div class="status-overlay right-overlay">
+						<div class="status-group">
+							<div class="status-item-inline">
+								<div class="hint">4G信号强度</div>
+								<div class="mono" id="signalStrength">-- dBm</div>
+							</div>
+							<div class="status-item-inline">
+								<div class="hint">服务状态</div>
+								<div class="mono" id="serviceStatus">检查中...</div>
+							</div>
+							<div class="status-item-inline">
+								<div class="hint">4G网络状态</div>
+								<div class="mono" id="simStatus">UNKNOWN</div>
+							</div>
 						</div>
-						<div class="status-item">
-							<div class="hint">下行网速</div>
-							<div class="mono" id="rxSpeed">0.00 KB/s</div>
-						</div>
-						<div class="status-item">
-							<div class="hint">CPU使用率</div>
-							<div class="mono" id="cpuUsage">0.00%</div>
-						</div>
-						<div class="status-item">
-							<div class="hint">4G信号强度</div>
-							<div class="mono" id="signalStrength">-- dBm</div>
+					</div>
+					
+					<!-- 底部状态面板 -->
+					<div class="status-overlay bottom-overlay">
+						<div class="signal-indicator-container">
 							<!-- 4G信号强度指示器 -->
 							<div class="signal-indicator" id="signalIndicator">
 								<div class="signal-bar"></div>
@@ -77,20 +68,22 @@
 								<span class="signal-quality" id="signalQuality">--</span>
 							</div>
 						</div>
-						<div class="status-item">
-							<div class="hint">服务状态</div>
-							<div class="mono" id="serviceStatus">检查中...</div>
-						</div>
-						<div class="status-item">
-							<div class="hint">4G网络状态</div>
-							<div class="mono" id="simStatus">UNKNOWN</div>
+						<div class="last-update">
+							<div class="hint">最后更新: <span id="lastUpdate">--</span></div>
 						</div>
 					</div>
-					<div class="hint" style="margin-top: 8px; font-size: 12px;">
-						最后更新: <span id="lastUpdate">--</span>
+					
+					<div class="video-container">
+						<video id="remoteVideo" autoplay playsinline style=";"></video>
+						<div id="noSignalOverlay" class="no-signal-overlay">
+							<div class="no-signal-text">无信号</div>
+						</div>
 					</div>
 				</div>
 			</div>
+		</div>
+		<!-- 控制层 - 下层 -->
+		<div class="control-layer">
 			<div class="card">
 				<div class="control-panel">
 					<div class="connection-info">
@@ -120,6 +113,7 @@
 					</div>
 				</div>
 			</div>
+			
 			<div class="card">
 				<div id="debugInfo" class="debug-info">
 					<h3>Debug Information</h3>
@@ -127,17 +121,39 @@
 				</div>
 			</div>
 		</div>
-
-			<!-- <div class="card">
-				<span class="badge">协议</span>
-				<pre id="proto" class="mono" style="white-space:pre-wrap; margin-top:8px; color:#9fb4ff">
+		<div class="card">
+			<div>
+				<h2>Local ID</h2>
+				<p id="localId"></p>
+			</div>
+			<div id="status">Status: Not connected</div>
+			<div>
+				<h2>Local ID</h2>
+				<p id="dataLocalId"></p>
+			</div>
+			<div id="dataStatus">Status: Not connected</div>
+		</div>
+		<div class="card">
+			<div class="video-controls">
+				<span class="badge">Send offer to:</span>
+				<input id="offerId" class="input mono" placeholder="remote ID" value="usbcam" />
+				<button id="offerBtn" class="btn">Send</button>
+			</div>
+			<div class="video-controls">
+				<span class="badge">Send offer to:</span>
+				<input id="dataOfferId" class="input mono" placeholder="remote ID" value="dataTrack" />
+				<button id="dataOfferBtn" class="btn">Send</button>
+			</div>
+		</div>
+		<!-- <div class="card">
+			<span class="badge">协议</span>
+			<pre id="proto" class="mono" style="white-space:pre-wrap; margin-top:8px; color:#9fb4ff">
 0:0xAA 1:0x55 2:type 3:key 4:value 5:0 6-7:checksum16(sum of bytes[0..5])
 MSG_KEY=0x01 (key:1=W,2=S,3=A,4=D; value:1=DOWN,0=UP)
 MSG_EMERGENCY_STOP=0x02, MSG_CYCLE_THROTTLE=0x03, MSG_STOP_ALL=0x04, MSG_QUIT=0x05, MSG_PING=0x10
 MSG_SYSTEM_STATUS=0x20 (扩展帧12字节: 3:rx_speed_H,4:rx_speed_L,5:tx_speed_H,6:tx_speed_L,7:cpu_H,8:cpu_L,9:service_status,10:4g_signal)
-				</pre>
-			</div> -->
-		</div>
+			</pre>
+		</div> -->
 	</div>
 </body>
 

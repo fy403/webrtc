@@ -304,11 +304,11 @@ window.addEventListener('load', () => {
 
     if (dataElements.serviceStatus) {
       const serviceStatus = [];
-      if (dataSystemStatus.ttyService) serviceStatus.push('✓ 控制信号');
-      else serviceStatus.push('✗ 控制信号');
+      if (dataSystemStatus.ttyService) serviceStatus.push('✓ 控制');
+      else serviceStatus.push('✗ 控制');
 
-      if (dataSystemStatus.rtspService) serviceStatus.push('✓ 视频信号');
-      else serviceStatus.push('✗ 视频信号');
+      if (dataSystemStatus.rtspService) serviceStatus.push('✓ 视频');
+      else serviceStatus.push('✗ 视频');
 
       dataElements.serviceStatus.textContent = serviceStatus.join(' | ');
     }
