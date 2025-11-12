@@ -62,6 +62,7 @@ window.addEventListener('load', () => {
                     if (currentDataChannel && currentDataChannel.readyState === 'open') {
                         // 直接发送音频数据，不进行额外处理
                         console.log('发送音频数据:', event.data);
+                        // Blob {size: 1948, type: 'audio/webm;codecs=opus'}
                         currentDataChannel.send(event.data);
                     }
                 }
