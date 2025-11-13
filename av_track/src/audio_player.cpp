@@ -264,11 +264,12 @@ void AudioPlayer::audioCallback(Uint8 *stream, int len) {
     audio_underruns_++;
 
     // 每20次欠载输出一次警告
-    if (audio_underruns_.load() % 20 == 0) {
-      std::cout << "Audio underrun #" << audio_underruns_.load()
-                << ": requested " << len << " bytes, got " << total_written
-                << std::endl;
-    }
+    //    if (audio_underruns_.load() % 20 == 0) {
+    //      std::cout << "Audio underrun #" << audio_underruns_.load()
+    //                << ": requested " << len << " bytes, got " <<
+    //                total_written
+    //                << std::endl;
+    //    }
   }
 }
 

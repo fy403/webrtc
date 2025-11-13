@@ -87,8 +87,8 @@ bool OpusDecoder::decode_packet(AVPacket *packet, AVFrame *frame) {
     return false;
   }
 
-  std::cout << "Packet decoded successfully, samples: " << frame->nb_samples
-            << std::endl;
+  std::cout << "Packet decoded successfully, samples number: "
+            << frame->nb_samples << std::endl;
 
   return true;
 }

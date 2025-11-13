@@ -164,7 +164,6 @@ createPeerConnection(const rtc::Configuration &config,
     rtc::Description::Audio audio_media("audio",
                                         rtc::Description::Direction::SendRecv);
     audio_media.addOpusCodec(111); // Add Opus codec with payload type 111
-
     uint32_t audio_ssrc = dis(gen);
     std::string audio_cname = "audio_" + std::to_string(audio_ssrc);
     std::string audio_msid = "stream_" + id;
