@@ -54,9 +54,6 @@ bool OpusDecoder::decode_packet(AVPacket *packet, AVFrame *frame) {
     return false;
   }
 
-  //  std::cout << "Sending packet to decoder, size: " << packet->size <<
-  //  std::endl;
-
   // Send packet to decoder
   int ret = avcodec_send_packet(decoder_context_, packet);
   if (ret < 0) {
@@ -87,10 +84,11 @@ bool OpusDecoder::decode_packet(AVPacket *packet, AVFrame *frame) {
     std::cerr << "Error during decoding: " << av_error_string(ret) << std::endl;
     return false;
   }
-
-  //  std::cout << "Packet decoded successfully, samples number: "
-  //            << frame->nb_samples << std::endl;
-
+  static u_int64_t id = 0;
+  if (id++ % 100 == 0) {
+    std::cout << "Packet size: " << packet->size << " bytes" << std::endl;
+    std::cout << "Frame size: " << frame->nb_samples << " samples" << std::endl;
+  }
   return true;
 }
 

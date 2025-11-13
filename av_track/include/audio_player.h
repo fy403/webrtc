@@ -27,6 +27,7 @@ public:
   void stop();
   void receiveAudioData(const rtc::binary &data, const rtc::FrameInfo &info);
   bool isRunning() const { return running_; }
+  bool initResampler();
 
 private:
   void decodeThread();
@@ -50,6 +51,8 @@ private:
   SDL_AudioDeviceID audio_device_id_ = 0;
   SDL_AudioSpec audio_spec_;
 
+  // 添加重采样相关成员
+  SwrContext *swr_ctx_ = nullptr;
   // 音频样本队列
   SafeQueue<AVFrame *> audio_sample_queue_;
 
