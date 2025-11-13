@@ -42,16 +42,7 @@ window.addEventListener('load', () => {
     async function getLocalStream() {
         try {
             localStream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    channelCount: 1, // 单声道降低带宽
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                    // 限制音频质量以降低延迟
-                    sampleRate: 16000, // 16kHz
-                    sampleSize: 16,
-                    latency: 0.01 // 低延迟
-                },
+                audio: true,
                 video: false,
             });
             console.log('获取本地音频流成功');

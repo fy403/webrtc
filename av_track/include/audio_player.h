@@ -25,7 +25,7 @@ public:
 
   void start();
   void stop();
-  void receiveAudioData(const rtc::binary &data);
+  void receiveAudioData(const rtc::binary &data, const rtc::FrameInfo &info);
   bool isRunning() const { return running_; }
 
 private:

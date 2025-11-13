@@ -136,9 +136,12 @@ void AudioPlayer::cleanup() {
   }
 }
 
-void AudioPlayer::receiveAudioData(const rtc::binary &data) {
-  packets_received_++;
+void AudioPlayer::receiveAudioData(const rtc::binary &data,
+                                   const rtc::FrameInfo &info) {
 
+  uint64_t timestamp_us = info.timestamp;
+  uint8_t payloadType = info.payloadType;
+  packets_received_++;
   // 性能统计：每100个包输出一次
   static auto last_stat_time = std::chrono::steady_clock::now();
   static int local_packet_count = 0;
@@ -150,56 +153,20 @@ void AudioPlayer::receiveAudioData(const rtc::binary &data) {
               << " packets/s" << std::endl;
     local_packet_count = 0;
     last_stat_time = now;
+    std::cout << "Audio RTP type: " << int(payloadType) << std::endl;
   }
 
-  // 检查 RTP 包
-  if (data.size() >= sizeof(rtc::RtpHeader) &&
-      (std::to_integer<uint8_t>(data[0]) == 0x80 ||
-       std::to_integer<uint8_t>(data[0]) == 0x81)) {
-
-    auto rtp = reinterpret_cast<const rtc::RtpHeader *>(data.data());
-    if (rtp->version() != 2) {
+  AVPacket *packet = av_packet_alloc();
+  if (packet) {
+    if (av_new_packet(packet, static_cast<int>(data.size())) == 0) {
+      std::memcpy(packet->data, data.data(), data.size());
+    } else {
+      av_packet_free(&packet);
       return;
     }
 
-    const char *payload = rtp->getBody();
-    size_t header_size = payload - reinterpret_cast<const char *>(data.data());
-    size_t payload_size = data.size() - header_size;
-
-    if (payload_size > 0) {
-      AVPacket *packet = av_packet_alloc();
-      if (packet) {
-        packet->data =
-            const_cast<uint8_t *>(reinterpret_cast<const uint8_t *>(payload));
-        packet->size = payload_size;
-        packet->buf = av_buffer_create(
-            packet->data, packet->size, [](void *, uint8_t *) {}, nullptr, 0);
-        packet->pts = rtp->timestamp();
-        packet->dts = rtp->timestamp();
-
-        // 使用非阻塞推送
-        if (!decode_queue_.try_push(packet)) {
-          av_packet_free(&packet);
-          // 队列满时丢弃数据包，避免积压
-        }
-      }
-    }
-    return;
-  }
-
-  // 处理非RTP数据
-  AVPacket *packet = av_packet_alloc();
-  if (packet) {
-    packet->data =
-        const_cast<uint8_t *>(reinterpret_cast<const uint8_t *>(data.data()));
-    packet->size = data.size();
-    packet->buf = av_buffer_create(
-        packet->data, packet->size, [](void *, uint8_t *) {}, nullptr, 0);
-
-    static uint64_t default_timestamp = 0;
-    packet->pts = default_timestamp;
-    packet->dts = default_timestamp;
-    default_timestamp++;
+    packet->pts = timestamp_us;
+    packet->dts = timestamp_us;
 
     if (!decode_queue_.try_push(packet)) {
       av_packet_free(&packet);

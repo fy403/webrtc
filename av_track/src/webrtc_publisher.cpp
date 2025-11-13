@@ -70,6 +70,7 @@ createPeerConnection(const rtc::Configuration &config,
   static std::uniform_int_distribution<uint32_t> dis(1, 0xFFFFFFFF);
   shared_ptr<rtc::Track> video_track = nullptr;
   shared_ptr<rtc::Track> audio_track = nullptr;
+
   if (video_capturer != nullptr && video_capturer->is_running()) {
     // Create video track and add to connection
     rtc::Description::Video media("video",
@@ -107,15 +108,6 @@ createPeerConnection(const rtc::Configuration &config,
 
     // 设置轨道的媒体处理器
     video_track->setMediaHandler(packetizer);
-
-    // Note: Audio track creation is handled in the WebRTCPublisher::start()
-    // method because we need access to the audio_capturer_ member variable
-    // which is not available in this function scope.
-
-    pc->onTrack([id](std::shared_ptr<rtc::Track> track) {
-      std::cout << "Track from " << id << " received with mid \""
-                << track->mid() << "\"" << std::endl;
-    });
 
     video_track->onOpen([id, video_track, video_capturer]() {
       std::cout << "Video track to " << id << " is now open" << std::endl;
@@ -159,7 +151,6 @@ createPeerConnection(const rtc::Configuration &config,
     });
   }
 
-  // Handle audio track if audio capturer exists
   if (audio_capturer != nullptr && audio_capturer->is_running()) {
     rtc::Description::Audio audio_media("audio",
                                         rtc::Description::Direction::SendRecv);
@@ -226,18 +217,6 @@ createPeerConnection(const rtc::Configuration &config,
       audio_capturer->resume_capture();
     });
 
-    // 收到音频数据时
-    audio_track->onMessage(
-        [id, audio_player](const rtc::binary &data) {
-          std::cout << "Audio track to " << id
-                    << " received binary audio data, size: " << data.size()
-                    << std::endl;
-          if (audio_player != nullptr) {
-            audio_player->receiveAudioData(data);
-          }
-        },
-        nullptr);
-
     audio_track->onClosed([id, audio_capturer]() {
       std::cout << "Audio Track to " << id << " closed" << std::endl;
       // 检查capturer是否仍然有效
@@ -248,6 +227,33 @@ createPeerConnection(const rtc::Configuration &config,
     });
   }
 
+  // 修复音频接收逻辑
+  std::shared_ptr<rtc::Track> audioReceiver = nullptr;
+  pc->onTrack([audio_player, audioReceiver](
+                  const std::shared_ptr<rtc::Track> &track) mutable {
+    if (track->description().type() == "audio") {
+      audioReceiver = track;
+
+      // Set up the receiving pipeline
+      auto depacketizer = std::make_shared<rtc::OpusRtpDepacketizer>(48000);
+      depacketizer->addToChain(std::make_shared<rtc::RtcpReceivingSession>());
+      audioReceiver->setMediaHandler(depacketizer);
+      audioReceiver->onOpen([audioReceiver]() {
+        std::cout << "Received Audio Track from " << audioReceiver->mid()
+                  << " is now open" << std::endl;
+      });
+      audioReceiver->onClosed([audioReceiver]() {
+        std::cout << "Audio Track from " << audioReceiver->mid() << " closed"
+                  << std::endl;
+      });
+      audioReceiver->onFrame(
+          [audio_player](const rtc::binary &data, const rtc::FrameInfo &info) {
+            if (audio_player != nullptr) {
+              audio_player->receiveAudioData(data, info);
+            }
+          });
+    }
+  });
   // 通道关闭时，停止音视频捕获
   pc->onStateChange(
       [video_capturer, audio_capturer](rtc::PeerConnection::State state) {
