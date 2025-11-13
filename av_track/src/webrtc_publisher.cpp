@@ -195,19 +195,6 @@ createPeerConnection(const rtc::Configuration &config,
     // 设置轨道的媒体处理器
     audio_track->setMediaHandler(audio_packetizer);
 
-    // 收到音频数据时
-    audio_track->onMessage(
-        [id, audio_player](const rtc::binary &data) {
-          std::cout << "Audio track to " << id
-                    << " received binary audio data, size: " << data.size()
-                    << std::endl;
-          // 将接收到的音频数据发送到音频播放器
-          if (audio_player != nullptr) {
-            audio_player->receiveAudioData(data);
-          }
-        },
-        nullptr);
-
     audio_track->onOpen([id, audio_track, audio_capturer]() {
       std::cout << "Audio track to " << id << " is now open" << std::endl;
       // Keep track of start time for timestamp calculation
@@ -239,6 +226,18 @@ createPeerConnection(const rtc::Configuration &config,
           });
       audio_capturer->resume_capture();
     });
+
+    // 收到音频数据时
+    audio_track->onMessage(
+        [id, audio_player](const rtc::binary &data) {
+          std::cout << "Audio track to " << id
+                    << " received binary audio data, size: " << data.size()
+                    << std::endl;
+          if (audio_player != nullptr) {
+            audio_player->receiveAudioData(data);
+          }
+        },
+        nullptr);
 
     audio_track->onClosed([id, audio_capturer]() {
       std::cout << "Audio Track to " << id << " closed" << std::endl;

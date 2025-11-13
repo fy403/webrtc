@@ -52,6 +52,11 @@ private:
 
   // 音频样本队列
   SafeQueue<AVFrame *> audio_sample_queue_;
+
+  // 性能统计
+  std::atomic<int> packets_received_{0};
+  std::atomic<int> packets_processed_{0};
+  std::atomic<int> audio_underruns_{0};
 };
 
 #endif // AUDIO_PLAYER_H

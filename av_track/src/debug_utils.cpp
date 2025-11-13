@@ -169,6 +169,7 @@ private:
 };
 
 static RawAudioWriter g_rawAudioWriter;
+static RawAudioWriter g_rawAudioFrameWriter;
 
 namespace DebugUtils {
 
@@ -445,6 +446,48 @@ bool save_raw_audio_packet(const AVPacket *packet, std::string filename) {
 }
 
 void finalize_raw_audio_file() { g_rawAudioWriter.finalize(); }
+
+// 音频帧保存函数
+bool save_raw_audio_frame(const AVFrame *frame, const std::string &filename) {
+  // 如果写入器未初始化，先初始化
+  if (!g_rawAudioFrameWriter.isInitialized()) {
+    if (!g_rawAudioFrameWriter.initialize(filename)) {
+      return false;
+    }
+  }
+  
+  // 创建一个包来保存帧数据
+  AVPacket *packet = av_packet_alloc();
+  if (!packet) {
+    std::cerr << "Failed to allocate packet for frame saving" << std::endl;
+    return false;
+  }
+  
+  // 为包分配缓冲区
+  int data_size = av_samples_get_buffer_size(nullptr, frame->channels, frame->nb_samples, 
+                                             (AVSampleFormat)frame->format, 1);
+  packet->data = (uint8_t*)av_malloc(data_size);
+  if (!packet->data) {
+    std::cerr << "Failed to allocate packet buffer" << std::endl;
+    av_packet_free(&packet);
+    return false;
+  }
+  packet->size = data_size;
+  
+  // 复制帧数据到包
+  memcpy(packet->data, frame->data[0], data_size);
+  
+  // 设置包属性
+  packet->pts = frame->pts;
+  packet->dts = frame->pkt_dts;
+  
+  bool result = g_rawAudioFrameWriter.writePacket(packet);
+  av_packet_unref(packet);
+  av_packet_free(&packet);
+  return result;
+}
+
+void finalize_raw_audio_frame_file() { g_rawAudioFrameWriter.finalize(); }
 
 // 添加日志来调试数据格式
 void logAudioData(const std::vector<uint8_t> &data, const std::string &prefix) {
