@@ -23,14 +23,10 @@ window.addEventListener('load', () => {
         ],
     };
 
+    // Add localStream variable to store the audio stream
+    let localStream;
     const peerConnectionMap = {};
     const dataChannelMap = {};
-
-    // 添加录音相关变量
-    let mediaRecorder = null;
-    let isRecording = false;
-    let audioStream = null;
-    let currentDataChannel = null;
 
     const offerId = document.getElementById('offerId');
     const offerBtn = document.getElementById('offerBtn');
@@ -42,45 +38,28 @@ window.addEventListener('load', () => {
     // Initialize with "No Signal" overlay visible
     toggleNoSignalOverlay(true);
 
-    // 页面加载时就获取麦克风权限
-    console.log('请求麦克风权限...');
-    updateStatus('请求麦克风权限...');
-    navigator.mediaDevices.getUserMedia({
-            audio: true
-        })
-        .then(stream => {
-            audioStream = stream;
-            console.log('麦克风权限已获取');
-            updateStatus('麦克风权限已获取');
-
-            // 初始化 MediaRecorder 但不开始录制
-            mediaRecorder = new MediaRecorder(stream);
-
-            mediaRecorder.ondataavailable = event => {
-                if (event.data.size > 0 && isRecording) {
-                    // 仅在录音状态下发送音频数据
-                    if (currentDataChannel && currentDataChannel.readyState === 'open') {
-                        // 直接发送音频数据，不进行额外处理
-                        console.log('发送音频数据:', event.data);
-                        // Blob {size: 1948, type: 'audio/webm;codecs=opus'}
-                        currentDataChannel.send(event.data);
-                    }
-                }
-            };
-
-            // 每100ms收集一次音频数据
-            mediaRecorder.start(100);
-        })
-        .catch(err => {
-            console.error('无法访问麦克风:', err);
-            updateStatus('无法访问麦克风: ' + err.message);
-        });
+    // Get local audio stream
+    async function getLocalStream() {
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: false
+            });
+            console.log('获取本地音频流成功');
+        } catch (error) {
+            console.error('获取本地音频流失败:', error);
+        }
+    }
 
     console.log('Connecting to signaling...');
     openSignaling(url)
-        .then((ws) => {
+        .then(async (ws) => {
             console.log('WebSocket connected, signaling ready');
             updateStatus('Signaling connected');
+
+            // Get local audio stream before enabling connections
+            await getLocalStream();
+
             offerId.disabled = false;
             offerBtn.disabled = false;
             offerBtn.onclick = () => offerPeerConnection(ws, offerId.value);
@@ -107,29 +86,6 @@ window.addEventListener('load', () => {
         if (overlay) {
             overlay.style.display = show ? 'flex' : 'none';
         }
-    }
-
-    // 开始录音（发送音频数据）
-    function startRecording() {
-        if (isRecording) return;
-        if (!mediaRecorder) {
-            console.error('MediaRecorder 未初始化');
-            updateStatus('MediaRecorder 未初始化');
-            return;
-        }
-
-        isRecording = true;
-        console.log('开始发送音频数据');
-        updateStatus('正在发送音频数据...');
-    }
-
-    // 停止录音（停止发送音频数据）
-    function stopRecording() {
-        if (!isRecording) return;
-
-        isRecording = false;
-        console.log('停止发送音频数据');
-        updateStatus('已停止发送音频数据');
     }
 
     // Helper function to show play button when autoplay fails
@@ -257,8 +213,14 @@ window.addEventListener('load', () => {
         updateStatus(`Offering to ${id}`);
         const pc = createPeerConnection(ws, id);
 
+        // Add only audio tracks to PeerConnection (even though we captured both)
+        if (localStream) {
+            localStream.getAudioTracks().forEach(track => pc.addTrack(track, localStream));
+            console.log('Added local audio tracks to PeerConnection');
+        }
+
         // Create DataChannel
-        const label = "control";
+        const label = "test";
         console.log(`Creating DataChannel with label "${label}"`);
         const dc = pc.createDataChannel(label);
         setupDataChannel(dc, id);
@@ -282,8 +244,6 @@ window.addEventListener('load', () => {
                 updateStatus(`Connection failed with ${id}`);
                 // Show "No Signal" overlay when connection fails
                 toggleNoSignalOverlay(true);
-                // 停止录音
-                stopRecording();
             }
         };
 
@@ -297,8 +257,6 @@ window.addEventListener('load', () => {
                 updateStatus(`Connection failed with ${id}`);
                 // Show "No Signal" overlay when connection fails
                 toggleNoSignalOverlay(true);
-                // 停止录音
-                stopRecording();
                 // Clean up the peer connection
                 if (peerConnectionMap[id]) {
                     delete peerConnectionMap[id];
@@ -322,6 +280,7 @@ window.addEventListener('load', () => {
         pc.ontrack = (e) => {
             console.log('Received remote track:', e.track.kind, e.track.id, e.track.readyState);
 
+            // Handle both audio and video tracks from remote peer
             // 检查是否已经设置了媒体源
             if (remoteVideo.srcObject) {
                 console.log('Media source already set, adding track:', e.track.kind);
@@ -421,6 +380,7 @@ window.addEventListener('load', () => {
             setupDataChannel(dc, id);
 
             dc.send(`Hello from ${localId}`);
+
         };
 
         peerConnectionMap[id] = pc;
@@ -432,35 +392,15 @@ window.addEventListener('load', () => {
         dc.onopen = () => {
             console.log(`DataChannel from ${id} open`);
             updateStatus(`Data channel open with ${id}`);
-
-            console.log(`DataChannel from ${id} open`);
-            updateStatus(`Data channel open with ${id}`);
-            currentDataChannel = dc;
-
-            // 监听键盘事件以控制录音
-            document.addEventListener('keydown', function (e) {
-                if (e.code === 'KeyT' && !e.repeat) {
-                    startRecording();
-                }
-            });
-
-            document.addEventListener('keyup', function (e) {
-                if (e.code === 'KeyT') {
-                    stopRecording();
-                }
-            });
         };
         dc.onclose = () => {
             console.log(`DataChannel from ${id} closed`);
             updateStatus(`Data channel closed with ${id}`);
-            currentDataChannel = null;
-            // 停止录音
-            stopRecording();
         };
         dc.onmessage = (e) => {
             if (typeof (e.data) != 'string')
                 return;
-            // console.log(`Message from ${id} received: ${e.data}`);
+            console.log(`Message from ${id} received: ${e.data}`);
             // Create message element
             const messageElement = document.createElement('div');
             messageElement.textContent = `From ${id}: ${e.data}`;

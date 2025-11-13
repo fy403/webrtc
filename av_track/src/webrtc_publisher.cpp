@@ -298,12 +298,12 @@ WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Cmdline params)
 
     audio_capturer_ =
         new AudioCapturer(audio_params, params.debug(), 100000, 100000);
+    // Initialize audio player with the specified playback device
+    audio_player_ = new AudioPlayer(params.speakerDevice(), audio_params);
   } else {
     audio_capturer_ = nullptr;
+    audio_player_ = nullptr;
   }
-
-  // Initialize audio player with the specified playback device
-  audio_player_ = new AudioPlayer(params.speakerDevice());
 
   std::cout << "WebRTCPublisher init..." << std::endl;
 }

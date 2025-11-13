@@ -1,15 +1,25 @@
 #include "audio_player.h"
+#include "debug_utils.h"
 #include <chrono>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 
-AudioPlayer::AudioPlayer(const std::string &audio_device)
-    : audio_device_(audio_device),
+AudioPlayer::AudioPlayer(const std::string &audio_device,
+                         const AudioDeviceParams &params)
+    : audio_device_(audio_device), params_(params),
       opus_decoder_(std::make_unique<OpusDecoder>()), decode_queue_(512),
       audio_sample_queue_(512) {
-  decode_queue_.set_deleter([](AudioPacket &packet) { packet.data.clear(); });
-  audio_sample_queue_.set_deleter(
-      [](AudioSample &sample) { sample.data.clear(); });
+  decode_queue_.set_deleter([](AVPacket *&packet) {
+    if (packet) {
+      av_packet_free(&packet);
+    }
+  });
+  audio_sample_queue_.set_deleter([](AVFrame *&frame) {
+    if (frame) {
+      av_frame_free(&frame);
+    }
+  });
 }
 
 AudioPlayer::~AudioPlayer() { stop(); }
@@ -26,7 +36,8 @@ void AudioPlayer::start() {
   }
 
   // 初始化 Opus 解码器
-  if (!opus_decoder_->open_decoder(48000, 1, AV_SAMPLE_FMT_S16)) {
+  if (!opus_decoder_->open_decoder(params_.sample_rate, params_.channels,
+                                   AV_SAMPLE_FMT_S16)) {
     std::cerr << "Failed to initialize Opus decoder" << std::endl;
     SDL_Quit();
     return;
@@ -69,15 +80,87 @@ void AudioPlayer::stop() {
 }
 
 void AudioPlayer::receiveAudioData(const rtc::binary &data) {
-  AudioPacket packet;
-  packet.data.assign(reinterpret_cast<const unsigned char *>(data.data()),
-                     reinterpret_cast<const unsigned char *>(data.data()) +
-                         data.size());
-  packet.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
-                         std::chrono::steady_clock::now().time_since_epoch())
-                         .count();
+  std::cout << "Received audio data, size: " << data.size() << std::endl;
 
-  decode_queue_.push(std::move(packet));
+  // Check if this is an RTP packet (starts with version 2 - 0x80 or 0x81)
+  if (data.size() >= sizeof(rtc::RtpHeader) &&
+      (std::to_integer<uint8_t>(data[0]) == 0x80 ||
+       std::to_integer<uint8_t>(data[0]) == 0x81)) {
+
+    std::cout << "Processing RTP packet..." << std::endl;
+
+    // Use libdatachannel's RTP helper class
+    auto rtp = reinterpret_cast<const rtc::RtpHeader *>(data.data());
+
+    // Validate RTP header
+    if (rtp->version() != 2) {
+      std::cerr << "Invalid RTP version: " << (int)rtp->version() << std::endl;
+      return;
+    }
+
+    // Get the payload start position
+    const char *payload = rtp->getBody();
+    size_t header_size = payload - reinterpret_cast<const char *>(data.data());
+    size_t payload_size = data.size() - header_size;
+
+    std::cout << "RTP header size: " << header_size
+              << ", payload size: " << payload_size << std::endl;
+
+    if (payload_size > 0) {
+      // Log first few bytes of payload for debugging
+      std::cout << "Payload first 16 bytes: ";
+      const unsigned char *payload_bytes =
+          reinterpret_cast<const unsigned char *>(payload);
+      for (size_t i = 0; i < std::min(payload_size, size_t(16)); ++i) {
+        std::cout << std::hex << std::setw(2) << std::setfill('0')
+                  << (int)payload_bytes[i] << " ";
+      }
+      std::cout << std::dec << std::endl;
+
+      // 创建 AVPacket 并放入队列
+      AVPacket *packet = av_packet_alloc();
+      if (packet) {
+        packet->data =
+            const_cast<uint8_t *>(reinterpret_cast<const uint8_t *>(payload));
+        packet->size = payload_size;
+        // 使用引用计数确保数据在使用期间不被释放
+        packet->buf = av_buffer_create(
+            packet->data, packet->size, [](void *, uint8_t *) {}, nullptr, 0);
+
+        // 设置时间戳以避免警告
+        packet->pts = rtp->timestamp();
+        packet->dts = rtp->timestamp();
+
+        std::cout << "Sending packet to decode queue, payload size: "
+                  << packet->size << std::endl;
+        decode_queue_.push(packet);
+      }
+      return;
+    } else {
+      std::cerr << "RTP packet has no payload" << std::endl;
+      return;
+    }
+  }
+
+  // If not RTP or couldn't parse, treat as raw data
+  std::cout << "Treating as raw data" << std::endl;
+  AVPacket *packet = av_packet_alloc();
+  if (packet) {
+    packet->data =
+        const_cast<uint8_t *>(reinterpret_cast<const uint8_t *>(data.data()));
+    packet->size = data.size();
+    // 使用引用计数确保数据在使用期间不被释放
+    packet->buf = av_buffer_create(
+        packet->data, packet->size, [](void *, uint8_t *) {}, nullptr, 0);
+
+    // 设置默认时间戳
+    static uint64_t default_timestamp = 0;
+    packet->pts = default_timestamp;
+    packet->dts = default_timestamp;
+    default_timestamp++;
+
+    decode_queue_.push(packet);
+  }
 }
 
 bool AudioPlayer::initSDLAudio() {
@@ -87,7 +170,7 @@ bool AudioPlayer::initSDLAudio() {
   desired.freq = 48000;
   desired.format = AUDIO_S16;
   desired.channels = 1;
-  desired.samples = 1024; // 约21ms的缓冲
+  desired.samples = 2048; // 增加缓冲区大小以减少欠载
   desired.callback = &AudioPlayer::sdlAudioCallback;
   desired.userdata = this;
 
@@ -135,100 +218,125 @@ void AudioPlayer::sdlAudioCallback(void *userdata, Uint8 *stream, int len) {
 }
 
 void AudioPlayer::audioCallback(Uint8 *stream, int len) {
-  // 清空输出流
+  // Validate inputs
+  if (!stream || len <= 0) {
+    std::cerr << "Invalid audio callback parameters: stream=" << stream
+              << ", len=" << len << std::endl;
+    return;
+  }
+
+  // Clear output stream
   SDL_memset(stream, 0, len);
 
   size_t total_read = 0;
   while (total_read < static_cast<size_t>(len)) {
-    // 尝试从音频样本队列中获取数据
-    AudioSample sample;
-    if (!audio_sample_queue_.pop(sample)) {
-      // 队列为空，跳出循环
+    // Try to get data from audio sample queue
+    AVFrame *frame = nullptr;
+    if (!audio_sample_queue_.pop(frame)) {
+      // Queue is empty, break out of loop
       break;
     }
 
-    // 计算可以复制的数据量
-    size_t to_copy =
-        std::min(static_cast<size_t>(len) - total_read, sample.size);
+    // Validate sample
+    if (frame->nb_samples == 0 || !frame->data[0]) {
+      std::cerr << "Invalid sample: nb_samples=" << frame->nb_samples
+                << ", data[0]=" << frame->data[0] << std::endl;
+      av_frame_free(&frame);
+      continue;
+    }
 
-    // 复制数据到输出流
-    memcpy(stream + total_read, sample.data.data(), to_copy);
+    // Calculate amount of data that can be copied
+    size_t frame_data_size =
+        frame->nb_samples * frame->channels * sizeof(short); // S16 format
+    size_t to_copy =
+        std::min(static_cast<size_t>(len) - total_read, frame_data_size);
+
+    // Copy data to stream
+    if (to_copy > 0 && frame->data[0]) {
+      memcpy(stream + total_read, frame->data[0], to_copy);
+    }
 
     total_read += to_copy;
 
-    // 如果还有剩余数据，重新放回队列
-    if (to_copy < sample.size) {
-      AudioSample remaining;
-      remaining.size = sample.size - to_copy;
-      remaining.data.resize(remaining.size);
-      memcpy(remaining.data.data(), sample.data.data() + to_copy,
-             remaining.size);
-      audio_sample_queue_.try_push(std::move(remaining));
-      break;
+    // If there's remaining data in the frame, keep the frame for next callback
+    if (to_copy < frame_data_size) {
+      // Calculate remaining samples
+      size_t consumed_bytes = to_copy;
+      size_t remaining_bytes = frame_data_size - consumed_bytes;
+      size_t remaining_samples =
+          remaining_bytes / (frame->channels * sizeof(short));
+
+      // Modify the existing frame to represent the remaining data
+      memmove(frame->data[0], frame->data[0] + consumed_bytes, remaining_bytes);
+      frame->nb_samples = remaining_samples;
+
+      // Put the modified frame back to the queue for next callback
+      audio_sample_queue_.try_push(frame);
+    } else {
+      // We've used all the data, free the frame
+      av_frame_free(&frame);
     }
   }
 }
 
 void AudioPlayer::decodeThread() {
-  std::cout << "Audio decode thread started" << std::endl;
-
-  AVPacket *packet = av_packet_alloc();
+  static auto start_time = std::chrono::steady_clock::now();
   AVFrame *frame = av_frame_alloc();
 
-  if (!packet || !frame) {
+  if (!frame) {
     std::cerr << "Failed to allocate FFmpeg resources" << std::endl;
-    if (packet)
-      av_packet_free(&packet);
     if (frame)
       av_frame_free(&frame);
     return;
   }
 
   while (running_) {
-    AudioPacket audio_packet;
-    decode_queue_.wait_and_pop(audio_packet);
+    try {
+      AVPacket *packet = nullptr;
+      std::cout << "Waiting for audio packet..." << std::endl;
+      decode_queue_.wait_and_pop(packet);
+      std::cout << "Got audio packet from queue, size: " << packet->size
+                << std::endl;
 
-    if (!running_)
-      break;
+      if (!running_)
+        break;
 
-    // 准备解码数据包
-    packet->data = audio_packet.data.data();
-    packet->size = static_cast<int>(audio_packet.data.size());
-
-    // 使用 Opus 解码器解码数据包
-    if (opus_decoder_->decode_packet(packet, frame)) {
-      // 将解码后的帧写入 FIFO
-      if (opus_decoder_->write_to_fifo(frame)) {
-        // 从 FIFO 读取完整帧并放入音频样本队列
-        auto output_frame =
-            std::shared_ptr<AVFrame>(av_frame_alloc(), [](AVFrame *f) {
-              if (f) {
-                av_frame_free(&f);
-              }
-            });
-
-        while (opus_decoder_->read_from_fifo(output_frame.get()) > 0) {
-          if (output_frame && output_frame->format == AV_SAMPLE_FMT_S16 &&
-              output_frame->channels == 1) {
-            int data_size = output_frame->nb_samples * output_frame->channels *
-                            sizeof(int16_t);
-
-            // 创建音频样本并放入队列
-            AudioSample sample;
-            sample.size = data_size;
-            sample.data.resize(data_size);
-            memcpy(sample.data.data(), output_frame->data[0], data_size);
-
-            audio_sample_queue_.try_push(std::move(sample));
-          }
-        }
+      // Check for minimum valid Opus packet size
+      if (packet->size == 0) {
+        std::cerr << "Received empty audio packet, skipping" << std::endl;
+        av_packet_free(&packet);
+        continue;
       }
-    }
 
-    av_packet_unref(packet);
+      std::cout << "Attempting to decode packet of size: " << packet->size
+                << std::endl;
+      // Use Opus decoder to decode packet
+      if (opus_decoder_->decode_packet(packet, frame)) {
+        std::cout << "Packet decoded successfully" << std::endl;
+
+        // 直接将解码后的帧放入audio_sample_queue_
+        AVFrame *queue_frame = av_frame_alloc();
+        if (queue_frame) {
+          // 复制frame的内容到queue_frame
+          av_frame_move_ref(queue_frame, frame);
+
+          // 将frame放入队列
+          audio_sample_queue_.push(queue_frame);
+          std::cout << "Frame written directly to audio sample queue, samples: "
+                    << queue_frame->nb_samples << std::endl;
+        }
+      } else {
+        std::cerr << "Failed to decode packet" << std::endl;
+      }
+
+      av_packet_free(&packet);
+    } catch (const std::exception &e) {
+      std::cerr << "Exception in decode thread: " << e.what() << std::endl;
+    } catch (...) {
+      std::cerr << "Unknown exception in decode thread" << std::endl;
+    }
   }
 
-  av_packet_free(&packet);
   av_frame_free(&frame);
 
   std::cout << "Audio decode thread stopped" << std::endl;

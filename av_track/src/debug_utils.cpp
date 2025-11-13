@@ -63,6 +63,9 @@ public:
     codecpar->block_align = 2;     // 1 channel * 2 bytes per sample
     codecpar->bits_per_coded_sample = 16;
     codecpar->format = AV_SAMPLE_FMT_S16;
+    
+    // 设置时间基准以避免时间戳警告
+    stream->time_base = (AVRational){1, codecpar->sample_rate};
 
     stream->time_base = (AVRational){1, 48000};
 
@@ -114,6 +117,14 @@ public:
 
     // 设置流索引
     pkt->stream_index = audio_stream_index;
+    
+    // 设置时间戳以避免警告
+    if (pkt->pts == AV_NOPTS_VALUE) {
+      pkt->pts = 0;
+    }
+    if (pkt->dts == AV_NOPTS_VALUE) {
+      pkt->dts = 0;
+    }
 
     // 写入数据包
     int ret = av_interleaved_write_frame(format_context, pkt);

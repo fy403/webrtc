@@ -46,6 +46,10 @@ bool OpusEncoder::open_encoder(int sample_rate, int channels,
   av_opt_set(encoder_context_->priv_data, "application", "audio", 0);
   av_opt_set_int(encoder_context_->priv_data, "frame_duration", 20,
                  0); // 设置帧持续时间为20毫秒
+  
+  // 增加编码器缓冲以避免xrun
+  av_opt_set_int(encoder_context_->priv_data, "packet_loss", 10, 0);
+  av_opt_set_int(encoder_context_->priv_data, "fec", 1, 0);
 
   int ret = avcodec_open2(encoder_context_, codec_, nullptr);
   if (ret < 0) {

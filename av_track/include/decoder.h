@@ -26,11 +26,6 @@ public:
   virtual AVCodecContext *get_context() const = 0;
 
   virtual bool decode_packet(AVPacket *packet, AVFrame *frame) = 0;
-  
-  // FIFO相关接口
-  virtual bool write_to_fifo(AVFrame *frame) = 0;
-  virtual int read_from_fifo(AVFrame *frame) = 0;
-  virtual int get_fifo_size() const = 0;
 
 protected:
   Decoder() = default;
