@@ -4,9 +4,34 @@
 
 extern std::string av_error_string(int errnum);
 
-OpusDecoder::OpusDecoder() : decoder_context_(nullptr), codec_(nullptr) {}
+OpusDecoder::OpusDecoder()
+    : decoder_context_(nullptr), codec_(nullptr), actual_sample_rate_(0),
+      actual_channels_(0), actual_sample_fmt_(AV_SAMPLE_FMT_NONE) {}
 
 OpusDecoder::~OpusDecoder() { close_decoder(); }
+
+bool OpusDecoder::open_decoder() {
+  codec_ = avcodec_find_decoder(AV_CODEC_ID_OPUS);
+  if (!codec_) {
+    std::cerr << "Cannot find Opus decoder" << std::endl;
+    return false;
+  }
+
+  decoder_context_ = avcodec_alloc_context3(codec_);
+  if (!decoder_context_) {
+    std::cerr << "Cannot allocate Opus decoder context" << std::endl;
+    return false;
+  }
+
+  // 在这种模式下，我们不预先设置参数，而是从数据包中获取
+  int ret = avcodec_open2(decoder_context_, codec_, nullptr);
+  if (ret < 0) {
+    std::cerr << "Cannot open Opus decoder: " << av_error_string(ret)
+              << std::endl;
+    return false;
+  }
+  return true;
+}
 
 bool OpusDecoder::open_decoder(int sample_rate, int channels,
                                AVSampleFormat sample_fmt) {
@@ -34,6 +59,12 @@ bool OpusDecoder::open_decoder(int sample_rate, int channels,
               << std::endl;
     return false;
   }
+
+  // 保存实际参数
+  actual_sample_rate_ = sample_rate;
+  actual_channels_ = channels;
+  actual_sample_fmt_ = sample_fmt;
+
   return true;
 }
 
@@ -84,10 +115,20 @@ bool OpusDecoder::decode_packet(AVPacket *packet, AVFrame *frame) {
     std::cerr << "Error during decoding: " << av_error_string(ret) << std::endl;
     return false;
   }
+
+  // 保存实际解码参数
+  actual_sample_rate_ = frame->sample_rate;
+  actual_channels_ = frame->channels;
+  actual_sample_fmt_ = static_cast<AVSampleFormat>(frame->format);
+
   static u_int64_t id = 0;
-  if (id++ % 100 == 0) {
+  if (id++ == 0) {
     std::cout << "Packet size: " << packet->size << " bytes" << std::endl;
     std::cout << "Frame size: " << frame->nb_samples << " samples" << std::endl;
+    std::cout << "Frame sample rate: " << actual_sample_rate_ << std::endl;
+    std::cout << "Frame channels: " << actual_channels_ << std::endl;
+    std::cout << "Frame sample format: "
+              << av_get_sample_fmt_name(actual_sample_fmt_) << std::endl;
   }
   return true;
 }
@@ -97,4 +138,12 @@ void OpusDecoder::close_decoder() {
     avcodec_free_context(&decoder_context_);
     decoder_context_ = nullptr;
   }
+}
+
+int OpusDecoder::get_sample_rate() const { return actual_sample_rate_; }
+
+int OpusDecoder::get_channels() const { return actual_channels_; }
+
+AVSampleFormat OpusDecoder::get_sample_fmt() const {
+  return actual_sample_fmt_;
 }
