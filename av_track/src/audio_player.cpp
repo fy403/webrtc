@@ -165,7 +165,12 @@ bool AudioPlayer::initResampler() {
     return false;
   }
 
-  std::cout << "Audio resampler initialized: FLTP -> S16" << std::endl;
+  std::cout << "Input sample rate: " << params_.sample_rate << std::endl;
+  std::cout << "Output sample rate: " << params_.sample_rate << std::endl;
+  std::cout << "Input channels: " << params_.channels << std::endl;
+  std::cout << "Output channels: " << params_.channels << std::endl;
+  std::cout << "Input sample format: FLTP" << std::endl;
+  std::cout << "Output sample format: S16" << std::endl;
   return true;
 }
 
@@ -238,6 +243,9 @@ void AudioPlayer::audioCallback(Uint8 *stream, int len) {
   int samples_needed = len / sizeof(int16_t);
   int samples_written = 0;
 
+  // 音量控制参数 (0-100%)
+  static const float volume_scale = 0.05f;
+
   while (samples_written < samples_needed) {
     AVFrame *frame = nullptr;
     if (!audio_sample_queue_.pop(frame)) {
@@ -264,9 +272,14 @@ void AudioPlayer::audioCallback(Uint8 *stream, int len) {
     int samples_to_copy =
         std::min(samples_available, samples_needed - samples_written);
 
-    // 拷贝音频数据
-    memcpy(output_buffer + samples_written, frame_data,
-           samples_to_copy * sizeof(int16_t));
+    // 拷贝并应用音量控制的音频数据
+    for (int i = 0; i < samples_to_copy; ++i) {
+      int32_t scaled_sample =
+          static_cast<int32_t>(frame_data[i]) * volume_scale;
+      // 确保值在16位范围内
+      output_buffer[samples_written + i] = static_cast<int16_t>(
+          std::max(-32768, std::min(32767, scaled_sample)));
+    }
     samples_written += samples_to_copy;
 
     // 处理未用完的数据
@@ -327,15 +340,12 @@ void AudioPlayer::decodeThread() {
     return;
   }
 
-  int processed_count = 0;
   auto last_log_time = std::chrono::steady_clock::now();
   auto last_perf_time = last_log_time;
   int packets_in_period = 0;
 
   // 只在调试时保存音频文件
   const bool enable_debug_save = true; // 改为true进行调试
-  std::string frame_filename = "captured_remote_audio_frames.wav";
-  auto start_time = std::chrono::steady_clock::now();
 
   while (running_) {
     AVPacket *packet = nullptr;
@@ -354,6 +364,12 @@ void AudioPlayer::decodeThread() {
 
     if (packet->size > 0 &&
         opus_decoder_->decode_packet(packet, decoded_frame)) {
+      if (decoded_frame->format != AV_SAMPLE_FMT_FLTP) {
+        std::cerr << "Unexpected audio format: " << decoded_frame->format
+                  << std::endl;
+        av_frame_free(&decoded_frame);
+        continue;
+      }
       // 重采样：FLTP -> S16
       resampled_frame->channel_layout =
           av_get_default_channel_layout(params_.channels);
@@ -362,36 +378,40 @@ void AudioPlayer::decodeThread() {
 
       int ret = swr_convert_frame(swr_ctx_, resampled_frame, decoded_frame);
       if (ret == AVERROR_INPUT_CHANGED) {
-        std::cerr << "Audio resampling context needs reinitialization due to input change" << std::endl;
+        std::cerr << "Audio resampling context needs reinitialization due to "
+                     "input change"
+                  << std::endl;
         // 重新初始化重采样器
         swr_free(&swr_ctx_);
-        swr_ctx_ = swr_alloc_set_opts(nullptr,
-                                      // 输出格式
-                                      av_get_default_channel_layout(params_.channels),
-                                      AV_SAMPLE_FMT_S16, params_.sample_rate,
-                                      // 输入格式（Opus解码器输出）
-                                      av_get_default_channel_layout(decoded_frame->channels),
-                                      static_cast<AVSampleFormat>(decoded_frame->format), 
-                                      decoded_frame->sample_rate, 0, nullptr);
+        swr_ctx_ = swr_alloc_set_opts(
+            nullptr,
+            // 输出格式
+            av_get_default_channel_layout(params_.channels), AV_SAMPLE_FMT_S16,
+            params_.sample_rate,
+            // 输入格式（Opus解码器输出）
+            av_get_default_channel_layout(decoded_frame->channels),
+            static_cast<AVSampleFormat>(decoded_frame->format),
+            decoded_frame->sample_rate, 0, nullptr);
 
         if (!swr_ctx_) {
           std::cerr << "Failed to allocate resampler context" << std::endl;
         } else {
           int init_ret = swr_init(swr_ctx_);
           if (init_ret < 0) {
-            std::cerr << "Failed to reinitialize resampler: " << init_ret << std::endl;
+            std::cerr << "Failed to reinitialize resampler: " << init_ret
+                      << std::endl;
             swr_free(&swr_ctx_);
             swr_ctx_ = nullptr;
           } else {
             // 重新尝试转换
             ret = swr_convert_frame(swr_ctx_, resampled_frame, decoded_frame);
             if (ret < 0) {
-              std::cerr << "Failed to resample audio frame after reinit: " << ret << std::endl;
+              std::cerr << "Failed to resample audio frame after reinit: "
+                        << ret << std::endl;
             }
           }
         }
-      }
-      else if (ret < 0) {
+      } else if (ret < 0) {
         std::cerr << "Failed to resample audio frame: " << ret << std::endl;
       } else {
         // 将重采样后的帧放入队列
@@ -403,14 +423,6 @@ void AudioPlayer::decodeThread() {
           if (!audio_sample_queue_.try_push(queue_frame)) {
             // 队列满时丢弃帧
             av_frame_free(&queue_frame);
-          }
-        }
-
-        // 调试保存（可选）
-        if (enable_debug_save) {
-          auto current_time = std::chrono::steady_clock::now();
-          if (current_time - start_time <= std::chrono::seconds(5)) {
-            DebugUtils::save_raw_audio_frame(resampled_frame, frame_filename);
           }
         }
       }

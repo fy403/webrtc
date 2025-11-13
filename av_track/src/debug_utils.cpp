@@ -63,7 +63,7 @@ public:
     codecpar->block_align = 2;     // 1 channel * 2 bytes per sample
     codecpar->bits_per_coded_sample = 16;
     codecpar->format = AV_SAMPLE_FMT_S16;
-    
+
     // 设置时间基准以避免时间戳警告
     stream->time_base = (AVRational){1, codecpar->sample_rate};
 
@@ -117,7 +117,7 @@ public:
 
     // 设置流索引
     pkt->stream_index = audio_stream_index;
-    
+
     // 设置时间戳以避免警告
     if (pkt->pts == AV_NOPTS_VALUE) {
       pkt->pts = 0;
@@ -455,32 +455,38 @@ bool save_raw_audio_frame(const AVFrame *frame, const std::string &filename) {
       return false;
     }
   }
-  
+
   // 创建一个包来保存帧数据
   AVPacket *packet = av_packet_alloc();
   if (!packet) {
     std::cerr << "Failed to allocate packet for frame saving" << std::endl;
     return false;
   }
-  
+
   // 为包分配缓冲区
-  int data_size = av_samples_get_buffer_size(nullptr, frame->channels, frame->nb_samples, 
-                                             (AVSampleFormat)frame->format, 1);
-  packet->data = (uint8_t*)av_malloc(data_size);
-  if (!packet->data) {
-    std::cerr << "Failed to allocate packet buffer" << std::endl;
+  int data_size =
+      av_samples_get_buffer_size(nullptr, frame->channels, frame->nb_samples,
+                                 (AVSampleFormat)frame->format, 1);
+  if (data_size < 0) {
+    std::cerr << "Failed to calculate buffer size for save wav" << std::endl;
     av_packet_free(&packet);
     return false;
   }
-  packet->size = data_size;
-  
+
+  // 使用av_new_packet分配数据包内存，而不是直接使用av_malloc
+  if (av_new_packet(packet, data_size) < 0) {
+    std::cerr << "Failed to allocate packet buffer for save wav" << std::endl;
+    av_packet_free(&packet);
+    return false;
+  }
+
   // 复制帧数据到包
   memcpy(packet->data, frame->data[0], data_size);
-  
+
   // 设置包属性
   packet->pts = frame->pts;
   packet->dts = frame->pkt_dts;
-  
+
   bool result = g_rawAudioFrameWriter.writePacket(packet);
   av_packet_unref(packet);
   av_packet_free(&packet);
