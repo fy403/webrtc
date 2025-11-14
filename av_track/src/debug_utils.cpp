@@ -169,7 +169,8 @@ private:
 };
 
 static RawAudioWriter g_rawAudioWriter;
-static RawAudioWriter g_rawAudioFrameWriter;
+
+static RawAudioWriter g_rawAudioWriter2;
 
 namespace DebugUtils {
 
@@ -447,89 +448,47 @@ bool save_raw_audio_packet(const AVPacket *packet, std::string filename) {
 
 void finalize_raw_audio_file() { g_rawAudioWriter.finalize(); }
 
-// 音频帧保存函数
-bool save_raw_audio_frame(const AVFrame *frame, const std::string &filename) {
+bool save_raw_audio_frame2(const AVFrame *frame, const std::string &filename) {
   // 如果写入器未初始化，先初始化
-  if (!g_rawAudioFrameWriter.isInitialized()) {
-    if (!g_rawAudioFrameWriter.initialize(filename)) {
+  if (!g_rawAudioWriter2.isInitialized()) {
+    if (!initialize_raw_audio_writer2(filename)) {
       return false;
     }
   }
-
-  // 创建一个包来保存帧数据
-  AVPacket *packet = av_packet_alloc();
-  if (!packet) {
-    std::cerr << "Failed to allocate packet for frame saving" << std::endl;
+  // 创建一个AVPacket来存储帧数据
+  AVPacket *pkt = av_packet_alloc();
+  if (!pkt) {
+    std::cerr << "Failed to allocate packet for audio frame" << std::endl;
     return false;
   }
 
-  // 为包分配缓冲区
-  int data_size =
-      av_samples_get_buffer_size(nullptr, frame->channels, frame->nb_samples,
-                                 (AVSampleFormat)frame->format, 1);
-  if (data_size < 0) {
-    std::cerr << "Failed to calculate buffer size for save wav" << std::endl;
-    av_packet_free(&packet);
+  // 将帧数据复制到包中
+  int ret = av_new_packet(pkt, frame->nb_samples * frame->channels *
+                                   2); // 假设16位音频
+  if (ret < 0) {
+    std::cerr << "Failed to allocate packet data for audio frame" << std::endl;
+    av_packet_free(&pkt);
     return false;
   }
 
-  // 使用av_new_packet分配数据包内存，而不是直接使用av_malloc
-  if (av_new_packet(packet, data_size) < 0) {
-    std::cerr << "Failed to allocate packet buffer for save wav" << std::endl;
-    av_packet_free(&packet);
-    return false;
-  }
-
-  // 复制帧数据到包
-  memcpy(packet->data, frame->data[0], data_size);
+  // 复制音频数据
+  memcpy(pkt->data, frame->data[0], pkt->size);
 
   // 设置包属性
-  packet->pts = frame->pts;
-  packet->dts = frame->pkt_dts;
+  pkt->pts = frame->pts;
+  pkt->dts = frame->pts;
+  pkt->duration = frame->nb_samples;
+  pkt->stream_index = 0;
 
-  bool result = g_rawAudioFrameWriter.writePacket(packet);
-  av_packet_unref(packet);
-  av_packet_free(&packet);
+  bool result = g_rawAudioWriter2.writePacket(pkt);
+  av_packet_free(&pkt);
   return result;
 }
 
-void finalize_raw_audio_frame_file() { g_rawAudioFrameWriter.finalize(); }
-
-// 添加日志来调试数据格式
-void logAudioData(const std::vector<uint8_t> &data, const std::string &prefix) {
-  std::cout << prefix << " Data size: " << data.size() << " bytes" << std::endl;
-  if (data.size() >= 8) {
-    std::cout << "First 8 bytes: ";
-    for (int i = 0; i < 8 && i < data.size(); i++) {
-      printf("%02X ", data[i]);
-    }
-    std::cout << std::endl;
-
-    // 检查常见格式的魔术字
-    if (data.size() >= 4) {
-      uint32_t magic =
-          (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
-      if (magic == 0x1A45DFA3) {
-        std::cout << "Detected: EBML/WebM format" << std::endl;
-      } else if (data[0] == 0xFF && (data[1] & 0xF0) == 0xF0) {
-        std::cout << "Detected: Possible AAC/ADTS format" << std::endl;
-      } else if (data[0] == 'R' && data[1] == 'I' && data[2] == 'F' &&
-                 data[3] == 'F') {
-        std::cout << "Detected: WAV format" << std::endl;
-      } else if (data[0] == 'O' && data[1] == 'p' && data[2] == 'u' &&
-                 data[3] == 's') {
-        std::cout << "Detected: Opus format" << std::endl;
-      } else {
-        std::cout << "Unknown format, checking Opus config..." << std::endl;
-        // 检查是否是 Opus 包
-        uint8_t config = data[0] >> 3;
-        if (config <= 18) {
-          std::cout << "Possible Opus packet with config: " << (int)config
-                    << std::endl;
-        }
-      }
-    }
-  }
+bool initialize_raw_audio_writer2(const std::string &filename) {
+  return g_rawAudioWriter2.initialize(filename);
 }
+
+void finalize_raw_audio_frame_file2() { g_rawAudioWriter2.finalize(); }
 
 } // namespace DebugUtils

@@ -148,6 +148,7 @@ void AudioCapturer::stop() {
 void AudioCapturer::capture_loop() {
   AVPacket *packet = av_packet_alloc();
   AVFrame *frame = av_frame_alloc();
+  static auto start_time = std::chrono::steady_clock::now();
   std::string wav_filename = "captured_audio.wav";
   // 等待 track_callback_ 被设置
   {
@@ -161,7 +162,6 @@ void AudioCapturer::capture_loop() {
     av_packet_free(&packet);
     return;
   }
-  static auto start_time = std::chrono::steady_clock::now();
   std::cout << "Capture thread started" << std::endl;
   while (is_running_) {
     if (is_paused_) {

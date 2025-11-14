@@ -199,67 +199,56 @@ void AudioPlayer::audioCallback(Uint8 *stream, int len) {
 
   int16_t *output_buffer = reinterpret_cast<int16_t *>(stream);
   int samples_needed = len / sizeof(int16_t);
-  int samples_written = 0;
 
   // 音量控制参数 (0-100%)
-  float volume_scale = volume_.load(); // 降低音量以减少失真
+  float volume_scale = volume_.load();
 
-  while (samples_written < samples_needed) {
-    AVFrame *frame = nullptr;
-    if (!audio_sample_queue_.pop(frame)) {
-      // 队列为空，跳出循环
-      break;
-    }
-
-    if (!frame || !frame->data[0] || frame->nb_samples <= 0) {
-      if (frame)
-        av_frame_free(&frame);
-      continue;
-    }
-
-    // 验证音频格式（应该是S16）
-    if (frame->format != AV_SAMPLE_FMT_S16) {
-      std::cerr << "Unexpected audio format in callback: "
-                << av_get_sample_fmt_name((AVSampleFormat)frame->format) << "("
-                << frame->format << ")" << std::endl;
-      av_frame_free(&frame);
-      continue;
-    }
-
-    int16_t *frame_data = reinterpret_cast<int16_t *>(frame->data[0]);
-    int samples_available = frame->nb_samples * frame->channels;
-    int samples_to_copy =
-        std::min(samples_available, samples_needed - samples_written);
-
-    // 拷贝并应用音量控制的音频数据
-    // 使用更平滑的音量控制算法以减少高频失真
-    for (int i = 0; i < samples_to_copy; ++i) {
-      // 使用浮点运算进行更精确的音量控制
-      float scaled_sample = static_cast<float>(frame_data[i]) * volume_scale;
-      // 确保值在16位范围内
-      output_buffer[samples_written + i] = static_cast<int16_t>(
-          std::max(-32768.0f, std::min(32767.0f, scaled_sample)));
-    }
-    samples_written += samples_to_copy;
-
-    av_frame_free(&frame);
+  AVFrame *frame = nullptr;
+  if (!audio_sample_queue_.pop(frame)) {
+    // 队列为空，跳出循环
+    return;
   }
 
-  // 处理音频欠载
-  if (samples_written < samples_needed) {
+  if (!frame || !frame->data[0] || frame->nb_samples <= 0) {
+    if (frame)
+      av_frame_free(&frame);
+    return;
+  }
+
+  int16_t *frame_data = reinterpret_cast<int16_t *>(frame->data[0]);
+  int samples_available = frame->nb_samples * frame->channels;
+
+  // 确保有足够的音频数据，否则进行欠载处理
+  if (samples_available < samples_needed) {
     audio_underruns_++;
 
     // 减少日志输出频率
     if (audio_underruns_.load() % 200 == 0) {
       std::cout << "Audio underrun #" << audio_underruns_.load()
                 << ": requested " << samples_needed << " samples, got "
-                << samples_written << std::endl;
+                << samples_available << std::endl;
     }
   }
+
+  // 一次性批量拷贝并应用音量控制
+  if (volume_scale == 1.0f) {
+    // 如果音量为100%，直接内存拷贝
+    memcpy(output_buffer, frame_data, samples_needed * sizeof(int16_t));
+  } else {
+    // 批量处理音量控制
+    for (int i = 0; i < samples_needed; ++i) {
+      float scaled_sample = static_cast<float>(frame_data[i]) * volume_scale;
+      output_buffer[i] = static_cast<int16_t>(
+          std::max(-32768.0f, std::min(32767.0f, scaled_sample)));
+    }
+  }
+
+  av_frame_free(&frame);
 }
 
 void AudioPlayer::decodeThread() {
   std::cout << "Audio decode thread started" << std::endl;
+  std::string wav_filename = "captured_remote_audio.wav";
 
   AVFrame *decoded_frame = av_frame_alloc();
   AVFrame *resampled_frame = av_frame_alloc();
@@ -436,8 +425,8 @@ void AudioPlayer::decodeThread() {
       }
     }
 
+    //    DebugUtils::save_raw_audio_frame2(resampled_frame, wav_filename);
     av_packet_free(&packet);
-
     // 性能统计和日志输出
     //    auto now = std::chrono::steady_clock::now();
     //    if (now - last_perf_time > std::chrono::seconds(5)) {
@@ -450,12 +439,9 @@ void AudioPlayer::decodeThread() {
     //    }
   }
 
+  //  DebugUtils::finalize_raw_audio_frame_file2();
   av_frame_free(&decoded_frame);
   av_frame_free(&resampled_frame);
-
-  if (enable_debug_save) {
-    DebugUtils::finalize_raw_audio_frame_file();
-  }
 
   std::cout << "Audio decode thread stopped" << std::endl;
 }

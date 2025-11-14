@@ -26,9 +26,9 @@ bool save_raw_audio_packet(const AVPacket *packet, std::string debug_filename);
 void finalize_raw_audio_file();
 
 // 音频帧保存函数
-bool save_raw_audio_frame(const AVFrame *frame, const std::string &filename);
-void finalize_raw_audio_frame_file();
-void logAudioData(const std::vector<uint8_t> &data, const std::string &prefix);
+bool initialize_raw_audio_writer2(const std::string &filename);
+bool save_raw_audio_frame2(const AVFrame *frame, const std::string &filename);
+void finalize_raw_audio_frame_file2();
 } // namespace DebugUtils
 
 #endif // DEBUG_UTILS_H
