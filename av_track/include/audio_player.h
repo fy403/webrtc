@@ -17,28 +17,41 @@ extern "C" {
 #include <libavutil/frame.h>
 }
 
+struct AudioPlayerDeviceParams {
+  std::string out_device;
+  int out_sample_rate;
+  int out_channels;
+  float volume;
+
+  AudioPlayerDeviceParams()
+      : out_sample_rate(48000), out_channels(2), volume(0.45f), out_device("") {
+  }
+};
+
 class AudioPlayer {
 public:
-  explicit AudioPlayer(const std::string &audio_device,
-                       const AudioDeviceParams &params);
+  explicit AudioPlayer(const AudioPlayerDeviceParams &params);
   ~AudioPlayer();
 
   void start();
   void stop();
   void receiveAudioData(const rtc::binary &data, const rtc::FrameInfo &info);
   bool isRunning() const { return running_; }
-  bool initResampler();
+
+  // 音量控制接口
+  void setVolume(float volume); // 设置音量 (0.0 - 1.0)
+  float getVolume() const;      // 获取当前音量
 
 private:
   void decodeThread();
-  bool initSDLAudio();
+  bool initSDLAudio(int sample_rate, int channels, SDL_AudioFormat format,
+                    Uint16 frame_size);
   void cleanup();
 
   static void sdlAudioCallback(void *userdata, Uint8 *stream, int len);
   void audioCallback(Uint8 *stream, int len);
 
-  std::string audio_device_;
-  AudioDeviceParams params_;
+  AudioPlayerDeviceParams params_;
   std::atomic<bool> running_{false};
 
   std::thread decode_thread_;
@@ -60,6 +73,9 @@ private:
   std::atomic<int> packets_received_{0};
   std::atomic<int> packets_processed_{0};
   std::atomic<int> audio_underruns_{0};
+
+  // 音量控制
+  std::atomic<float> volume_{0.45f}; // 音量 (0.0 - 1.0)
 };
 
 #endif // AUDIO_PLAYER_H

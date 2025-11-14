@@ -54,10 +54,11 @@ Cmdline::Cmdline(int argc,
       {"turnUser", required_argument, NULL, 'U'},
       {"turnPass", required_argument, NULL, 'P'},
       {"inputDevice", required_argument, NULL, 'i'},
-      {"audioDevice", required_argument, NULL, 'a'}, // Audio device option (microphone)
+      {"audioDevice", required_argument, NULL,
+       'a'}, // Audio device option (microphone)
       {"speakerDevice", required_argument, NULL, 'S'}, // Speaker device option
-      {"sampleRate", required_argument, NULL, 'r'},  // Audio sample rate option
-      {"channels", required_argument, NULL, 'C'},    // Audio channels option
+      {"sampleRate", required_argument, NULL, 'r'}, // Audio sample rate option
+      {"channels", required_argument, NULL, 'C'},   // Audio channels option
       {"audioFormat", required_argument, NULL,
        'f'}, // Audio input_format option
       {"videoFormat", required_argument, NULL,
@@ -66,6 +67,10 @@ Cmdline::Cmdline(int argc,
       {"debug", no_argument, NULL, 'd'},
       {"resolution", required_argument, NULL, 'R'},
       {"framerate", required_argument, NULL, 'F'},
+      {"outSampleRate", required_argument, NULL, 'O'},
+      {"outChannels", required_argument, NULL, 'H'},
+      {"outFormat", required_argument, NULL, 'G'},
+      {"volume", required_argument, NULL, 'v'},
       {"help", no_argument, NULL, 'h'},
       {NULL, 0, NULL, 0}};
 
@@ -99,10 +104,15 @@ Cmdline::Cmdline(int argc,
   _resolution = "640x480"; // resolution
   _framerate = 30;         // framerate
 
+  // Audio output parameters defaults
+  _out_sample_rate = 48000; // Default output sample rate
+  _out_channels = 2;        // Default output channels
+  _volume = 0.8f;           // Default volume (80%)
+
   optind = 0;
-  while (
-      (c = getopt_long(argc, argv, "a:S:s:t:w:x:u:p:U:R:P:C:i:c:r:f:F:V:denmhv",
-                       long_options, &optind)) != -1) {
+  while ((c = getopt_long(argc, argv,
+                          "a:S:s:t:w:x:u:p:U:R:P:C:i:c:r:f:F:V:O:H:v:denmh",
+                          long_options, &optind)) != -1) {
     switch (c) {
     case 'n':
       _n = true;
@@ -229,6 +239,33 @@ Cmdline::Cmdline(int argc,
       }
       break;
 
+    case 'O': // Output sample rate
+      _out_sample_rate = atoi(optarg);
+      if (_out_sample_rate < 1) {
+        std::string err;
+        err += "parameter range error: output sample rate must be positive";
+        throw(std::range_error(err));
+      }
+      break;
+
+    case 'H': // Output channels
+      _out_channels = atoi(optarg);
+      if (_out_channels < 1) {
+        std::string err;
+        err += "parameter range error: output channels must be positive";
+        throw(std::range_error(err));
+      }
+      break;
+
+    case 'v': // Volume control
+      _volume = atof(optarg);
+      if (_volume < 0.0f || _volume > 1.0f) {
+        std::string err;
+        err += "parameter range error: volume must be between 0.0 and 1.0";
+        throw(std::range_error(err));
+      }
+      break;
+
     case 'd':
       _debug = true;
       break;
@@ -304,6 +341,14 @@ libdatachannel client implementing WebRTC Data Channels with WebSocket signaling
           Video resolution in WIDTHxHEIGHT input_format.\n\
    [ -F ] [ --framerate ] (type=INTEGER, range=1...120, default=30)\n\
           Video encoding framerate.\n\
+   [ -O ] [ --outSampleRate ] (type=INTEGER, default=48000)\n\
+          Audio output sample rate.\n\
+   [ -H ] [ --outChannels ] (type=INTEGER, default=2)\n\
+          Audio output channels.\n\
+   [ -G ] [ --outFormat ] (type=STRING, default=s16)\n\
+          Audio output format.\n\
+   [ -v ] [ --volume ] (type=FLOAT, range=0.0...1.0, default=0.8)\n\
+          Audio volume control.\n\
    [ -h ] [ --help ] (type=FLAG)\n\
           Display this help and exit.\n";
   }

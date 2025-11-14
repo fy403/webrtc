@@ -8,12 +8,10 @@
 #include <libavutil/samplefmt.h>
 #include <libswresample/swresample.h>
 
-AudioPlayer::AudioPlayer(const std::string &audio_device,
-                         const AudioDeviceParams &params)
-    : audio_device_(audio_device), params_(params),
-      opus_decoder_(std::make_unique<OpusDecoder>()),
-      decode_queue_(1000),        // 减少队列大小避免积压
-      audio_sample_queue_(2000) { // 适当增加音频样本队列
+AudioPlayer::AudioPlayer(const AudioPlayerDeviceParams &params)
+    : params_(params), opus_decoder_(std::make_unique<OpusDecoder>()),
+      decode_queue_(50),         // 减少队列大小以降低延迟
+      audio_sample_queue_(100) { // 减少队列大小以降低延迟
 
   decode_queue_.set_deleter([](AVPacket *&packet) {
     if (packet) {
@@ -26,6 +24,7 @@ AudioPlayer::AudioPlayer(const std::string &audio_device,
       av_frame_free(&frame);
     }
   });
+  setVolume(params_.volume);
 }
 
 AudioPlayer::~AudioPlayer() { stop(); }
@@ -44,13 +43,6 @@ void AudioPlayer::start() {
   // 初始化 Opus 解码器 - 不指定具体参数，让解码器自动识别
   if (!opus_decoder_->open_decoder()) {
     std::cerr << "Failed to initialize Opus decoder" << std::endl;
-    SDL_Quit();
-    return;
-  }
-
-  if (!initSDLAudio()) {
-    std::cerr << "Failed to initialize SDL audio" << std::endl;
-    cleanup();
     SDL_Quit();
     return;
   }
@@ -88,15 +80,34 @@ void AudioPlayer::stop() {
             << ", Underruns: " << audio_underruns_.load() << std::endl;
 }
 
-bool AudioPlayer::initSDLAudio() {
+void AudioPlayer::cleanup() {
+  if (audio_device_id_ != 0) {
+    SDL_PauseAudioDevice(audio_device_id_, 1);
+    SDL_CloseAudioDevice(audio_device_id_);
+    audio_device_id_ = 0;
+  }
+
+  if (opus_decoder_) {
+    opus_decoder_->close_decoder();
+  }
+
+  // 清理重采样器
+  if (swr_ctx_) {
+    swr_free(&swr_ctx_);
+    swr_ctx_ = nullptr;
+  }
+}
+
+bool AudioPlayer::initSDLAudio(int sample_rate, int channels,
+                               SDL_AudioFormat format, Uint16 frame_size) {
   SDL_AudioSpec desired, obtained;
   SDL_zero(desired);
 
-  // 先使用默认参数，后续再根据实际解码结果调整
-  desired.freq = params_.sample_rate;
-  desired.format = AUDIO_S16;
-  desired.channels = params_.channels;
-  desired.samples = 1024; // 优化缓冲区大小
+  // 根据实际音频参数配置SDL
+  desired.freq = sample_rate;
+  desired.format = format;
+  desired.channels = channels;
+  desired.samples = frame_size; // 使用OPUS标准帧大小以减少延迟
   desired.callback = &AudioPlayer::sdlAudioCallback;
   desired.userdata = this;
 
@@ -107,13 +118,13 @@ bool AudioPlayer::initSDLAudio() {
               << std::endl;
   }
 
-  if (!audio_device_.empty())
-    std::cout << "Speaker device name: " << audio_device_ << std::endl;
+  if (!params_.out_device.empty())
+    std::cout << "Speaker device name: " << params_.out_device << std::endl;
   else
     std::cout << "Using default audio device" << std::endl;
 
   const char *device_name =
-      audio_device_.empty() ? nullptr : audio_device_.c_str();
+      params_.out_device.empty() ? nullptr : params_.out_device.c_str();
   audio_device_id_ =
       SDL_OpenAudioDevice(device_name, 0, &desired, &obtained, 0);
 
@@ -139,46 +150,12 @@ bool AudioPlayer::initSDLAudio() {
   return true;
 }
 
-bool AudioPlayer::initResampler() { return true; }
-
-void AudioPlayer::cleanup() {
-  if (audio_device_id_ != 0) {
-    SDL_PauseAudioDevice(audio_device_id_, 1);
-    SDL_CloseAudioDevice(audio_device_id_);
-    audio_device_id_ = 0;
-  }
-
-  if (opus_decoder_) {
-    opus_decoder_->close_decoder();
-  }
-
-  // 清理重采样器
-  if (swr_ctx_) {
-    swr_free(&swr_ctx_);
-    swr_ctx_ = nullptr;
-  }
-}
-
 void AudioPlayer::receiveAudioData(const rtc::binary &data,
                                    const rtc::FrameInfo &info) {
 
   uint64_t timestamp_us = info.timestamp;
   uint8_t payloadType = info.payloadType;
   packets_received_++;
-
-  // 性能统计：每2秒输出一次
-  static auto last_stat_time = std::chrono::steady_clock::now();
-  static int local_packet_count = 0;
-
-  local_packet_count++;
-  auto now = std::chrono::steady_clock::now();
-  //  if (now - last_stat_time > std::chrono::seconds(2)) {
-  //    std::cout << "Audio receive rate: " << local_packet_count / 2.0
-  //              << " packets/s" << std::endl;
-  //    local_packet_count = 0;
-  //    last_stat_time = now;
-  //    std::cout << "Audio RTP type: " << int(payloadType) << std::endl;
-  //  }
 
   AVPacket *packet = av_packet_alloc();
   if (packet) {
@@ -192,11 +169,25 @@ void AudioPlayer::receiveAudioData(const rtc::binary &data,
     packet->pts = timestamp_us;
     packet->dts = timestamp_us;
 
+    // 当队列满时丢弃旧数据包以降低延迟
     if (!decode_queue_.try_push(packet)) {
       av_packet_free(&packet);
+
+      // 每隔一段时间输出警告信息
+      static int drop_count = 0;
+      if (++drop_count % 100 == 0) {
+        std::cout << "Warning: Audio decode queue full, dropping packets. "
+                  << "Total drops: " << drop_count << std::endl;
+      }
     }
   }
 }
+
+void AudioPlayer::setVolume(float volume) {
+  volume_ = std::clamp(volume, 0.0f, 1.0f);
+}
+
+float AudioPlayer::getVolume() const { return volume_.load(); }
 
 void AudioPlayer::sdlAudioCallback(void *userdata, Uint8 *stream, int len) {
   auto player = static_cast<AudioPlayer *>(userdata);
@@ -211,7 +202,7 @@ void AudioPlayer::audioCallback(Uint8 *stream, int len) {
   int samples_written = 0;
 
   // 音量控制参数 (0-100%)
-  static const float volume_scale = 0.1f; // 降低音量以减少失真
+  float volume_scale = volume_.load(); // 降低音量以减少失真
 
   while (samples_written < samples_needed) {
     AVFrame *frame = nullptr;
@@ -228,8 +219,9 @@ void AudioPlayer::audioCallback(Uint8 *stream, int len) {
 
     // 验证音频格式（应该是S16）
     if (frame->format != AV_SAMPLE_FMT_S16) {
-      std::cerr << "Unexpected audio format in callback: " << frame->format
-                << std::endl;
+      std::cerr << "Unexpected audio format in callback: "
+                << av_get_sample_fmt_name((AVSampleFormat)frame->format) << "("
+                << frame->format << ")" << std::endl;
       av_frame_free(&frame);
       continue;
     }
@@ -250,29 +242,6 @@ void AudioPlayer::audioCallback(Uint8 *stream, int len) {
     }
     samples_written += samples_to_copy;
 
-    // 处理未用完的数据
-    if (samples_to_copy < samples_available) {
-      int remaining_samples = samples_available - samples_to_copy;
-      AVFrame *remaining_frame = av_frame_alloc();
-
-      if (remaining_frame) {
-        // 复制frame属性
-        if (av_frame_ref(remaining_frame, frame) == 0) {
-          // 设置剩余数据的指针
-          remaining_frame->data[0] =
-              reinterpret_cast<uint8_t *>(frame_data + samples_to_copy);
-          remaining_frame->nb_samples = remaining_samples / frame->channels;
-
-          // 尝试放回队列
-          if (!audio_sample_queue_.try_push(remaining_frame)) {
-            av_frame_free(&remaining_frame);
-          }
-        } else {
-          av_frame_free(&remaining_frame);
-        }
-      }
-    }
-
     av_frame_free(&frame);
   }
 
@@ -280,12 +249,8 @@ void AudioPlayer::audioCallback(Uint8 *stream, int len) {
   if (samples_written < samples_needed) {
     audio_underruns_++;
 
-    // 用静音填充剩余缓冲区
-    memset(output_buffer + samples_written, 0,
-           (samples_needed - samples_written) * sizeof(int16_t));
-
-    // 每50次欠载输出一次警告
-    if (audio_underruns_.load() % 50 == 0) {
+    // 减少日志输出频率
+    if (audio_underruns_.load() % 200 == 0) {
       std::cout << "Audio underrun #" << audio_underruns_.load()
                 << ": requested " << samples_needed << " samples, got "
                 << samples_written << std::endl;
@@ -313,14 +278,22 @@ void AudioPlayer::decodeThread() {
   int packets_in_period = 0;
 
   // 只在调试时保存音频文件
-  const bool enable_debug_save = true; // 改为true进行调试
+  const bool enable_debug_save = false; // 默认关闭调试保存
 
   // 标记是否已经初始化了重采样器
   bool resampler_initialized = false;
 
+  // 标记是否已经初始化了SDL音频设备
+  bool sdl_initialized = false;
+
+  // 输出音频参数
+  int out_sample_rate = params_.out_sample_rate;
+  int out_channels = params_.out_channels;
+  SDL_AudioFormat out_sample_fmt_sdl = AUDIO_S16;
+  AVSampleFormat out_sample_fmt = AV_SAMPLE_FMT_S16;
+
   while (running_) {
     AVPacket *packet = nullptr;
-
     // 使用带超时的等待，避免线程无法及时退出
     decode_queue_.wait_and_pop(packet);
 
@@ -336,25 +309,32 @@ void AudioPlayer::decodeThread() {
     if (packet->size > 0 &&
         opus_decoder_->decode_packet(packet, decoded_frame)) {
 
-      // 第一次成功解码后，获取实际参数并初始化重采样器
+      // 第一次成功解码后，获取实际参数并初始化SDL音频设备和重采样器
+      if (!sdl_initialized) {
+        // 初始化SDL音频设备，使用实际参数
+        if (!initSDLAudio(out_sample_rate, out_channels, out_sample_fmt_sdl,
+                          decoded_frame->nb_samples)) {
+          std::cerr << "Failed to initialize SDL audio" << std::endl;
+          av_packet_free(&packet);
+          break;
+        }
+        sdl_initialized = true;
+      }
+
       if (!resampler_initialized) {
         // 获取实际解码参数
         int actual_sample_rate = opus_decoder_->get_sample_rate();
         int actual_channels = opus_decoder_->get_channels();
         AVSampleFormat actual_sample_fmt = opus_decoder_->get_sample_fmt();
 
-        // 定义输出参数为局部变量
-        int out_sample_rate = params_.sample_rate;
-        int out_channels = params_.channels;
-        AVSampleFormat out_sample_fmt = AV_SAMPLE_FMT_S16;
         uint64_t out_channel_layout =
             av_get_default_channel_layout(out_channels);
         uint64_t in_channel_layout =
             av_get_default_channel_layout(actual_channels);
 
-        // 配置重采样器：从实际格式转换为S16（有符号16位整数交错）
+        // 配置重采样器：保持原始格式
         swr_ctx_ = swr_alloc_set_opts(nullptr,
-                                      // 输出格式 - 使用配置参数
+                                      // 输出格式 - 与输入相同
                                       out_channel_layout, out_sample_fmt,
                                       out_sample_rate,
                                       // 输入格式（Opus解码器输出）
@@ -364,11 +344,6 @@ void AudioPlayer::decodeThread() {
         if (!swr_ctx_) {
           std::cerr << "Failed to allocate resampler context" << std::endl;
         } else {
-          // 设置重采样器选项以提高质量
-          av_opt_set_double(swr_ctx_, "cutoff", 0.98, 0);
-          av_opt_set(swr_ctx_, "filter_type", "kaiser", 0);
-          av_opt_set_double(swr_ctx_, "kaiser_beta", 9.0, 0);
-
           int ret = swr_init(swr_ctx_);
           if (ret < 0) {
             std::cerr << "Failed to initialize resampler: " << ret << std::endl;
@@ -381,16 +356,21 @@ void AudioPlayer::decodeThread() {
             std::cout << "Out sample format: "
                       << av_get_sample_fmt_name(out_sample_fmt) << std::endl;
             std::cout << "Out channels: " << out_channels << std::endl;
+            std::cout << "Volume: " << params_.volume << std::endl;
           }
         }
       }
 
       if (resampler_initialized) {
-        // 重采样：实际格式 -> S16
+        // 获取新的实际解码参数
+        AVSampleFormat actual_sample_fmt = opus_decoder_->get_sample_fmt();
+        int actual_sample_rate = opus_decoder_->get_sample_rate();
+        int actual_channels = opus_decoder_->get_channels();
+        // 设置输出帧参数
         resampled_frame->channel_layout =
-            av_get_default_channel_layout(params_.channels);
-        resampled_frame->sample_rate = params_.sample_rate;
-        resampled_frame->format = AV_SAMPLE_FMT_S16;
+            av_get_default_channel_layout(out_channels);
+        resampled_frame->sample_rate = out_sample_rate;
+        resampled_frame->format = out_sample_fmt; // 强制输出为S16格式
 
         int ret = swr_convert_frame(swr_ctx_, resampled_frame, decoded_frame);
         if (ret == AVERROR_INPUT_CHANGED) {
@@ -401,16 +381,11 @@ void AudioPlayer::decodeThread() {
           swr_free(&swr_ctx_);
           swr_ctx_ = nullptr;
 
-          // 获取新的实际解码参数
-          int actual_sample_rate = opus_decoder_->get_sample_rate();
-          int actual_channels = opus_decoder_->get_channels();
-          AVSampleFormat actual_sample_fmt = opus_decoder_->get_sample_fmt();
-
           swr_ctx_ = swr_alloc_set_opts(
               nullptr,
               // 输出格式
-              av_get_default_channel_layout(params_.channels),
-              AV_SAMPLE_FMT_S16, params_.sample_rate,
+              av_get_default_channel_layout(out_channels), out_sample_fmt,
+              out_sample_rate,
               // 输入格式（Opus解码器输出）
               av_get_default_channel_layout(actual_channels), actual_sample_fmt,
               actual_sample_rate, 0, nullptr);
@@ -439,7 +414,10 @@ void AudioPlayer::decodeThread() {
             }
           }
         } else if (ret < 0) {
-          std::cerr << "Failed to resample audio frame: " << ret << std::endl;
+          char err_str[AV_ERROR_MAX_STRING_SIZE] = {0};
+          av_strerror(ret, err_str, sizeof(err_str));
+          std::cerr << "Failed to resample audio frame: " << ret << " ("
+                    << err_str << ")" << std::endl;
         } else {
           // 将重采样后的帧放入队列
           AVFrame *queue_frame = av_frame_alloc();
@@ -448,7 +426,7 @@ void AudioPlayer::decodeThread() {
 
             // 使用非阻塞推送
             if (!audio_sample_queue_.try_push(queue_frame)) {
-              // 队列满时丢弃帧
+              // 队列满时丢弃帧以降低延迟
               av_frame_free(&queue_frame);
             }
           }
