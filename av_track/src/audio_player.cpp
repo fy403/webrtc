@@ -41,11 +41,11 @@ void AudioPlayer::start() {
   }
 
   // 初始化 Opus 解码器 - 不指定具体参数，让解码器自动识别
-  if (!opus_decoder_->open_decoder()) {
-    std::cerr << "Failed to initialize Opus decoder" << std::endl;
-    SDL_Quit();
-    return;
-  }
+  //  if (!opus_decoder_->open_decoder()) {
+  //    std::cerr << "Failed to initialize Opus decoder" << std::endl;
+  //    SDL_Quit();
+  //    return;
+  //  }
 
   running_ = true;
 
@@ -276,6 +276,9 @@ void AudioPlayer::decodeThread() {
   // 标记是否已经初始化了SDL音频设备
   bool sdl_initialized = false;
 
+  // 是否初始化了解码器
+  bool decoder_initialized = false;
+
   // 输出音频参数
   int out_sample_rate = params_.out_sample_rate;
   int out_channels = params_.out_channels;
@@ -292,6 +295,13 @@ void AudioPlayer::decodeThread() {
         av_packet_free(&packet);
       break;
     }
+    if (!decoder_initialized) {
+      if (!opus_decoder_->open_decoder()) {
+        std::cerr << "Failed to initialize Opus decoder" << std::endl;
+        SDL_Quit();
+        exit(-100);
+      }
+    }
 
     packets_processed_++;
     packets_in_period++;
@@ -299,7 +309,7 @@ void AudioPlayer::decodeThread() {
     if (packet->size > 0 &&
         opus_decoder_->decode_packet(packet, decoded_frame)) {
       // Save OPUS
-      DebugUtils::save_opus_packet_to_ogg(packet, "opus_packets.ogg");
+      //      DebugUtils::save_opus_packet_to_ogg(packet, "opus_packets.ogg");
       // 第一次成功解码后，获取实际参数并初始化SDL音频设备和重采样器
       if (!sdl_initialized) {
         // 初始化SDL音频设备，使用实际参数
@@ -411,6 +421,7 @@ void AudioPlayer::decodeThread() {
                     << err_str << ")" << std::endl;
         } else {
           // 将重采样后的帧放入队列
+          DebugUtils::save_raw_audio_frame2(resampled_frame, wav_filename);
           AVFrame *queue_frame = av_frame_alloc();
           if (queue_frame) {
             av_frame_move_ref(queue_frame, resampled_frame);
@@ -427,7 +438,6 @@ void AudioPlayer::decodeThread() {
       }
     }
 
-    //    DebugUtils::save_raw_audio_frame2(resampled_frame, wav_filename);
     av_packet_free(&packet);
     // 性能统计和日志输出
     //    auto now = std::chrono::steady_clock::now();
@@ -441,8 +451,8 @@ void AudioPlayer::decodeThread() {
     //    }
   }
 
-  //  DebugUtils::finalize_raw_audio_frame_file2();
-  DebugUtils::finalize_opus_ogg_file();
+  DebugUtils::finalize_raw_audio_frame_file2();
+  //  DebugUtils::finalize_opus_ogg_file();
   av_frame_free(&decoded_frame);
   av_frame_free(&resampled_frame);
 

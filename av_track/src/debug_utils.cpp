@@ -31,8 +31,7 @@ public:
       : format_context(nullptr), initialized(false), audio_stream_index(-1) {}
   ~RawAudioWriter() { finalize(); }
 
-  bool initialize(const std::string &filename,
-                  const AVPacket *packet = nullptr) {
+  bool initialize(const std::string &filename) {
     if (initialized) {
       return true;
     }
@@ -57,28 +56,12 @@ public:
     AVCodecParameters *codecpar = stream->codecpar;
     codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
     codecpar->codec_id = AV_CODEC_ID_PCM_S16LE; // PCM 16-bit little endian
-
-    // 如果提供了packet，则从packet中提取参数
-    if (packet && packet->stream_index >= 0) {
-      // 这里我们假设可以从packet获取相关信息
-      // 在实际应用中，你可能需要通过其他方式传递这些参数
-      codecpar->channels = 1; // 默认单通道
-      codecpar->channel_layout = AV_CH_LAYOUT_MONO;
-      codecpar->sample_rate = 48000; // 默认采样率
-      codecpar->bit_rate = 768000;   // 48000 * 1 * 16
-      codecpar->block_align = 2;     // 1 channel * 2 bytes per sample
-      codecpar->bits_per_coded_sample = 16;
-      codecpar->format = AV_SAMPLE_FMT_S16;
-    } else {
-      // 默认参数
-      codecpar->channels = 1; // 单通道
-      codecpar->channel_layout = AV_CH_LAYOUT_MONO;
-      codecpar->sample_rate = 48000; // 默认采样率
-      codecpar->bit_rate = 768000;   // 48000 * 1 * 16
-      codecpar->block_align = 2;     // 1 channel * 2 bytes per sample
-      codecpar->bits_per_coded_sample = 16;
-      codecpar->format = AV_SAMPLE_FMT_S16;
-    }
+    codecpar->channels = 2;                     // 单通道
+    codecpar->channel_layout = AV_CH_LAYOUT_STEREO;
+    codecpar->sample_rate = 48000; // 默认采样率
+    codecpar->block_align = 4;     // 2 channel * 2 bytes per sample
+    codecpar->bits_per_coded_sample = 16;
+    codecpar->format = AV_SAMPLE_FMT_S16;
 
     // 设置时间基准以避免时间戳警告
     stream->time_base = (AVRational){1, codecpar->sample_rate};
@@ -116,11 +99,8 @@ public:
 
   bool writePacket(const AVPacket *packet) {
     if (!initialized || !format_context) {
-      // 延迟初始化，使用第一个packet的参数
-      if (!initialize("raw_audio.wav", packet)) {
-        std::cerr << "Raw audio writer failed to initialize" << std::endl;
-        return false;
-      }
+      std::cerr << "Raw audio writer not initialized" << std::endl;
+      return false;
     }
 
     if (!packet || !packet->data || packet->size <= 0) {
@@ -628,7 +608,14 @@ bool initialize_raw_audio_writer(const std::string &filename) {
 }
 
 bool save_raw_audio_packet(const AVPacket *packet, std::string filename) {
-  // 直接使用延迟初始化的版本
+  // 如果写入器未初始化，先初始化
+  if (!g_rawAudioWriter.isInitialized()) {
+    // 默认使用文件名 raw_audio.wav
+    if (!initialize_raw_audio_writer(filename)) {
+      return false;
+    }
+  }
+
   return g_rawAudioWriter.writePacket(packet);
 }
 
@@ -675,6 +662,8 @@ bool initialize_raw_audio_writer2(const std::string &filename) {
   return g_rawAudioWriter2.initialize(filename);
 }
 
+void finalize_raw_audio_frame_file2() { g_rawAudioWriter2.finalize(); }
+
 // 保存opus packet到ogg文件
 bool initialize_opus_ogg_writer(const std::string &filename) {
   return g_opusOggWriter.initialize(filename);
@@ -687,7 +676,4 @@ bool save_opus_packet_to_ogg(const AVPacket *packet,
 }
 
 void finalize_opus_ogg_file() { g_opusOggWriter.finalize(); }
-
-void finalize_raw_audio_frame_file2() { g_rawAudioWriter2.finalize(); }
-
 } // namespace DebugUtils
