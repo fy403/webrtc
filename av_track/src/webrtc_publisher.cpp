@@ -292,20 +292,25 @@ WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Cmdline params)
   } else {
     video_capturer_ = nullptr;
   }
+  
+  AudioDeviceParams audio_params;
+  audio_params.device = params.audioDevice();
+  audio_params.channels = params.channels();
+  audio_params.input_format = params.audioFormat();
+  audio_params.sample_rate = params.sampleRate();
+
   // Initialize audio capturer if audio device is specified
   if (!params.audioDevice().empty()) {
-    AudioDeviceParams audio_params;
-    audio_params.device = params.audioDevice();
-    audio_params.channels = params.channels();
-    audio_params.input_format = params.audioFormat();
-    audio_params.sample_rate = params.sampleRate();
-
     audio_capturer_ =
         new AudioCapturer(audio_params, params.debug(), 100000, 100000);
-    // Initialize audio player with the specified playback device
-    audio_player_ = new AudioPlayer(params.speakerDevice(), audio_params);
   } else {
     audio_capturer_ = nullptr;
+  }
+
+  // Initialize audio player with the specified playback device
+  if (!params.speakerDevice().empty()) {
+    audio_player_ = new AudioPlayer(params.speakerDevice(), audio_params);
+  } else {
     audio_player_ = nullptr;
   }
 

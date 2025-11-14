@@ -107,6 +107,11 @@ bool AudioPlayer::initSDLAudio() {
               << std::endl;
   }
 
+  if (!audio_device_.empty())
+    std::cout << "Speaker device name: " << audio_device_ << std::endl;
+  else
+    std::cout << "Using default audio device" << std::endl;
+
   const char *device_name =
       audio_device_.empty() ? nullptr : audio_device_.c_str();
   audio_device_id_ =
@@ -342,17 +347,19 @@ void AudioPlayer::decodeThread() {
         int out_sample_rate = params_.sample_rate;
         int out_channels = params_.channels;
         AVSampleFormat out_sample_fmt = AV_SAMPLE_FMT_S16;
-        uint64_t out_channel_layout = av_get_default_channel_layout(out_channels);
-        uint64_t in_channel_layout = av_get_default_channel_layout(actual_channels);
+        uint64_t out_channel_layout =
+            av_get_default_channel_layout(out_channels);
+        uint64_t in_channel_layout =
+            av_get_default_channel_layout(actual_channels);
 
         // 配置重采样器：从实际格式转换为S16（有符号16位整数交错）
-        swr_ctx_ = swr_alloc_set_opts(
-            nullptr,
-            // 输出格式 - 使用配置参数
-            out_channel_layout, out_sample_fmt, out_sample_rate,
-            // 输入格式（Opus解码器输出）
-            in_channel_layout, actual_sample_fmt, actual_sample_rate,
-            0, nullptr);
+        swr_ctx_ = swr_alloc_set_opts(nullptr,
+                                      // 输出格式 - 使用配置参数
+                                      out_channel_layout, out_sample_fmt,
+                                      out_sample_rate,
+                                      // 输入格式（Opus解码器输出）
+                                      in_channel_layout, actual_sample_fmt,
+                                      actual_sample_rate, 0, nullptr);
 
         if (!swr_ctx_) {
           std::cerr << "Failed to allocate resampler context" << std::endl;
