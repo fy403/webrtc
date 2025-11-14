@@ -231,17 +231,17 @@ void AudioPlayer::audioCallback(Uint8 *stream, int len) {
   }
 
   // 一次性批量拷贝并应用音量控制
-  if (volume_scale == 1.0f) {
-    // 如果音量为100%，直接内存拷贝
-    memcpy(output_buffer, frame_data, samples_needed * sizeof(int16_t));
-  } else {
-    // 批量处理音量控制
-    for (int i = 0; i < samples_needed; ++i) {
-      float scaled_sample = static_cast<float>(frame_data[i]) * volume_scale;
-      output_buffer[i] = static_cast<int16_t>(
-          std::max(-32768.0f, std::min(32767.0f, scaled_sample)));
-    }
-  }
+  //  if (volume_scale == 1.0f) {
+  //    // 如果音量为100%，直接内存拷贝
+  //    memcpy(output_buffer, frame_data, samples_needed * sizeof(int16_t));
+  //  } else {
+  //    // 批量处理音量控制
+  //    for (int i = 0; i < samples_needed; ++i) {
+  //      float scaled_sample = static_cast<float>(frame_data[i]) *
+  //      volume_scale; output_buffer[i] = static_cast<int16_t>(
+  //          std::max(-32768.0f, std::min(32767.0f, scaled_sample)));
+  //    }
+  //  }
 
   av_frame_free(&frame);
 }
@@ -249,6 +249,7 @@ void AudioPlayer::audioCallback(Uint8 *stream, int len) {
 void AudioPlayer::decodeThread() {
   std::cout << "Audio decode thread started" << std::endl;
   std::string wav_filename = "captured_remote_audio.wav";
+  std::string ogg_filename = "captured_remote_audio.ogg";
 
   AVFrame *decoded_frame = av_frame_alloc();
   AVFrame *resampled_frame = av_frame_alloc();
@@ -297,7 +298,8 @@ void AudioPlayer::decodeThread() {
 
     if (packet->size > 0 &&
         opus_decoder_->decode_packet(packet, decoded_frame)) {
-
+      // Save OPUS
+      DebugUtils::save_opus_packet_to_ogg(packet, "opus_packets.ogg");
       // 第一次成功解码后，获取实际参数并初始化SDL音频设备和重采样器
       if (!sdl_initialized) {
         // 初始化SDL音频设备，使用实际参数
@@ -440,6 +442,7 @@ void AudioPlayer::decodeThread() {
   }
 
   //  DebugUtils::finalize_raw_audio_frame_file2();
+  DebugUtils::finalize_opus_ogg_file();
   av_frame_free(&decoded_frame);
   av_frame_free(&resampled_frame);
 

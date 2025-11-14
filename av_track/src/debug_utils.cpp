@@ -31,7 +31,8 @@ public:
       : format_context(nullptr), initialized(false), audio_stream_index(-1) {}
   ~RawAudioWriter() { finalize(); }
 
-  bool initialize(const std::string &filename) {
+  bool initialize(const std::string &filename,
+                  const AVPacket *packet = nullptr) {
     if (initialized) {
       return true;
     }
@@ -56,13 +57,28 @@ public:
     AVCodecParameters *codecpar = stream->codecpar;
     codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
     codecpar->codec_id = AV_CODEC_ID_PCM_S16LE; // PCM 16-bit little endian
-    codecpar->channels = 1;                     // 单通道
-    codecpar->channel_layout = AV_CH_LAYOUT_MONO;
-    codecpar->sample_rate = 48000; // 默认采样率
-    codecpar->bit_rate = 768000;   // 48000 * 1 * 16
-    codecpar->block_align = 2;     // 1 channel * 2 bytes per sample
-    codecpar->bits_per_coded_sample = 16;
-    codecpar->format = AV_SAMPLE_FMT_S16;
+
+    // 如果提供了packet，则从packet中提取参数
+    if (packet && packet->stream_index >= 0) {
+      // 这里我们假设可以从packet获取相关信息
+      // 在实际应用中，你可能需要通过其他方式传递这些参数
+      codecpar->channels = 1; // 默认单通道
+      codecpar->channel_layout = AV_CH_LAYOUT_MONO;
+      codecpar->sample_rate = 48000; // 默认采样率
+      codecpar->bit_rate = 768000;   // 48000 * 1 * 16
+      codecpar->block_align = 2;     // 1 channel * 2 bytes per sample
+      codecpar->bits_per_coded_sample = 16;
+      codecpar->format = AV_SAMPLE_FMT_S16;
+    } else {
+      // 默认参数
+      codecpar->channels = 1; // 单通道
+      codecpar->channel_layout = AV_CH_LAYOUT_MONO;
+      codecpar->sample_rate = 48000; // 默认采样率
+      codecpar->bit_rate = 768000;   // 48000 * 1 * 16
+      codecpar->block_align = 2;     // 1 channel * 2 bytes per sample
+      codecpar->bits_per_coded_sample = 16;
+      codecpar->format = AV_SAMPLE_FMT_S16;
+    }
 
     // 设置时间基准以避免时间戳警告
     stream->time_base = (AVRational){1, codecpar->sample_rate};
@@ -100,8 +116,11 @@ public:
 
   bool writePacket(const AVPacket *packet) {
     if (!initialized || !format_context) {
-      std::cerr << "Raw audio writer not initialized" << std::endl;
-      return false;
+      // 延迟初始化，使用第一个packet的参数
+      if (!initialize("raw_audio.wav", packet)) {
+        std::cerr << "Raw audio writer failed to initialize" << std::endl;
+        return false;
+      }
     }
 
     if (!packet || !packet->data || packet->size <= 0) {
@@ -171,6 +190,180 @@ private:
 static RawAudioWriter g_rawAudioWriter;
 
 static RawAudioWriter g_rawAudioWriter2;
+
+// 全局Opus OGG写入器
+class OpusOggWriter {
+public:
+  OpusOggWriter()
+      : format_context(nullptr), initialized(false), audio_stream_index(-1) {}
+  ~OpusOggWriter() { finalize(); }
+
+  bool initialize(const std::string &filename,
+                  const AVPacket *packet = nullptr) {
+    if (initialized) {
+      return true;
+    }
+
+    // 分配输出格式上下文
+    int ret = avformat_alloc_output_context2(&format_context, nullptr, "ogg",
+                                             filename.c_str());
+    if (ret < 0 || !format_context) {
+      std::cerr << "Could not create output context for OGG: "
+                << av_error_string(ret) << std::endl;
+      return false;
+    }
+
+    // 创建音频流
+    AVStream *stream = avformat_new_stream(format_context, nullptr);
+    if (!stream) {
+      std::cerr << "Could not create new stream" << std::endl;
+      return false;
+    }
+
+    // 设置编解码器参数 (Opus)
+    AVCodecParameters *codecpar = stream->codecpar;
+    codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
+    codecpar->codec_id = AV_CODEC_ID_OPUS;
+
+    // 从packet中获取参数
+    codecpar->channels = 2; // 单通道
+    codecpar->channel_layout = AV_CH_LAYOUT_STEREO;
+    codecpar->sample_rate = 48000; // Opus标准采样率
+    codecpar->bit_rate = 0;        // 可变比特率
+
+    // 添加Opus所需的extradata (RFC 7845规范)
+    const int extradata_size = 19;
+    uint8_t *extradata =
+        (uint8_t *)av_mallocz(extradata_size + AV_INPUT_BUFFER_PADDING_SIZE);
+    if (!extradata) {
+      std::cerr << "Could not allocate extradata" << std::endl;
+      return false;
+    }
+
+    // 构造OpusHead头部 (RFC 7845)
+    memcpy(extradata, "OpusHead", 8);  // 魔数
+    extradata[8] = 1;                  // 版本
+    extradata[9] = codecpar->channels; // 声道数
+    // 使用AV_WL16写入预跳过样本数 (符合RFC 7845规范，推荐312样本@48kHz)
+    AV_WL16(extradata + 10, 312);
+    AV_WL32(extradata + 12, codecpar->sample_rate); // 原始采样率
+    AV_WL16(extradata + 16, 0);                     // 输出增益
+    extradata[18] = 0;                              // 声道映射家族
+
+    codecpar->extradata = extradata;
+    codecpar->extradata_size = extradata_size;
+
+    stream->time_base = (AVRational){1, codecpar->sample_rate};
+    audio_stream_index = stream->index;
+
+    // 打开输出文件
+    if (!(format_context->oformat->flags & AVFMT_NOFILE)) {
+      ret = avio_open(&format_context->pb, filename.c_str(), AVIO_FLAG_WRITE);
+      if (ret < 0) {
+        std::cerr << "Could not open output file: " << filename << " - "
+                  << av_error_string(ret) << std::endl;
+        // 释放extradata
+        av_freep(&codecpar->extradata);
+        codecpar->extradata_size = 0;
+        return false;
+      }
+    }
+
+    // 写入头部信息
+    ret = avformat_write_header(format_context, nullptr);
+    if (ret < 0) {
+      std::cerr << "Error writing OGG header: " << av_error_string(ret)
+                << std::endl;
+      // 如果写入头部失败，需要关闭已打开的文件
+      if (!(format_context->oformat->flags & AVFMT_NOFILE)) {
+        avio_closep(&format_context->pb);
+      }
+      // 释放extradata
+      av_freep(&codecpar->extradata);
+      codecpar->extradata_size = 0;
+      return false;
+    }
+
+    initialized = true;
+    std::cout << "Initialized Opus OGG writer: " << filename << std::endl;
+    return true;
+  }
+
+  bool writePacket(const AVPacket *packet) {
+    if (!initialized || !format_context) {
+      // 延迟初始化，使用第一个packet的参数
+      if (!initialize("opus_audio.ogg", packet)) {
+        std::cerr << "Opus OGG writer failed to initialize" << std::endl;
+        return false;
+      }
+    }
+
+    if (!packet || !packet->data || packet->size <= 0) {
+      std::cerr << "Invalid packet for writing" << std::endl;
+      return false;
+    }
+
+    AVPacket *pkt = av_packet_clone(packet);
+    if (!pkt) {
+      std::cerr << "Failed to clone packet" << std::endl;
+      return false;
+    }
+
+    // 设置流索引
+    pkt->stream_index = audio_stream_index;
+
+    // 写入数据包
+    int ret = av_interleaved_write_frame(format_context, pkt);
+    if (ret < 0) {
+      std::cerr << "Error writing frame to OGG file: " << av_error_string(ret)
+                << std::endl;
+      av_packet_free(&pkt);
+      return false;
+    }
+
+    av_packet_free(&pkt);
+    return true;
+  }
+
+  void finalize() {
+    if (!initialized) {
+      return;
+    }
+    if (initialized && format_context) {
+      // 写入尾部信息
+      av_write_trailer(format_context);
+
+      // 关闭输出文件
+      if (!(format_context->oformat->flags & AVFMT_NOFILE)) {
+        avio_closep(&format_context->pb);
+      }
+
+      // 释放extradata
+      if (format_context->streams[0]) {
+        AVCodecParameters *codecpar = format_context->streams[0]->codecpar;
+        if (codecpar->extradata) {
+          av_freep(&codecpar->extradata);
+          codecpar->extradata_size = 0;
+        }
+      }
+
+      // 释放资源
+      avformat_free_context(format_context);
+      format_context = nullptr;
+    }
+    initialized = false;
+    audio_stream_index = -1;
+  }
+
+  bool isInitialized() const { return initialized; }
+
+private:
+  AVFormatContext *format_context;
+  bool initialized;
+  int audio_stream_index;
+};
+
+static OpusOggWriter g_opusOggWriter;
 
 namespace DebugUtils {
 
@@ -435,14 +628,7 @@ bool initialize_raw_audio_writer(const std::string &filename) {
 }
 
 bool save_raw_audio_packet(const AVPacket *packet, std::string filename) {
-  // 如果写入器未初始化，先初始化
-  if (!g_rawAudioWriter.isInitialized()) {
-    // 默认使用文件名 raw_audio.wav
-    if (!initialize_raw_audio_writer(filename)) {
-      return false;
-    }
-  }
-
+  // 直接使用延迟初始化的版本
   return g_rawAudioWriter.writePacket(packet);
 }
 
@@ -488,6 +674,19 @@ bool save_raw_audio_frame2(const AVFrame *frame, const std::string &filename) {
 bool initialize_raw_audio_writer2(const std::string &filename) {
   return g_rawAudioWriter2.initialize(filename);
 }
+
+// 保存opus packet到ogg文件
+bool initialize_opus_ogg_writer(const std::string &filename) {
+  return g_opusOggWriter.initialize(filename);
+}
+
+bool save_opus_packet_to_ogg(const AVPacket *packet,
+                             const std::string &filename) {
+  // 直接使用延迟初始化的版本
+  return g_opusOggWriter.writePacket(packet);
+}
+
+void finalize_opus_ogg_file() { g_opusOggWriter.finalize(); }
 
 void finalize_raw_audio_frame_file2() { g_rawAudioWriter2.finalize(); }
 
