@@ -7,7 +7,6 @@
 #include <iostream>
 #include <libavutil/samplefmt.h>
 #include <libswresample/swresample.h>
-
 AudioPlayer::AudioPlayer(const AudioPlayerDeviceParams &params)
     : params_(params), opus_decoder_(std::make_unique<OpusDecoder>()),
       decode_queue_(50),         // 减少队列大小以降低延迟
@@ -230,18 +229,16 @@ void AudioPlayer::audioCallback(Uint8 *stream, int len) {
     }
   }
 
-  // 一次性批量拷贝并应用音量控制
-  //  if (volume_scale == 1.0f) {
-  //    // 如果音量为100%，直接内存拷贝
-  //    memcpy(output_buffer, frame_data, samples_needed * sizeof(int16_t));
-  //  } else {
-  //    // 批量处理音量控制
-  //    for (int i = 0; i < samples_needed; ++i) {
-  //      float scaled_sample = static_cast<float>(frame_data[i]) *
-  //      volume_scale; output_buffer[i] = static_cast<int16_t>(
-  //          std::max(-32768.0f, std::min(32767.0f, scaled_sample)));
-  //    }
-  //  }
+  if (volume_scale == 1.0f) {
+    // If volume is 100%, directly copy memory
+    memcpy(output_buffer, frame_data, samples_needed * sizeof(int16_t));
+  } else {
+    // Use SDL_MixAudioFormat for volume scaling
+    SDL_MixAudioFormat(reinterpret_cast<Uint8 *>(output_buffer),
+                       reinterpret_cast<const Uint8 *>(frame_data),
+                       AUDIO_S16SYS, samples_needed * sizeof(int16_t),
+                       static_cast<int>(volume_scale * SDL_MIX_MAXVOLUME));
+  }
 
   av_frame_free(&frame);
 }
@@ -282,7 +279,7 @@ void AudioPlayer::decodeThread() {
   // 输出音频参数
   int out_sample_rate = params_.out_sample_rate;
   int out_channels = params_.out_channels;
-  SDL_AudioFormat out_sample_fmt_sdl = AUDIO_S16;
+  SDL_AudioFormat out_sample_fmt_sdl = AUDIO_S16SYS;
   AVSampleFormat out_sample_fmt = AV_SAMPLE_FMT_S16;
 
   while (running_) {
