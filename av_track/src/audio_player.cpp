@@ -110,39 +110,57 @@ bool AudioPlayer::initSDLAudio(int sample_rate, int channels,
   desired.callback = &AudioPlayer::sdlAudioCallback;
   desired.userdata = this;
 
-  // 打印所有可用的音频设备名称
-  std::cout << "Available audio devices:" << std::endl;
-  for (int i = 0; i < SDL_GetNumAudioDevices(0); ++i) {
+  // 打印所有可用的播放设备
+  std::cout << "Available playback audio devices:" << std::endl;
+  int playback_device_count = SDL_GetNumAudioDevices(0); // 0 表示播放设备
+  for (int i = 0; i < playback_device_count; ++i) {
     std::cout << "  [" << i << "] " << SDL_GetAudioDeviceName(i, 0)
               << std::endl;
   }
 
-  if (!params_.out_device.empty())
-    std::cout << "Speaker device name: " << params_.out_device << std::endl;
-  else
-    std::cout << "Using default audio device" << std::endl;
+  if (!params_.out_device.empty()) {
+    std::cout << "Selected speaker device: " << params_.out_device << std::endl;
+
+    // 验证设备是否存在
+    bool device_found = false;
+    for (int i = 0; i < playback_device_count; ++i) {
+      if (params_.out_device == SDL_GetAudioDeviceName(i, 0)) {
+        device_found = true;
+        break;
+      }
+    }
+    if (!device_found) {
+      std::cerr << "Warning: Specified audio device '" << params_.out_device
+                << "' not found in available playback devices!" << std::endl;
+    }
+  } else {
+    std::cout << "Using default audio playback device" << std::endl;
+  }
 
   const char *device_name =
       params_.out_device.empty() ? nullptr : params_.out_device.c_str();
-  audio_device_id_ =
-      SDL_OpenAudioDevice(device_name, 0, &desired, &obtained, 0);
+
+  // 明确指定打开播放设备 (iscapture = 0)
+  audio_device_id_ = SDL_OpenAudioDevice(device_name, 0, &desired, &obtained,
+                                         SDL_AUDIO_ALLOW_ANY_CHANGE);
 
   if (audio_device_id_ == 0) {
-    std::cerr << "Failed to open audio device(" << device_name
+    std::cerr << "Failed to open audio playback device("
+              << (device_name ? device_name : "default")
               << "): " << SDL_GetError() << std::endl;
     return false;
   }
 
   audio_spec_ = obtained;
 
-  std::cout << "SDL audio initialized: " << obtained.freq << "Hz, "
+  std::cout << "SDL audio playback initialized: " << obtained.freq << "Hz, "
             << static_cast<int>(obtained.channels) << " channels, "
             << obtained.samples << " samples" << std::endl;
 
   // 启动SDL音频播放
   SDL_PauseAudioDevice(audio_device_id_, 0);
 
-  std::cout << "SDL Audio Device: "
+  std::cout << "SDL Audio Playback Device: "
             << SDL_GetAudioDeviceName(audio_device_id_, 0)
             << " (ID: " << audio_device_id_ << ")" << std::endl;
 
