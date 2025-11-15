@@ -18,6 +18,24 @@ GSM_BAUDRATE=115200 # 4g模块串口波特率
 # Path to font file - adjust according to your system
 FONT_FILE="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
+# Check if tty port exists, if not, use the first available usb interface
+check_tty_port() {
+    if [ ! -c "$TTY_PORT" ]; then
+        echo "$(date): TTY port $TTY_PORT does not exist"
+        # Find the first available USB tty device
+        local first_usb=$(ls /dev/ttyUSB* 2>/dev/null | head -n 1)
+        if [ -n "$first_usb" ] && [ -c "$first_usb" ]; then
+            echo "$(date): Using first available USB TTY port: $first_usb"
+            TTY_PORT="$first_usb"
+        else
+            echo "$(date): No USB TTY ports available"
+        fi
+    else
+        echo "$(date): TTY port $TTY_PORT exists"
+    fi
+}
+
+
 # Check if host is reachable (IPv4/IPv6)
 check_host() {
     if ping -${IP_TYPE} -c 3 -W 2 "$TARGET_HOST" > /dev/null 2>&1; then
@@ -62,7 +80,10 @@ main() {
     echo "$(date): Starting streaming script"
     
     while true; do
-        if check_host && check_port; then
+        # Check and update TTY port if needed
+        check_tty_port
+        
+#        if check_host && check_port; then
             echo "$(date): All checks passed, starting stream..."
             run_rtc
             
@@ -74,10 +95,10 @@ main() {
                 echo "$(date): Stream failed, waiting before retry..."
                 sleep $CHECK_INTERVAL
             fi
-        else
-            echo "$(date): Health checks failed, waiting before retry..."
-            sleep $CHECK_INTERVAL
-        fi
+#        else
+#            echo "$(date): Health checks failed, waiting before retry..."
+#            sleep $CHECK_INTERVAL
+#        fi
     done
 }
 

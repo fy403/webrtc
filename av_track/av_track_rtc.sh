@@ -4,9 +4,9 @@ TARGET_PORT=8000 # 信令服务器端口
 IP_TYPE=4 # ipv4 or ipv6
 VIDEO_DEVICE="/dev/video1" # 首选摄像头设备
 VIDEO_DEVICE_BAK="/dev/video0" # 备选摄像头设备
-AUDIO_DEVICE="hw:CARD=Audio,DEV=0" # 音频设备
-SAMPLE_RATE=48000 # 音频采样率
-CHANNELS=1 # 音频通道数
+#AUDIO_DEVICE="hw:CARD=Audio,DEV=0" # 音频设备
+#SAMPLE_RATE=48000 # 音频采样率
+#CHANNELS=1 # 音频通道数
 AUDIO_FORMAT="alsa" # 音频输入格式
 CHECK_INTERVAL=2  # Health check interval (seconds)
 CLIENT_ID="usbcam" # 客户端ID：不填写使用随机值
@@ -82,12 +82,12 @@ run_rtc() {
     -u $TURN_SERVER -p $TURN_SERVER_PORT -U $USER \
     -P $PASSWD \
     -w $TARGET_HOST -x $TARGET_PORT \
-    -c $CLIENT_ID -i $VIDEO_DEVICE \
     -R $RESOLUTION -F $FPS \
-    -a $AUDIO_DEVICE \
-    -r $SAMPLE_RATE \
-    -C $CHANNELS \
-    -f $AUDIO_FORMAT
+    -c $CLIENT_ID -i $VIDEO_DEVICE
+#    -a $AUDIO_DEVICE \
+#    -r $SAMPLE_RATE \
+#    -C $CHANNELS \
+#    -f $AUDIO_FORMAT
 
     local exit_code=$?
     echo "$(date): RTC exited with code $exit_code"
@@ -99,7 +99,7 @@ main() {
     echo "$(date): Starting streaming script"
     
     while true; do
-        if check_host && check_port; then
+#        if check_host && check_port; then
             # Test video device before starting stream
             if test_video_device; then
                 echo "$(date): All checks passed, starting stream..."
@@ -117,10 +117,10 @@ main() {
                 echo "$(date): Video device test failed, waiting before retry..."
                 sleep $CHECK_INTERVAL
             fi
-        else
-            echo "$(date): Health checks failed, waiting before retry..."
-            sleep $CHECK_INTERVAL
-        fi
+#        else
+#            echo "$(date): Health checks failed, waiting before retry..."
+#            sleep $CHECK_INTERVAL
+#        fi
     done
 }
 
