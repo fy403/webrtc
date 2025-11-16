@@ -6,9 +6,10 @@
 #include <cstring>
 #include <thread>
 #include <chrono>
+#include <cstdlib> // For exit()
 
 MotorDriver::MotorDriver(const std::string &port, int baudrate)
-    : port_(port), baudrate_(baudrate), fd_(-1) {}
+    : port_(port), baudrate_(baudrate), fd_(-1), error_count_(0) {}
 
 MotorDriver::~MotorDriver()
 {
@@ -25,13 +26,27 @@ void MotorDriver::disconnect()
     closeSerial();
 }
 
+void MotorDriver::checkErrorCount()
+{
+    if (error_count_ >= 4) {
+        std::cerr << "Too many consecutive errors (" << error_count_ << "), exiting program." << std::endl;
+        exit(1);
+    }
+}
+
 bool MotorDriver::openSerial()
 {
     fd_ = open(port_.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
     if (fd_ < 0)
     {
         std::cerr << "Error opening serial port: " << port_ << std::endl;
+        error_count_++;
+        checkErrorCount();
         return false;
+    }
+    else
+    {
+        error_count_ = 0; // Reset error count on successful connection
     }
 
     struct termios tty;
@@ -39,6 +54,8 @@ bool MotorDriver::openSerial()
     if (tcgetattr(fd_, &tty) != 0)
     {
         std::cerr << "Error getting termios attributes" << std::endl;
+        error_count_++;
+        checkErrorCount();
         return false;
     }
 
@@ -61,7 +78,13 @@ bool MotorDriver::openSerial()
     if (tcsetattr(fd_, TCSANOW, &tty) != 0)
     {
         std::cerr << "Error setting termios attributes" << std::endl;
+        error_count_++;
+        checkErrorCount();
         return false;
+    }
+    else
+    {
+        error_count_ = 0; // Reset error count on successful setup
     }
 
     std::cout << "Serial port opened: " << port_ << std::endl;
@@ -83,6 +106,8 @@ bool MotorDriver::sendCommand(const std::string &cmd, std::string *response, int
     if (fd_ < 0)
     {
         std::cerr << "Serial port not open." << std::endl;
+        error_count_++;
+        checkErrorCount();
         return false;
     }
 
@@ -94,7 +119,13 @@ bool MotorDriver::sendCommand(const std::string &cmd, std::string *response, int
     if (n < 0)
     {
         std::cerr << "Write error" << std::endl;
+        error_count_++;
+        checkErrorCount();
         return false;
+    }
+    else
+    {
+        error_count_ = 0; // Reset error count on successful write
     }
 
     std::cout << "Sent: " << cmd << std::endl;
@@ -126,6 +157,7 @@ bool MotorDriver::sendCommand(const std::string &cmd, std::string *response, int
             {
                 *response = resp;
                 std::cout << "Response: " << resp << std::endl;
+                error_count_ = 0; // Reset error count on successful response
                 return true;
             }
 
@@ -134,6 +166,7 @@ bool MotorDriver::sendCommand(const std::string &cmd, std::string *response, int
             {
                 *response = resp;
                 std::cout << "Response: " << resp << std::endl;
+                error_count_ = 0; // Reset error count on successful response
                 return true;
             }
         }
@@ -142,6 +175,8 @@ bool MotorDriver::sendCommand(const std::string &cmd, std::string *response, int
 
     std::cout << "Timeout or no valid response. Received: " << resp << std::endl;
     *response = resp;
+    error_count_++; // Increment error count for timeout/no valid response
+    checkErrorCount();
     return false;
 }
 

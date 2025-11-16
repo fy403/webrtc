@@ -50,10 +50,13 @@ private:
     std::string port_;
     int baudrate_;
     int fd_; // 串口文件描述符
+    int error_count_; // 错误计数器
 
     bool sendCommand(const std::string &cmd, std::string *response, int timeout_ms = 500);
     bool openSerial();
     void closeSerial();
+    
+    void checkErrorCount(); // 检查错误计数并根据需要退出程序
 };
 
 #endif // MOTOR_DRIVER_H
