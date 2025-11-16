@@ -402,7 +402,7 @@
 		.status-overlay {
 			position: absolute;
 			z-index: 20;
-			background: rgba(18, 24, 51, 0.0);
+			background: rgba(18, 24, 51, 0.7);
 			border-radius: 8px;
 			padding: 10px;
 			backdrop-filter: blur(4px);
@@ -410,14 +410,14 @@
 		
 		.left-overlay {
 			top: 15px;
-			left: 15px;
-			width: 130px;
+			left: 5px;
+			width: 120px;
 		}
 		
 		.right-overlay {
 			top: 15px;
 			right: 5px;
-			width: 120px;
+			width: 130px;
 		}
 		
 		.bottom-overlay {
