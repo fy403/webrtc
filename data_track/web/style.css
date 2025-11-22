@@ -10,6 +10,11 @@
 			color: #e6eaf2;
 			overflow-x: hidden;
 		}
+		
+		body.mobile-layout {
+			padding: 0;
+			background: #000;
+		}
 
 		.container {
 			max-width: 900px;
@@ -17,6 +22,15 @@
 			display: flex;
 			flex-direction: column;
 			gap: 16px;
+		}
+		
+		.mobile-container {
+			width: 100vw;
+			height: 100vh;
+			position: fixed;
+			top: 0;
+			left: 0;
+			background: #000;
 		}
 
 		.card {
@@ -149,6 +163,19 @@
 			overflow: hidden;
 			border: 1px solid #243056;
 			margin-top: 16px;
+		}
+		
+		.video-section {
+			width: 100%;
+			height: 100%;
+		}
+		
+		.video-wrapper {
+			width: 100%;
+			height: 100%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
 		}
 
 		.video-container video {
@@ -397,6 +424,7 @@
 		.video-with-overlay {
 			position: relative;
 			width: 100%;
+			height: 100%;
 		}
 		
 		.status-overlay {
@@ -475,4 +503,95 @@
 				left: 5%;
 				transform: none;
 			}
+		}
+		
+		/* Mobile specific styles */
+		.mobile-layout .video-with-overlay {
+			position: relative;
+			width: 100vw;
+			height: 100vh;
+		}
+		
+		/* Control overlays for mobile */
+		.control-overlay {
+			position: absolute;
+			z-index: 30;
+			background: rgba(18, 24, 51, 0.7);
+			border-radius: 8px;
+			padding: 10px;
+			backdrop-filter: blur(4px);
+		}
+		
+		.left-control-overlay {
+			left: 20px;
+			top: 50%;
+			transform: translateY(-50%);
+		}
+		
+		.right-control-overlay {
+			right: 20px;
+			top: 50%;
+			transform: translateY(-50%);
+		}
+		
+		.top-control-overlay {
+			top: 20px;
+			left: 50%;
+			transform: translateX(-50%);
+		}
+		
+		.directional-controls {
+			display: flex;
+			flex-direction: column;
+			gap: 15px;
+		}
+		
+		.dir-btn {
+			width: 60px;
+			height: 60px;
+			border-radius: 50%;
+			border: 2px solid #31406d;
+			background: rgba(15, 22, 48, 0.8);
+			color: #bed0ff;
+			font-size: 24px;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+		
+		.top-controls {
+			display: flex;
+			gap: 10px;
+		}
+		
+		.mobile-btn {
+			font-size: 12px;
+			padding: 6px 10px;
+		}
+		
+		/* Status overlays for mobile fullscreen */
+		.mobile-layout .status-overlay {
+			background: rgba(18, 24, 51, 0.5);
+		}
+		
+		.mobile-layout .left-overlay {
+			top: 80px;
+			left: 10px;
+			width: 100px;
+		}
+		
+		.mobile-layout .right-overlay {
+			top: 80px;
+			right: 10px;
+			width: 110px;
+		}
+		
+		.mobile-layout .bottom-overlay {
+			bottom: 20px;
+			left: 50%;
+			transform: translateX(-50%);
+			background: rgba(18, 24, 51, 0.5);
+			border-radius: 20px;
+			padding: 8px 15px;
 		}

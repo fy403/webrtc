@@ -3,19 +3,46 @@
 
 <head>
 	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>Signal Control Client</title>
-	<link rel="stylesheet" href="style.css">
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+	<title>Signal Control Client - Mobile</title>
+	<link rel="stylesheet" href="mobile.css">
 	<script src="video_rtc.js"></script>
 	<script src="data_rtc.js"></script>
 </head>
 
 <body>
-	<div class="container">
-		<!-- 视频层 - 最高层 -->
-		<div class="video-layer">
-			<div class="card">
+	<div class="mobile-container">
+		<!-- 视频容器 -->
+		<div class="video-section">
+			<div class="video-wrapper">
 				<div class="video-with-overlay">
+					<!-- 左侧前进后退按钮 -->
+					<div class="control-overlay left-control-overlay">
+						<div class="forward-back-controls">
+							<button id="forwardBtn" class="dir-btn">↑</button>
+							<button id="backwardBtn" class="dir-btn">↓</button>
+						</div>
+					</div>
+					
+					<!-- 右侧左右按钮 -->
+					<div class="control-overlay right-control-overlay">
+						<div class="left-right-controls">
+							<button id="leftBtn" class="dir-btn">←</button>
+							<button id="rightBtn" class="dir-btn">→</button>
+						</div>
+					</div>
+					
+					<!-- 顶部其他按钮 -->
+					<div class="control-overlay top-control-overlay">
+						<div class="top-controls">
+							<button id="reconnectBtnMobile" class="btn mobile-btn">重新连接</button>
+							<button id="stopAllBtnMobile" class="btn mobile-btn">STOP ALL</button>
+							<button id="emgBtnMobile" class="btn mobile-btn">急停</button>
+							<button id="throttleBtnMobile" class="btn mobile-btn">档位调整</button>
+							<button id="fullscreenBtn" class="btn mobile-btn">全屏</button>
+						</div>
+					</div>
+					
 					<!-- 左侧状态面板 -->
 					<div class="status-overlay left-overlay">
 						<div class="status-group">
@@ -74,7 +101,7 @@
 					</div>
 					
 					<div class="video-container">
-						<video id="remoteVideo" autoplay playsinline style=";"></video>
+						<video id="remoteVideo" autoplay playsinline></video>
 						<div id="noSignalOverlay" class="no-signal-overlay">
 							<div class="no-signal-text">无信号</div>
 						</div>
@@ -82,8 +109,9 @@
 				</div>
 			</div>
 		</div>
-		<!-- 控制层 - 下层 -->
-		<div class="control-layer">
+		
+		<!-- 隐藏的控制层（保持原有功能但默认隐藏） -->
+		<div class="control-layer" style="display: none;">
 			<div class="card">
 				<div class="control-panel">
 					<div class="connection-info">
@@ -121,7 +149,8 @@
 				</div>
 			</div>
 		</div>
-		<div class="card">
+		
+		<div class="hidden-elements" style="display: none;">
 			<div>
 				<h2>Local ID</h2>
 				<p id="localId"></p>
@@ -132,8 +161,7 @@
 				<p id="dataLocalId"></p>
 			</div>
 			<div id="dataStatus">Status: Not connected</div>
-		</div>
-		<div class="card">
+			
 			<div class="video-controls">
 				<span class="badge">Send offer to:</span>
 				<input id="offerId" class="input mono" placeholder="remote ID" value="usbcam" />
@@ -145,15 +173,6 @@
 				<button id="dataOfferBtn" class="btn">Send</button>
 			</div>
 		</div>
-		<!-- <div class="card">
-			<span class="badge">协议</span>
-			<pre id="proto" class="mono" style="white-space:pre-wrap; margin-top:8px; color:#9fb4ff">
-0:0xAA 1:0x55 2:type 3:key 4:value 5:0 6-7:checksum16(sum of bytes[0..5])
-MSG_KEY=0x01 (key:1=W,2=S,3=A,4=D; value:1=DOWN,0=UP)
-MSG_EMERGENCY_STOP=0x02, MSG_CYCLE_THROTTLE=0x03, MSG_STOP_ALL=0x04, MSG_QUIT=0x05, MSG_PING=0x10
-MSG_SYSTEM_STATUS=0x20 (扩展帧12字节: 3:rx_speed_H,4:rx_speed_L,5:tx_speed_H,6:tx_speed_L,7:cpu_H,8:cpu_L,9:service_status,10:4g_signal)
-			</pre>
-		</div> -->
 	</div>
 	
 	<script>
@@ -167,6 +186,66 @@ MSG_SYSTEM_STATUS=0x20 (扩展帧12字节: 3:rx_speed_H,4:rx_speed_L,5:tx_speed_
 			// 如果当前不是mobile.html页面且检测到是移动设备，则跳转到mobile.html
 			if (!window.location.pathname.includes('mobile.html') && isMobileDevice()) {
 				window.location.href = 'mobile.html';
+			}
+			// 如果是mobile.html页面但不是移动设备，则跳转回index.html
+			else if (window.location.pathname.includes('mobile.html') && !isMobileDevice()) {
+				window.location.href = 'index.html';
+			}
+			
+			// 添加全屏功能
+			const fullscreenBtn = document.getElementById('fullscreenBtn');
+			const videoContainer = document.querySelector('.video-with-overlay');
+			
+			if (fullscreenBtn) {
+				fullscreenBtn.addEventListener('click', toggleFullScreen);
+			}
+			
+			function toggleFullScreen() {
+				if (!document.fullscreenElement && 
+					!document.webkitFullscreenElement && 
+					!document.mozFullScreenElement &&
+					!document.msFullscreenElement) {
+					// 进入全屏
+					if (videoContainer.requestFullscreen) {
+						videoContainer.requestFullscreen();
+					} else if (videoContainer.webkitRequestFullscreen) {
+						videoContainer.webkitRequestFullscreen();
+					} else if (videoContainer.mozRequestFullScreen) {
+						videoContainer.mozRequestFullScreen();
+					} else if (videoContainer.msRequestFullscreen) {
+						videoContainer.msRequestFullscreen();
+					}
+				} else {
+					// 退出全屏
+					if (document.exitFullscreen) {
+						document.exitFullscreen();
+					} else if (document.webkitExitFullscreen) {
+						document.webkitExitFullscreen();
+					} else if (document.mozCancelFullScreen) {
+						document.mozCancelFullScreen();
+					} else if (document.msExitFullscreen) {
+						document.msExitFullscreen();
+					}
+				}
+			}
+			
+			// 监听全屏变化事件，更新按钮文本
+			document.addEventListener('fullscreenchange', handleFullscreenChange);
+			document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+			document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+			document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+			
+			function handleFullscreenChange() {
+				if (fullscreenBtn) {
+					if (document.fullscreenElement || 
+						document.webkitFullscreenElement || 
+						document.mozFullScreenElement ||
+						document.msFullscreenElement) {
+						fullscreenBtn.textContent = '退出全屏';
+					} else {
+						fullscreenBtn.textContent = '全屏';
+					}
+				}
 			}
 		});
 	</script>

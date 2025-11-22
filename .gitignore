@@ -8,3 +8,4 @@ __pycache__/
 av_track/.idea
 data_track/.idea
 cmake*/
+*.htaccess

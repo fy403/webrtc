@@ -52,9 +52,17 @@ window.addEventListener('load', () => {
     emgBtn: document.getElementById('emgBtn'),
     throttleBtn: document.getElementById('throttleBtn'),
     keyW: document.getElementById('keyW'),
+    reconnectBtnMobile: document.getElementById('reconnectBtnMobile'),
+    stopAllBtnMobile: document.getElementById('stopAllBtnMobile'),
+    emgBtnMobile: document.getElementById('emgBtnMobile'),
+    throttleBtnMobile: document.getElementById('throttleBtnMobile'),
     keyA: document.getElementById('keyA'),
     keyS: document.getElementById('keyS'),
     keyD: document.getElementById('keyD'),
+    forwardBtn: document.getElementById('forwardBtn'),
+    backwardBtn: document.getElementById('backwardBtn'),
+    leftBtn: document.getElementById('leftBtn'),
+    rightBtn: document.getElementById('rightBtn'),
     connStatus: document.getElementById('connStatus'),
     signalStrength: document.getElementById('signalStrength'),
     signalIndicator: document.getElementById('signalIndicator'),
@@ -190,6 +198,7 @@ window.addEventListener('load', () => {
       if (!dataState[keyChar]) {
         dataState[keyChar] = true;
         dataUpdateKeyVisual();
+        console.log('!!!Key down:', keyChar, kc, 1);
         dataSendFrame(MSG_KEY, kc, 1);
       }
     } else if (ev.code === 'KeyT') {
@@ -219,12 +228,14 @@ window.addEventListener('load', () => {
   function dataAttachKeyboard() {
     window.addEventListener('keydown', dataOnKeyDown);
     window.addEventListener('keyup', dataOnKeyUp);
+
   }
 
   // 移除键盘事件监听器
   function dataDetachKeyboard() {
     window.removeEventListener('keydown', dataOnKeyDown);
     window.removeEventListener('keyup', dataOnKeyUp);
+
   }
 
   // 4G信号强度评估函数
@@ -467,8 +478,85 @@ window.addEventListener('load', () => {
   }
 
   if (dataElements.throttleBtn) {
+    console.log('绑定油门按钮事件');
     dataElements.throttleBtn.addEventListener('click', function () {
       dataSendFrame(MSG_CYCLE_THROTTLE, 0, 0);
+    });
+  }
+
+  if (dataElements.reconnectBtnMobile) {
+    console.log('绑定重新连接按钮事件');
+    dataElements.reconnectBtnMobile.addEventListener('click', function () {
+      // 重新连接逻辑
+      window.location.reload();
+    });
+  }
+
+  if (dataElements.stopAllBtnMobile) {
+    dataElements.stopAllBtnMobile.addEventListener('click', function () {
+    console.log('绑定停止所有按钮事件');
+      dataSendFrame(MSG_STOP_ALL, 0, 0);
+    });
+  }
+
+  if (dataElements.emgBtnMobile) {
+    dataElements.emgBtnMobile.addEventListener('click', function () {
+    console.log('绑定紧急停止按钮事件');
+      dataSendFrame(MSG_EMERGENCY_STOP, 0, 0);
+    });
+  }
+
+  if (dataElements.throttleBtnMobile) {
+    dataElements.throttleBtnMobile.addEventListener('click', function () {
+      console.log('油门按钮点击');
+      dataSendFrame(MSG_CYCLE_THROTTLE, 0, 0);
+    });
+  }
+
+  // Unified handler for button press/release events
+  function handleDirectionButton(keyCode, pressed) {
+    if (pressed) {
+      console.log(`${keyCode === 1 ? '前进' : keyCode === 2 ? '后退' : keyCode === 3 ? '左转' : '右转'}按钮按下`);
+      dataSendFrame(MSG_KEY, keyCode, 1);
+    } else {
+      console.log(`${keyCode === 1 ? '前进' : keyCode === 2 ? '后退' : keyCode === 3 ? '左转' : '右转'}按钮释放`);
+      dataSendFrame(MSG_KEY, keyCode, 0);
+    }
+  }
+
+  if (dataElements.forwardBtn){
+    dataElements.forwardBtn.addEventListener('touchstart', function () {
+      handleDirectionButton(1, true);
+    });
+    dataElements.forwardBtn.addEventListener('touchend', function () {
+      handleDirectionButton(1, false);
+    });
+  }
+
+  if (dataElements.backwardBtn) {
+    dataElements.backwardBtn.addEventListener('touchstart', function () {
+      handleDirectionButton(2, true);
+    });
+    dataElements.backwardBtn.addEventListener('touchend', function () {
+      handleDirectionButton(2, false);
+    });
+  }
+
+  if (dataElements.leftBtn) {
+    dataElements.leftBtn.addEventListener('touchstart', function () {
+      handleDirectionButton(3, true);
+    });
+    dataElements.leftBtn.addEventListener('touchend', function () {
+      handleDirectionButton(3, false);
+    });
+  }
+
+  if (dataElements.rightBtn) {
+    dataElements.rightBtn.addEventListener('touchstart', function (e) {
+      handleDirectionButton(4, true);
+    });
+    dataElements.rightBtn.addEventListener('touchend', function (e) {
+      handleDirectionButton(4, false);
     });
   }
 
@@ -630,12 +718,12 @@ window.addEventListener('load', () => {
     };
 
     dc.onmessage = (ev) => {
-      console.log(`Message from ${id} received:`, ev.data);
+      // console.log(`Message from ${id} received:`, ev.data);
 
       if (ev.data instanceof ArrayBuffer) {
         // 处理二进制数据
         const data = new Uint8Array(ev.data);
-        console.log('二进制数据长度:', data.length);
+        // console.log('二进制数据长度:', data.length);
 
         // 解析系统状态帧
         const statusData = dataParseSystemStatusFrame(data);

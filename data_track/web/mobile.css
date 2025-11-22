@@ -1,0 +1,396 @@
+* {
+			box-sizing: border-box;
+		}
+
+		body {
+			font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+			margin: 0;
+			padding: 0;
+			background: #000;
+			color: #e6eaf2;
+			overflow: hidden;
+		}
+
+		.mobile-container {
+			width: 100vw;
+			height: 100vh;
+			position: fixed;
+			top: 0;
+			left: 0;
+			background: #000;
+		}
+
+		.video-section {
+			width: 100%;
+			height: 100%;
+		}
+
+		.video-wrapper {
+			width: 100%;
+			height: 100%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+
+		.video-with-overlay {
+			position: relative;
+			width: 100%;
+			height: 100%;
+		}
+
+		.video-container {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			background: #000;
+		}
+
+		.video-container video {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			background: black;
+		}
+
+		.no-signal-overlay {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: #000;
+			color: #fff;
+			font-size: 24px;
+			z-index: 10;
+		}
+
+		.status-overlay {
+			position: absolute;
+			z-index: 20;
+			background: rgba(18, 24, 51, 0.7);
+			border-radius: 8px;
+			padding: 10px;
+			backdrop-filter: blur(4px);
+		}
+
+		.left-overlay {
+			top: 15px;
+			left: 5px;
+			width: 120px;
+		}
+
+		.right-overlay {
+			top: 15px;
+			right: 5px;
+			width: 130px;
+		}
+
+		.bottom-overlay {
+			bottom: 15px;
+			left: 50%;
+			transform: translateX(-50%);
+			display: flex;
+			align-items: center;
+			gap: 20px;
+			padding: 8px 15px;
+		}
+
+		.status-group {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+		}
+
+		.status-item-inline .hint {
+			font-size: 11px;
+			margin-bottom: 2px;
+		}
+
+		.status-item-inline .mono {
+			font-size: 12px;
+			font-weight: bold;
+		}
+
+		.signal-indicator-container {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+
+		.last-update .hint {
+			font-size: 11px;
+			white-space: nowrap;
+		}
+
+		/* 4G信号强度指示器样式 */
+		.signal-indicator {
+			display: flex;
+			align-items: flex-end;
+			gap: 2px;
+			height: 24px;
+			margin-top: 4px;
+		}
+
+		.signal-bar {
+			width: 6px;
+			background: #374151;
+			border-radius: 1px;
+			transition: background-color 0.3s ease;
+		}
+
+		.signal-bar.active {
+			background: #10b981;
+			/* 绿色表示良好信号 */
+		}
+
+		.signal-bar.moderate {
+			background: #f59e0b;
+			/* 黄色表示中等信号 */
+		}
+
+		.signal-bar.weak {
+			background: #ef4444;
+			/* 红色表示弱信号 */
+		}
+
+		.signal-bar:nth-child(1) {
+			height: 6px;
+		}
+
+		.signal-bar:nth-child(2) {
+			height: 9px;
+		}
+
+		.signal-bar:nth-child(3) {
+			height: 12px;
+		}
+
+		.signal-bar:nth-child(4) {
+			height: 15px;
+		}
+
+		.signal-bar:nth-child(5) {
+			height: 18px;
+		}
+
+		.signal-info {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			margin-top: 4px;
+		}
+
+		.signal-text {
+			font-size: 12px;
+			color: #93a4d6;
+		}
+
+		.signal-value {
+			font-size: 12px;
+			font-weight: 600;
+			color: #c7d2fe;
+		}
+
+		.signal-quality {
+			font-size: 11px;
+			padding: 2px 6px;
+			border-radius: 4px;
+			background: #1f2937;
+			color: #e5e7eb;
+		}
+
+		/* Control overlays for mobile */
+		.control-overlay {
+			position: absolute;
+			z-index: 30;
+		}
+
+		.left-control-overlay {
+			left: 10%;
+			bottom: 15%;
+		}
+
+		.right-control-overlay {
+			right: 10%;
+			bottom: 25%;
+		}
+
+		.forward-back-controls {
+			display: flex;
+			flex-direction: column;
+			gap: 20px;
+		}
+
+		.left-right-controls {
+			display: flex;
+			flex-direction: row;
+			gap: 20px;
+		}
+
+		.dir-btn {
+			width: 70px;
+			height: 70px;
+			border-radius: 50%;
+			border: 2px solid #31406d;
+			background: rgba(15, 22, 48, 0.8);
+			color: #bed0ff;
+			font-size: 28px;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+		}
+
+		.top-control-overlay {
+			top: 20px;
+			left: 50%;
+			transform: translateX(-50%);
+			box-shadow: 0 4px 8px rgba(0, 0, 0, 0.0);
+		}
+
+		.top-controls {
+			display: flex;
+			gap: 10px;
+			background: rgba(18, 24, 51, 0.7);
+			border-radius: 20px;
+			padding: 10px;
+			backdrop-filter: blur(4px);
+		}
+
+		.btn {
+			appearance: none;
+			border: 1px solid #31406d;
+			background: #0f1630;
+			color: #bed0ff;
+			padding: 8px 12px;
+			border-radius: 10px;
+			cursor: pointer;
+			transition: all 0.2s ease;
+		}
+
+		.btn:hover {
+			background: #152047;
+			border-color: #475f9e;
+		}
+
+		.mobile-btn {
+			font-size: 12px;
+			padding: 6px 10px;
+		}
+
+		/* Status overlays for mobile fullscreen */
+		.status-overlay {
+			background: rgba(18, 24, 51, 0.5);
+		}
+
+		.left-overlay {
+			top: 10px;
+			left: 10px;
+			width: 100px;
+		}
+
+		.right-overlay {
+			top: 10px;
+			right: 10px;
+			width: 110px;
+		}
+
+		.bottom-overlay {
+			bottom: 20px;
+			left: 50%;
+			transform: translateX(-50%);
+			background: rgba(18, 24, 51, 0.5);
+			border-radius: 20px;
+			padding: 8px 15px;
+		}
+
+		.hint {
+			color: #93a4d6;
+			font-size: 13px;
+		}
+
+		.mono {
+			font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+		}
+
+		.status-dot {
+			width: 10px;
+			height: 10px;
+			border-radius: 50%;
+			display: inline-block;
+			vertical-align: middle;
+			margin-right: 6px;
+		}
+
+		.dot-red {
+			background: #ef4444;
+		}
+
+		.dot-green {
+			background: #10b981;
+		}
+
+		.dot-yellow {
+			background: #f59e0b;
+		}
+		
+		/* 全屏样式 */
+		:-webkit-full-screen .video-with-overlay {
+			width: 100vw;
+			height: 100vh;
+		}
+		
+		:-moz-full-screen .video-with-overlay {
+			width: 100vw;
+			height: 100vh;
+		}
+		
+		:-ms-fullscreen .video-with-overlay {
+			width: 100vw;
+			height: 100vh;
+		}
+		
+		:fullscreen .video-with-overlay {
+			width: 100vw;
+			height: 100vh;
+		}
+		
+		/* 在全屏模式下隐藏所有非必要元素 */
+		:-webkit-full-screen .control-layer {
+			display: none !important;
+		}
+		
+		:-moz-full-screen .control-layer {
+			display: none !important;
+		}
+		
+		:-ms-fullscreen .control-layer {
+			display: none !important;
+		}
+		
+		:fullscreen .control-layer {
+			display: none !important;
+		}
+		
+		:-webkit-full-screen .hidden-elements {
+			display: none !important;
+		}
+		
+		:-moz-full-screen .hidden-elements {
+			display: none !important;
+		}
+		
+		:-ms-fullscreen .hidden-elements {
+			display: none !important;
+		}
+		
+		:fullscreen .hidden-elements {
+			display: none !important;
+		}
