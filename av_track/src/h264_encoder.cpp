@@ -38,27 +38,24 @@ bool H264Encoder::open_encoder(int width, int height, int fps) {
   encoder_context_->framerate = {fps, 1};
 
   // 更频繁的关键帧
-  encoder_context_->gop_size = 15;   // 每15帧一个关键帧，确保快速启动
-  encoder_context_->keyint_min = 15; // 最小关键帧间隔
+  //  encoder_context_->gop_size = 15;   // 每15帧一个关键帧，确保快速启动
+  //  encoder_context_->keyint_min = 15; // 最小关键帧间隔
 
   // 禁用 B 帧，确保低延迟和兼容性
   encoder_context_->max_b_frames = 0;
   encoder_context_->has_b_frames = 0;
 
   // 码率控制：VBR运行较大波动
-  // encoder_context_->bit_rate = 800000;
-  // encoder_context_->rc_max_rate = 2500000;
-  // encoder_context_->rc_buffer_size = 2500000;
-
-  // 强制使用 baseline profile
-  encoder_context_->profile = FF_PROFILE_H264_BASELINE;
-  encoder_context_->level = 31;
+  encoder_context_->bit_rate = 800000;
+  encoder_context_->rc_max_rate = 2500000;
+  encoder_context_->rc_buffer_size = 2500000;
 
   // 设置编码器参数
   av_opt_set(encoder_context_->priv_data, "preset", "ultrafast", 0);
   av_opt_set(encoder_context_->priv_data, "tune", "zerolatency", 0);
   av_opt_set(encoder_context_->priv_data, "crf", "29", 0);
   av_opt_set(encoder_context_->priv_data, "profile", "baseline", 0);
+  encoder_context_->level = 31;
 
   std::cout << "Encoder configured with GOP size: "
             << encoder_context_->gop_size << std::endl;

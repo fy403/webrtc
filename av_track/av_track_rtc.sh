@@ -16,8 +16,8 @@ TURN_SERVER="turn.cloudflare.com" # TURN服务器地址
 TURN_SERVER_PORT=3478 # TURN服务器端口
 USER="g0xxxxxxxxxxx" # TURN服务器用户名
 PASSWD="95yyyyyyyyy" # TURN服务器密码
-RESOLUTION="640x480" # 画面分辨率
-FPS=20 # 画面帧率
+RESOLUTION="1280x720" # 画面分辨率
+FPS=10 # 画面帧率
 
 
 # Path to font file - adjust according to your system

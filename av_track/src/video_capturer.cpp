@@ -37,9 +37,7 @@ VideoCapturer::VideoCapturer(const std::string &device, bool debug_enabled,
   encoder_ = std::make_unique<H264Encoder>(debug_enabled);
 }
 
-VideoCapturer::~VideoCapturer() { 
-  stop(); 
-}
+VideoCapturer::~VideoCapturer() { stop(); }
 
 // Inherited from Capture base class
 // void VideoCapturer::set_track_callback(TrackCallback callback)
@@ -161,7 +159,18 @@ void VideoCapturer::capture_loop() {
   AVPacket *packet = av_packet_alloc();
   AVFrame *frame = av_frame_alloc();
 
+  int encoder_out_fps = encoder_->get_context()->framerate.num;
+  int capture_in_fps =
+      format_context_->streams[video_stream_index_]->avg_frame_rate.num;
   static int saved_count = 0;
+  static int frame_counter = 0;
+  int frame_drop_factor = 1; // 默认值，可以根据需要调整
+  if (encoder_out_fps < capture_in_fps) {
+    frame_drop_factor = std::max(1, capture_in_fps / encoder_out_fps);
+  }
+  std::cout << "Capture FPS: " << capture_in_fps
+            << ", Encode FPS: " << encoder_out_fps
+            << ", Frame Drop Factor: " << frame_drop_factor << std::endl;
 
   // 等待 track_callback_ 被设置
   {
@@ -193,6 +202,14 @@ void VideoCapturer::capture_loop() {
     }
 
     if (packet->stream_index == video_stream_index_) {
+      // 帧率控制逻辑：根据frame_drop_factor决定是否丢弃帧
+      frame_counter++;
+      if (frame_drop_factor > 1 && (frame_counter % frame_drop_factor) != 1) {
+        // 跳过这一帧（不进行编码）
+        av_packet_unref(packet);
+        continue;
+      }
+
       ret = avcodec_send_packet(codec_context_, packet);
       if (ret < 0) {
         av_packet_unref(packet);
