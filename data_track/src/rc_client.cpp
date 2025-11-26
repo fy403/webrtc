@@ -128,6 +128,7 @@ void RCClient::sendSystemStatus()
 
     bool net_ok = system_monitor_.getNetworkStats(rx_speed, tx_speed);
     bool cpu_ok = system_monitor_.getCPUUsage(cpu_usage);
+    int speed = motor_controller_->getThrottleSpeed();
 
     bool tty_service = system_monitor_.checkServiceStatus("data_track_rtc.service");
     bool rtsp_service = system_monitor_.checkServiceStatus("av_track_rtc.service");
@@ -138,6 +139,7 @@ void RCClient::sendSystemStatus()
     std::string moduleInfo = system_monitor_.gsm.getModuleInfo();
 
     std::map<std::string, std::string> statusData;
+    statusData["speed"] = std::to_string(speed);
     statusData["rx_speed"] = std::to_string(static_cast<uint16_t>(rx_speed * 100));
     statusData["tx_speed"] = std::to_string(static_cast<uint16_t>(tx_speed * 100));
     // System resources

@@ -458,6 +458,36 @@
 			padding: 8px 15px;
 		}
 		
+		/* Speed overlay styles */
+		.speed-overlay {
+			bottom: 15px;
+			right: 15px;
+			width: 60px;
+			height: 60px;
+			border-radius: 50%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: rgba(18, 24, 51, 0.5);
+			backdrop-filter: blur(4px);
+			border: 2px solid rgba(255, 255, 255, 0.1);
+		}
+
+		.speed-display {
+			text-align: center;
+		}
+
+		.speed-value {
+			font-size: 18px;
+			font-weight: bold;
+			color: #ffffff;
+		}
+
+		.speed-unit {
+			font-size: 10px;
+			color: #93a4d6;
+		}
+
 		.status-group {
 			display: flex;
 			flex-direction: column;

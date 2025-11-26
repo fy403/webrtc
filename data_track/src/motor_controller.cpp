@@ -141,6 +141,11 @@ void MotorControllerTTY::cycleThrottle()
     updateMotors();
 }
 
+int MotorControllerTTY::getThrottleSpeed()
+{
+    return THROTTLE_LEVELS[throttle_level].speed_percent;
+}
+
 void MotorControllerTTY::updateMotors()
 {
     int base_speed = THROTTLE_LEVELS[throttle_level].speed_percent;

@@ -18,6 +18,7 @@ public:
 
     void setNeutral();
     void cycleThrottle();
+    int getThrottleSpeed();
     void updateMotors();
     void printStatus();
     bool setKeyState(const char *key, bool state);

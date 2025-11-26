@@ -72,7 +72,8 @@ window.addEventListener('load', () => {
     rxSpeed: document.getElementById('rxSpeed'),
     txSpeed: document.getElementById('txSpeed'),
     cpuUsage: document.getElementById('cpuUsage'),
-    lastUpdate: document.getElementById('lastUpdate')
+    lastUpdate: document.getElementById('lastUpdate'),
+    speedValue: document.getElementById('speedValue') // 添加速度元素
   };
 
   // 系统状态数据
@@ -84,6 +85,7 @@ window.addEventListener('load', () => {
     rtspService: false,
     signalStrength: -1, // 4G信号强度，默认-1表示未知
     sim_status: "UNKNOWN",
+    speed: 0, // 添加速度字段
     lastUpdate: null
   };
 
@@ -312,6 +314,7 @@ window.addEventListener('load', () => {
     if (dataElements.txSpeed) dataElements.txSpeed.textContent = dataSystemStatus.txSpeed.toFixed(2) + ' Kbit/s';
     if (dataElements.cpuUsage) dataElements.cpuUsage.textContent = dataSystemStatus.cpuUsage.toFixed(2) + '%';
     if (dataElements.simStatus) dataElements.simStatus.textContent = dataSystemStatus.sim_status;
+    if (dataElements.speedValue) dataElements.speedValue.textContent = dataSystemStatus.speed; // 更新速度显示
 
     if (dataElements.serviceStatus) {
       const serviceStatus = [];
@@ -443,6 +446,11 @@ window.addEventListener('load', () => {
       dataSystemStatus.sim_status = statusData.sim_status;
     }
 
+    // 处理速度数据
+    if (statusData.speed !== undefined) {
+      dataSystemStatus.speed = parseInt(statusData.speed);
+    }
+
     dataSystemStatus.lastUpdate = new Date();
 
     // 更新显示
@@ -455,7 +463,7 @@ window.addEventListener('load', () => {
   // 心跳发送
   setInterval(function () {
     dataSendFrame(MSG_PING, 0, 0);
-  }, 1000);
+  }, 1500);
 
   // 绑定控制按钮事件
   if (dataElements.reconnectBtn) {
