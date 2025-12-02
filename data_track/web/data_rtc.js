@@ -1,4 +1,3 @@
-
 window.addEventListener('load', () => {
 
   // 协议常量，保持与 C++ 一致
@@ -16,10 +15,33 @@ window.addEventListener('load', () => {
   const KEY_A = 3;
   const KEY_D = 4;
 
+
   const dataConfig = {
     iceServers: [{
-      urls: 'stun:stun.l.google.com:19302', // change to your STUN server
-    }],
+        "urls": ["stun:stun.cloudflare.com:3478",
+          // "stun:stun.cloudflare.com:53"
+        ]
+      },
+      // {
+      //   "urls": [
+      //     "turn:turn.cloudflare.com:3478?transport=udp",
+      //     // "turn:turn.cloudflare.com:3478?transport=tcp",
+      //     // "turns:turn.cloudflare.com:5349?transport=tcp",
+      //     // "turn:turn.cloudflare.com:53?transport=udp",
+      //     // "turn:turn.cloudflare.com:80?transport=tcp",
+      //     // "turns:turn.cloudflare.com:443?transport=tcp"
+      //   ],
+      //   "username": "g01ca9a98e4b987d196492b8da9873bde96eb447d5587a708916ffad6daa4ac5",
+      //   "credential": "ad5db8205573fa6f8b2a93c1c04fecceab6dc8b3b4ec9bb5db5c386305e49610"
+      // },
+      {
+        "urls": [
+          "turn:tx.fy403.cn:3478?transport=udp",
+        ],
+        "username": "fy403",
+        "credential": "qwertyuiop"
+      },
+    ],
   };
 
   const dataLocalId = dataRandomId(5);
@@ -502,14 +524,14 @@ window.addEventListener('load', () => {
 
   if (dataElements.stopAllBtnMobile) {
     dataElements.stopAllBtnMobile.addEventListener('click', function () {
-    console.log('绑定停止所有按钮事件');
+      console.log('绑定停止所有按钮事件');
       dataSendFrame(MSG_STOP_ALL, 0, 0);
     });
   }
 
   if (dataElements.emgBtnMobile) {
     dataElements.emgBtnMobile.addEventListener('click', function () {
-    console.log('绑定紧急停止按钮事件');
+      console.log('绑定紧急停止按钮事件');
       dataSendFrame(MSG_EMERGENCY_STOP, 0, 0);
     });
   }
@@ -532,7 +554,7 @@ window.addEventListener('load', () => {
     }
   }
 
-  if (dataElements.forwardBtn){
+  if (dataElements.forwardBtn) {
     dataElements.forwardBtn.addEventListener('touchstart', function () {
       handleDirectionButton(1, true);
     });

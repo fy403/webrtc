@@ -1,0 +1,15 @@
+version: '3'
+
+services:
+  coturn:
+    image: coturn/coturn
+    container_name: coturn
+    restart: always
+    network_mode: host
+    volumes:
+      - /www/dockerfiles/coturn/turnserver.conf:/etc/turnserver.conf
+      - /etc/ssl:/etc/ssl
+    cpus: 1
+    mem_limit: 1g
+    mem_reservation: 512m
+

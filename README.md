@@ -51,7 +51,9 @@ chmod +x ./install && ./install
 
 STUN/TRUN服务器是用来获取WebRTC双方的网络地址信息：本地接口直接地址（Host Candidate）、STUN服务器反射地址（Server Reflexive Candidate）以及TURN中继地址（Relayed Candidate）。通常内网地址优先级低于公网直连地址。如果内网不能互通则走中级TURN服务器，流媒体流量从TURN转发。
 
-公开的STUN服务器非常多，比如：(stun_host=‘stun.l.google.com’, stun_port=19302)。TURN服务器可以自己搭建，也可以使用cloudflare免费提供的服务器。具体可以参考这篇Blog[【WebRTC全流程】livekit配置免费的cloudflare turn服务 - PiDan! | 虚拟世界的懒猫的博客](https://pidan.dev/20250722/webrtc-livekit-deploy-config-turn-server/)
+公开的STUN服务器非常多，比如：(stun_host=‘stun.l.google.com’, stun_port=19302)。
+
+TURN服务器可以自己搭建[搭建私有TURN服务器](turn_server/README.md)，当然也可以使用cloudflare免费提供的服务器（但是延迟会比较大，且不稳定）。具体可以参考这篇Blog[【WebRTC全流程】livekit配置免费的cloudflare turn服务 - PiDan! | 虚拟世界的懒猫的博客](https://pidan.dev/20250722/webrtc-livekit-deploy-config-turn-server/)
 
 申请后，只需要通过他提供的一个cmd命令curl获取TURN server host和username，password就行。
 

@@ -2,14 +2,14 @@
 TARGET_HOST="fy403.cn" 
 TARGET_PORT=8000
 IP_TYPE=4
-USER="g0xxxxxxxxxxx"
-PASSWD="95yyyyyyyyy"
 CHECK_INTERVAL=2  # Health check interval (seconds)
 CLIENT_ID="dataTrack"
 STUN_SERVER="stun.l.google.com"
 STUN_SERVER_PORT=19302
-TURN_SERVER="turn.cloudflare.com"
+TURN_SERVER="tx.fy403.cn"
 TURN_SERVER_PORT=3478
+USER="fy403"
+PASSWD="qwertyuiop"
 TTY_PORT=/dev/ttyUSB0 # 电机驱动板usb端口
 TTY_BAUDRATE=115200 # 电机驱动板串口波特率
 GSM_PORT=/dev/ttyACM0 # 4g模块usb端口

@@ -12,12 +12,12 @@ CHECK_INTERVAL=2  # Health check interval (seconds)
 CLIENT_ID="usbcam" # 客户端ID：不填写使用随机值
 STUN_SERVER="stun.l.google.com" # STUN服务器地址
 STUN_SERVER_PORT=19302 # STUN服务器端口
-TURN_SERVER="turn.cloudflare.com" # TURN服务器地址
-TURN_SERVER_PORT=3478 # TURN服务器端口
-USER="g0xxxxxxxxxxx" # TURN服务器用户名
-PASSWD="95yyyyyyyyy" # TURN服务器密码
-RESOLUTION="1280x720" # 画面分辨率
-FPS=10 # 画面帧率
+TURN_SERVER="tx.fy403.cn"
+TURN_SERVER_PORT=3478
+USER="fy403"
+PASSWD="qwertyuiop"
+RESOLUTION="720x460" # 画面分辨率
+FPS=30 # 画面帧率
 
 
 # Path to font file - adjust according to your system
