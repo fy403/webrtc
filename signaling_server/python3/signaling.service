@@ -1,0 +1,30 @@
+[Unit]
+Description=WebRTC Signaling Service with Health Checks
+After=network.target
+Wants=network.target
+Requires=network-online.target
+
+[Service]
+Type=simple
+# User=root
+# Group=video
+WorkingDirectory=/home/pi/signaling
+ExecStart=python3 signaling_server.py
+Restart=always
+RestartSec=3
+
+# 进程优先级
+# Nice=0
+
+# 安全设置
+# NoNewPrivileges=yes
+# ProtectSystem=strict
+# ProtectHome=yes
+# PrivateTmp=yes
+
+# 资源限制
+# MemoryMax=500M
+# CPUQuota=150%
+
+[Install]
+WantedBy=multi-user.target

@@ -26,21 +26,30 @@
 #### 1.1 信令服务器搭建
 
 信令服务器主要是协助WebRTC双方交换SDP（音视频参数信息）以及ICE（双方网络地址信息）。所以要想支持4G远程，需要购买一个便宜的建站服务器就行，成本70/年(2H2G)。服务器需要有公网ip，服务器不需要很大的带宽（不负责传输流媒体数据）。
-
+##### 下载项目
 ```shel
-# 下载项目
 git cloen https://github.com/fy403/webrtc
-
+```
+##### 依赖安装
+方法1：nodejs
+```shell
+cd webrtc/signaling_server/nodejs
 # 安装nodejs, npm
 sudo apt install nodejs npm
-
-# 进入信令脚本目录
-cd webrtc/signaling
-
 # 安装依赖
 npm install 
+```
 
-# 启动信令服务器
+方法2：python3
+```shell
+cd webrtc/signaling_server/python3
+# 安装python3, pip3
+sudo apt install python3 python3-pip
+pip3 install -r requirements.txt
+```
+
+##### 启动信令服务器
+```shel
 chmod +x ./install && ./install
 ```
 
@@ -453,7 +462,7 @@ WebRTC的连接建立分为以下几个阶段：
 >
 > 这款开发板还支持编码电机，后续如果要升级也比较好。
 
-<img src="C:\Users\Administrator\tools\RTSP\remote_control\webrtc\README.assets\image-20251103205553057.png" alt="image-20251103205553057" style="zoom: 50%;" />
+<img src="README.assets\image-20251103205553057.png" alt="image-20251103205553057" style="zoom: 50%;" />
 
 > 选择4G模块尽量选择支持RNDIS的，这样插上USB和供电就能直接识别为一个网络接口【免去配置】。供电7.4V，用5V供电会导致信号速率低。
 >
