@@ -283,7 +283,7 @@ WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Cmdline params)
     audio_params.sample_rate = params.sampleRate();
 
     audio_capturer_ =
-        new AudioCapturer(audio_params, params.debug(), 100000, 100000);
+        new AudioCapturer(audio_params, params.debug(), 1024, 1024);
   } else {
     audio_capturer_ = nullptr;
   }

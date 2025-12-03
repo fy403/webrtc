@@ -224,12 +224,15 @@ void AudioCapturer::capture_loop() {
         // 使用非阻塞方式推入队列
         if (!encode_queue_.try_push(frame)) {
           if (debug_enabled_) {
-            std::cout << "Encode queue full, dropping audio frame" << std::endl;
-            std::cout << "Encode queue Len: " << encode_queue_.size()
+            std::cout << "Audio Encode queue full, dropping audio frame"
+                      << std::endl;
+            std::cout << "Audio Encode queue Len: " << encode_queue_.size()
                       << ", Capacity: " << encode_queue_.capacity()
                       << std::endl;
           }
           av_frame_unref(frame);
+          encode_queue_.clear();
+          send_queue_.clear();
         } else {
           frame = av_frame_alloc();
         }

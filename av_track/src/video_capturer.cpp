@@ -254,7 +254,21 @@ void VideoCapturer::capture_loop() {
 
         scaled_frame->pts = frame->pts;
 
-        encode_queue_.push(scaled_frame);
+        av_frame_unref(frame);
+        // encode_queue_.push(scaled_frame);
+        // 使用非阻塞方式推入队列
+        if (!encode_queue_.try_push(scaled_frame)) {
+          if (debug_enabled_) {
+            std::cout << "Video Encode queue full, dropping audio frame"
+                      << std::endl;
+            std::cout << "Video Encode queue Len: " << encode_queue_.size()
+                      << ", Capacity: " << encode_queue_.capacity()
+                      << std::endl;
+          }
+          av_frame_free(&scaled_frame);
+          encode_queue_.clear();
+          send_queue_.clear();
+        }
       }
     }
 
