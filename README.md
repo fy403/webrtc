@@ -28,7 +28,7 @@
 信令服务器主要是协助WebRTC双方交换SDP（音视频参数信息）以及ICE（双方网络地址信息）。所以要想支持4G远程，需要购买一个便宜的建站服务器就行，成本70/年(2H2G)。服务器需要有公网ip，服务器不需要很大的带宽（不负责传输流媒体数据）。
 ##### 下载项目
 ```shel
-git cloen https://github.com/fy403/webrtc
+git clone https://github.com/fy403/webrtc
 ```
 ##### 依赖安装
 方法1：nodejs
@@ -481,3 +481,5 @@ WebRTC的连接建立分为以下几个阶段：
 - [ ] AI模型接入
 - [ ] 自主导航
 
+## QQ群交流
+<img src="README.assets\qrcode_1764133405428.jpg" alt="qrcode_1764133405428" style="zoom: 50%;" />
