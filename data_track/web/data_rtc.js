@@ -81,10 +81,10 @@ window.addEventListener('load', () => {
     keyA: document.getElementById('keyA'),
     keyS: document.getElementById('keyS'),
     keyD: document.getElementById('keyD'),
-    forwardBtn: document.getElementById('forwardBtn'),
-    backwardBtn: document.getElementById('backwardBtn'),
-    leftBtn: document.getElementById('leftBtn'),
-    rightBtn: document.getElementById('rightBtn'),
+    // 虚拟手柄元素
+    joystickContainer: document.getElementById('virtualJoystickContainer'),
+    joystickBase: document.getElementById('joystickBase'),
+    joystickHandle: document.getElementById('joystickHandle'),
     connStatus: document.getElementById('connStatus'),
     signalStrength: document.getElementById('signalStrength'),
     signalIndicator: document.getElementById('signalIndicator'),
@@ -543,55 +543,278 @@ window.addEventListener('load', () => {
     });
   }
 
-  // Unified handler for button press/release events
-  function handleDirectionButton(keyCode, pressed) {
-    if (pressed) {
-      console.log(`${keyCode === 1 ? '前进' : keyCode === 2 ? '后退' : keyCode === 3 ? '左转' : '右转'}按钮按下`);
-      dataSendFrame(MSG_KEY, keyCode, 1);
-    } else {
-      console.log(`${keyCode === 1 ? '前进' : keyCode === 2 ? '后退' : keyCode === 3 ? '左转' : '右转'}按钮释放`);
+  // 虚拟手柄控制变量
+  let joystickActive = false;
+  let joystickCenterX = 0;
+  let joystickCenterY = 0;
+  let currentDirections = new Set(); // 跟踪当前按下的方向
+  
+  // 虚拟手柄控制函数
+  function updateJoystickDirection(clientX, clientY) {
+    if (!dataElements.joystickBase || !dataElements.joystickHandle) return;
+    
+    const rect = dataElements.joystickBase.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    
+    // 计算相对位置
+    let deltaX = clientX - centerX;
+    let deltaY = clientY - centerY;
+    
+    // 计算距离
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    const maxDistance = rect.width / 2 - 40; // 手柄最大移动距离
+    
+    // 限制移动范围
+    if (distance > maxDistance) {
+      deltaX = (deltaX / distance) * maxDistance;
+      deltaY = (deltaY / distance) * maxDistance;
+    }
+    
+    // 更新手柄位置
+    dataElements.joystickHandle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+    
+    // 计算方向阈值 - 降低阈值使多方向操作更容易
+    const threshold = maxDistance * 0.2; // 20%的阈值，更敏感
+    
+    // 检测方向
+    const newDirections = new Set();
+    
+    // 检测垂直方向
+    if (Math.abs(deltaY) > threshold) {
+      if (deltaY < -threshold) {
+        newDirections.add('W'); // 前进
+      } else if (deltaY > threshold) {
+        newDirections.add('S'); // 后退
+      }
+    }
+    
+    // 检测水平方向
+    if (Math.abs(deltaX) > threshold) {
+      if (deltaX < -threshold) {
+        newDirections.add('A'); // 左转
+      } else if (deltaX > threshold) {
+        newDirections.add('D'); // 右转
+      }
+    }
+    
+    // 输出调试信息
+    if (newDirections.size > 0) {
+      const dirs = Array.from(newDirections).join('+');
+      console.log(`手柄方向: ${dirs}, deltaX: ${deltaX.toFixed(1)}, deltaY: ${deltaY.toFixed(1)}`);
+    }
+    
+    // 比较方向变化并发送控制命令
+    const directionsToSend = [];
+    
+    // 检查新增的方向
+    for (const dir of newDirections) {
+      if (!currentDirections.has(dir)) {
+        directionsToSend.push({ dir, pressed: true });
+      }
+    }
+    
+    // 检查释放的方向
+    for (const dir of currentDirections) {
+      if (!newDirections.has(dir)) {
+        directionsToSend.push({ dir, pressed: false });
+      }
+    }
+    
+    // 发送控制命令
+    for (const { dir, pressed } of directionsToSend) {
+      const keyCode = dir === 'W' ? KEY_W : dir === 'S' ? KEY_S : dir === 'A' ? KEY_A : KEY_D;
+      const dirName = dir === 'W' ? '前进' : dir === 'S' ? '后退' : dir === 'A' ? '左转' : '右转';
+      
+      // 同步全局状态
+      dataState[dir] = pressed;
+      
+      if (pressed) {
+        console.log(`${dirName} - 手柄按下`);
+        dataSendFrame(MSG_KEY, keyCode, 1);
+      } else {
+        console.log(`${dirName} - 手柄释放`);
+        dataSendFrame(MSG_KEY, keyCode, 0);
+      }
+    }
+    
+    // 更新当前方向状态
+    currentDirections = newDirections;
+    
+    // 更新键盘视觉反馈
+    dataUpdateKeyVisual();
+  }
+  
+  // 重置手柄位置
+  function resetJoystick() {
+    if (dataElements.joystickHandle) {
+      dataElements.joystickHandle.style.transform = 'translate(-50%, -50%)';
+    }
+    
+    // 释放所有按下的方向
+    for (const dir of currentDirections) {
+      const keyCode = dir === 'W' ? KEY_W : dir === 'S' ? KEY_S : dir === 'A' ? KEY_A : KEY_D;
+      const dirName = dir === 'W' ? '前进' : dir === 'S' ? '后退' : dir === 'A' ? '左转' : '右转';
+      
+      // 同步全局状态
+      dataState[dir] = false;
+      
+      console.log(`${dirName} - 手柄释放`);
       dataSendFrame(MSG_KEY, keyCode, 0);
     }
+    
+    currentDirections.clear();
+    joystickActive = false;
+    
+    // 更新键盘视觉反馈
+    dataUpdateKeyVisual();
   }
-
-  if (dataElements.forwardBtn) {
-    dataElements.forwardBtn.addEventListener('touchstart', function () {
-      handleDirectionButton(1, true);
-    });
-    dataElements.forwardBtn.addEventListener('touchend', function () {
-      handleDirectionButton(1, false);
-    });
+  
+  // 检测是否为移动设备
+  function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   }
-
-  if (dataElements.backwardBtn) {
-    dataElements.backwardBtn.addEventListener('touchstart', function () {
-      handleDirectionButton(2, true);
-    });
-    dataElements.backwardBtn.addEventListener('touchend', function () {
-      handleDirectionButton(2, false);
-    });
+  
+  // 检测是否在移动页面
+  function isMobilePage() {
+    return window.location.pathname.includes('mobile.html');
   }
-
-  if (dataElements.leftBtn) {
-    dataElements.leftBtn.addEventListener('touchstart', function () {
-      handleDirectionButton(3, true);
+  
+  // 初始化虚拟手柄事件
+  function initVirtualJoystick(retryCount = 0) {
+    // 如果不是移动设备且不在移动页面，直接返回
+    if (!isMobileDevice() && !isMobilePage()) {
+      return;
+    }
+    
+    // 限制重试次数（最多重试10次，即1秒）
+    if (retryCount > 10) {
+      console.warn('虚拟手柄元素未找到，已达到最大重试次数');
+      return;
+    }
+    
+    if (!dataElements.joystickBase || !dataElements.joystickHandle) {
+      if (retryCount === 0) {
+        console.log('虚拟手柄元素未找到，延迟初始化');
+      }
+      setTimeout(() => initVirtualJoystick(retryCount + 1), 100);
+      return;
+    }
+    
+    let currentTouchId = null;
+    
+    // 阻止默认触摸行为，设置 touch-action
+    dataElements.joystickBase.style.touchAction = 'none';
+    dataElements.joystickHandle.style.touchAction = 'none';
+    dataElements.joystickContainer.style.touchAction = 'none';
+    
+    // 触摸开始事件
+    dataElements.joystickBase.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.touches.length > 0) {
+        joystickActive = true;
+        currentTouchId = e.touches[0].identifier;
+        updateJoystickDirection(e.touches[0].clientX, e.touches[0].clientY);
+        console.log('触摸开始，ID:', currentTouchId);
+      }
+    }, { passive: false });
+    
+    // 鼠标事件支持（用于调试）
+    dataElements.joystickBase.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      joystickActive = true;
+      updateJoystickDirection(e.clientX, e.clientY);
+      console.log('鼠标按下');
     });
-    dataElements.leftBtn.addEventListener('touchend', function () {
-      handleDirectionButton(3, false);
+    
+    // 全局触摸移动事件
+    document.addEventListener('touchmove', (e) => {
+      if (!joystickActive || currentTouchId === null) return;
+      
+      // 查找匹配的触摸点
+      let touch = null;
+      for (let i = 0; i < e.touches.length; i++) {
+        if (e.touches[i].identifier === currentTouchId) {
+          touch = e.touches[i];
+          break;
+        }
+      }
+      
+      if (touch) {
+        e.preventDefault();
+        e.stopPropagation();
+        updateJoystickDirection(touch.clientX, touch.clientY);
+      }
+    }, { passive: false });
+    
+    // 全局鼠标移动事件
+    document.addEventListener('mousemove', (e) => {
+      if (!joystickActive) return;
+      e.preventDefault();
+      updateJoystickDirection(e.clientX, e.clientY);
     });
-  }
-
-  if (dataElements.rightBtn) {
-    dataElements.rightBtn.addEventListener('touchstart', function (e) {
-      handleDirectionButton(4, true);
+    
+    // 全局触摸结束事件
+    document.addEventListener('touchend', (e) => {
+      if (!joystickActive || currentTouchId === null) return;
+      
+      // 检查结束的触摸点是否匹配
+      let touchEnded = false;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === currentTouchId) {
+          touchEnded = true;
+          break;
+        }
+      }
+      
+      if (touchEnded) {
+        e.preventDefault();
+        e.stopPropagation();
+        currentTouchId = null;
+        resetJoystick();
+        console.log('触摸结束');
+      }
+    }, { passive: false });
+    
+    // 全局触摸取消事件（处理意外中断）
+    document.addEventListener('touchcancel', (e) => {
+      if (!joystickActive || currentTouchId === null) return;
+      
+      let touchCancelled = false;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === currentTouchId) {
+          touchCancelled = true;
+          break;
+        }
+      }
+      
+      if (touchCancelled) {
+        e.preventDefault();
+        e.stopPropagation();
+        currentTouchId = null;
+        resetJoystick();
+        console.log('触摸取消');
+      }
+    }, { passive: false });
+    
+    // 全局鼠标释放事件
+    document.addEventListener('mouseup', (e) => {
+      if (!joystickActive) return;
+      e.preventDefault();
+      resetJoystick();
+      console.log('鼠标释放');
     });
-    dataElements.rightBtn.addEventListener('touchend', function (e) {
-      handleDirectionButton(4, false);
-    });
+    
+    console.log('虚拟手柄初始化完成');
   }
 
   // 附加键盘监听
   dataAttachKeyboard();
+  
+  // 初始化虚拟手柄
+  initVirtualJoystick();
 
   function dataOpenSignaling(url) {
     return new Promise((resolve, reject) => {

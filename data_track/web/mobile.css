@@ -235,54 +235,78 @@
 			color: #e5e7eb;
 		}
 
-		/* Control overlays for mobile */
-		.control-overlay {
+		/* 虚拟手柄样式 - 右手大拇指区域 */
+		.virtual-joystick-container {
 			position: absolute;
+			right: 15%;
+			bottom: 13%;
 			z-index: 30;
+			touch-action: none;
+			-webkit-touch-callout: none;
+			-webkit-user-select: none;
+			user-select: none;
 		}
 
-		.left-control-overlay {
-			left: 10%;
-			bottom: 15%;
-		}
-
-		.right-control-overlay {
-			right: 10%;
-			bottom: 25%;
-		}
-
-		.forward-back-controls {
-			display: flex;
-			flex-direction: column;
-			gap: 20px;
-		}
-
-		.left-right-controls {
-			display: flex;
-			flex-direction: row;
-			gap: 20px;
-		}
-
-		.dir-btn {
-			width: 70px;
-			height: 70px;
+		.joystick-base {
+			width: 120px;
+			height: 120px;
 			border-radius: 50%;
+			background: rgba(15, 22, 48, 0.7);
 			border: 2px solid #31406d;
-			background: rgba(15, 22, 48, 0.8);
-			color: #bed0ff;
-			font-size: 28px;
-			cursor: pointer;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+			position: relative;
+			box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+			backdrop-filter: blur(4px);
+			touch-action: none;
+			-webkit-touch-callout: none;
+			-webkit-user-select: none;
+			user-select: none;
+		}
+
+		.joystick-center {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			width: 6px;
+			height: 6px;
+			border-radius: 50%;
+			background: #475f9e;
+			border: 1px solid #6b7aa1;
+		}
+
+		.joystick-handle {
+			position: absolute;
+			width: 50px;
+			height: 50px;
+			border-radius: 50%;
+			background: linear-gradient(135deg, #475f9e, #31406d);
+			border: 2px solid #6b7aa1;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+			transition: none;
+			touch-action: none;
+			-webkit-touch-callout: none;
+			-webkit-user-select: none;
+			user-select: none;
+			pointer-events: none;
+			cursor: grab;
+		}
+
+		.joystick-handle:active {
+			cursor: grabbing;
+			box-shadow: 0 6px 12px rgba(0, 0, 0, 0.6);
 		}
 
 		.top-control-overlay {
+			position: absolute;
 			top: 20px;
 			left: 50%;
 			transform: translateX(-50%);
 			box-shadow: 0 4px 8px rgba(0, 0, 0, 0.0);
+			z-index: 30;
+			display: block;
 		}
 
 		.top-controls {
@@ -423,4 +447,37 @@
 		
 		:fullscreen .hidden-elements {
 			display: none !important;
+		}
+		
+		/* 确保顶部控制按钮在全屏模式下可见 */
+		.video-with-overlay:-webkit-full-screen .top-control-overlay,
+		:-webkit-full-screen .top-control-overlay {
+			display: block !important;
+			z-index: 9999 !important;
+			visibility: visible !important;
+			opacity: 1 !important;
+		}
+		
+		.video-with-overlay:-moz-full-screen .top-control-overlay,
+		:-moz-full-screen .top-control-overlay {
+			display: block !important;
+			z-index: 9999 !important;
+			visibility: visible !important;
+			opacity: 1 !important;
+		}
+		
+		.video-with-overlay:-ms-fullscreen .top-control-overlay,
+		:-ms-fullscreen .top-control-overlay {
+			display: block !important;
+			z-index: 9999 !important;
+			visibility: visible !important;
+			opacity: 1 !important;
+		}
+		
+		.video-with-overlay:fullscreen .top-control-overlay,
+		:fullscreen .top-control-overlay {
+			display: block !important;
+			z-index: 9999 !important;
+			visibility: visible !important;
+			opacity: 1 !important;
 		}

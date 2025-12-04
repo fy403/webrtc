@@ -16,19 +16,11 @@
 		<div class="video-section">
 			<div class="video-wrapper">
 				<div class="video-with-overlay">
-					<!-- 左侧前进后退按钮 -->
-					<div class="control-overlay left-control-overlay">
-						<div class="forward-back-controls">
-							<button id="forwardBtn" class="dir-btn">↑</button>
-							<button id="backwardBtn" class="dir-btn">↓</button>
-						</div>
-					</div>
-					
-					<!-- 右侧左右按钮 -->
-					<div class="control-overlay right-control-overlay">
-						<div class="left-right-controls">
-							<button id="leftBtn" class="dir-btn">←</button>
-							<button id="rightBtn" class="dir-btn">→</button>
+					<!-- 虚拟手柄控制层 -->
+					<div class="virtual-joystick-container" id="virtualJoystickContainer">
+						<div class="joystick-base" id="joystickBase">
+							<div class="joystick-handle" id="joystickHandle"></div>
+							<div class="joystick-center"></div>
 						</div>
 					</div>
 					
@@ -244,14 +236,33 @@
 			document.addEventListener('MSFullscreenChange', handleFullscreenChange);
 			
 			function handleFullscreenChange() {
+				const topControlOverlay = document.querySelector('.top-control-overlay');
+				const isFullscreen = document.fullscreenElement || 
+					document.webkitFullscreenElement || 
+					document.mozFullScreenElement ||
+					document.msFullscreenElement;
+				
 				if (fullscreenBtn) {
-					if (document.fullscreenElement || 
-						document.webkitFullscreenElement || 
-						document.mozFullScreenElement ||
-						document.msFullscreenElement) {
+					if (isFullscreen) {
 						fullscreenBtn.textContent = '退出全屏';
 					} else {
 						fullscreenBtn.textContent = '全屏';
+					}
+				}
+				
+				// 确保全屏时顶部按钮可见
+				if (topControlOverlay) {
+					if (isFullscreen) {
+						topControlOverlay.style.display = 'block';
+						topControlOverlay.style.zIndex = '9999';
+						topControlOverlay.style.visibility = 'visible';
+						topControlOverlay.style.opacity = '1';
+					} else {
+						// 退出全屏时恢复默认样式
+						topControlOverlay.style.display = '';
+						topControlOverlay.style.zIndex = '';
+						topControlOverlay.style.visibility = '';
+						topControlOverlay.style.opacity = '';
 					}
 				}
 			}
