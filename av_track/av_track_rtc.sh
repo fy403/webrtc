@@ -18,6 +18,8 @@ USER="fy403"
 PASSWD="qwertyuiop"
 RESOLUTION="720x460" # 画面分辨率
 FPS=30 # 画面帧率
+#RESOLUTION="1280x720" # 画面分辨率
+#FPS=10 # 画面帧率
 
 
 # Path to font file - adjust according to your system

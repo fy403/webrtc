@@ -4,8 +4,8 @@ window.addEventListener('load', () => {
     const url = `ws://fy403.cn:8000/${localId}`;
     const config = {
         iceServers: [{
-                "urls": ["stun:stun.cloudflare.com:3478",
-                    // "stun:stun.cloudflare.com:53"
+                "urls": [
+                    "stun:stun.l.google.com:19302",
                 ]
             },
             // {
