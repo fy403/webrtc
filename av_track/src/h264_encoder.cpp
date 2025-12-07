@@ -30,25 +30,27 @@ bool H264Encoder::open_encoder(int width, int height, int fps) {
 
   encoder_context_ = avcodec_alloc_context3(codec_);
 
-  // 基本配置
-  encoder_context_->width = width;
-  encoder_context_->height = height;
-  encoder_context_->pix_fmt = AV_PIX_FMT_YUV420P;
-  encoder_context_->time_base = {1, fps};
-  encoder_context_->framerate = {fps, 1};
+  // ==================== 基础视频参数配置 ====================
+  encoder_context_->width = width;                // 视频宽度
+  encoder_context_->height = height;              // 视频高度
+  encoder_context_->pix_fmt = AV_PIX_FMT_YUV420P; // 像素格式：YUV420平面格式
+  encoder_context_->time_base = {1, fps};         // 时间基：每帧持续时间
+  encoder_context_->framerate = {fps, 1};         // 帧率
 
-  // 更频繁的关键帧
-  //  encoder_context_->gop_size = 15;   // 每15帧一个关键帧，确保快速启动
-  //  encoder_context_->keyint_min = 15; // 最小关键帧间隔
+  // 关键帧设置（优化）
+  encoder_context_->gop_size = fps; // GOP等于帧率（1秒一个关键帧）
+  // 最小关键帧间隔改为半秒，提高随机访问性
+  encoder_context_->keyint_min = fps / 2;
 
-  // 禁用 B 帧，确保低延迟和兼容性
-  encoder_context_->max_b_frames = 0;
-  encoder_context_->has_b_frames = 0;
+  // ==================== B帧配置 ====================
+  // 完全禁用B帧以减少编码延迟和提高兼容性
+  encoder_context_->max_b_frames = 0; // 最大连续B帧数为0
+  encoder_context_->has_b_frames = 0; // 标记流中无B帧
 
   // 码率控制：VBR运行较大波动
   encoder_context_->bit_rate = 800000;
-  encoder_context_->rc_max_rate = 2500000;
-  encoder_context_->rc_buffer_size = 2500000;
+  encoder_context_->rc_max_rate = 800000;
+  encoder_context_->rc_buffer_size = 800000;
 
   // 设置编码器参数
   av_opt_set(encoder_context_->priv_data, "preset", "ultrafast", 0);
@@ -56,7 +58,7 @@ bool H264Encoder::open_encoder(int width, int height, int fps) {
   av_opt_set(encoder_context_->priv_data, "crf", "29", 0);
   av_opt_set(encoder_context_->priv_data, "profile", "baseline", 0);
   encoder_context_->level = 31;
-
+  
   std::cout << "Encoder configured with GOP size: "
             << encoder_context_->gop_size << std::endl;
 
