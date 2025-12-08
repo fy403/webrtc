@@ -106,7 +106,10 @@ window.addEventListener('load', () => {
       },
     });
 
+    const xbox = new XboxController({});
+
     controllerManager.register('keyboard', keyboard, 10);
+    controllerManager.register('xbox', xbox, 8);
     controllerManager.register('joystick', joystick, 5);
   }
 
