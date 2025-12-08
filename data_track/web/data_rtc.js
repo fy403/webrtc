@@ -2,6 +2,8 @@ window.addEventListener('load', () => {
   // Only keep status frame id from legacy protocol; control uses SBUS.
   const MSG_SYSTEM_STATUS = 0x20;
 
+  const dataLocalId = dataRandomId(5);
+  const dataUrl = `ws://fy403.cn:8000/${dataLocalId}`;
   const dataConfig = {
     iceServers: [
       { urls: ['stun:stun.l.google.com:19302'] },
@@ -9,8 +11,6 @@ window.addEventListener('load', () => {
     ],
   };
 
-  const dataLocalId = dataRandomId(5);
-  const dataUrl = `ws://fy403.cn:8000/${dataLocalId}`;
 
   const dataPeerConnectionMap = {};
   const dataDataChannelMap = {};

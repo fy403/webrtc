@@ -102,8 +102,8 @@ void RCClient::sendSystemStatus()
 {
     double rx_speed, tx_speed, cpu_usage;
 
-    bool net_ok = system_monitor_.getNetworkStats(rx_speed, tx_speed);
-    bool cpu_ok = system_monitor_.getCPUUsage(cpu_usage);
+    system_monitor_.getNetworkStats(rx_speed, tx_speed);
+    system_monitor_.getCPUUsage(cpu_usage);
 
     bool tty_service = system_monitor_.checkServiceStatus("data_track_rtc.service");
     bool rtsp_service = system_monitor_.checkServiceStatus("av_track_rtc.service");

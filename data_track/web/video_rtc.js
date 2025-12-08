@@ -3,30 +3,9 @@ window.addEventListener('load', () => {
     const localId = randomId(4);
     const url = `ws://fy403.cn:8000/${localId}`;
     const config = {
-        iceServers: [{
-                "urls": [
-                    "stun:stun.l.google.com:19302",
-                ]
-            },
-            // {
-            //     "urls": [
-            //         "turn:turn.cloudflare.com:3478?transport=udp",
-            //         // "turn:turn.cloudflare.com:3478?transport=tcp",
-            //         // "turns:turn.cloudflare.com:5349?transport=tcp",
-            //         // "turn:turn.cloudflare.com:53?transport=udp",
-            //         // "turn:turn.cloudflare.com:80?transport=tcp",
-            //         // "turns:turn.cloudflare.com:443?transport=tcp"
-            //     ],
-            //     "username": "g01ca9a98e4b987d196492b8da9873bde96eb447d5587a708916ffad6daa4ac5",
-            //     "credential": "ad5db8205573fa6f8b2a93c1c04fecceab6dc8b3b4ec9bb5db5c386305e49610"
-            // },
-            {
-                "urls": [
-                    "turn:tx.fy403.cn:3478?transport=udp",
-                ],
-                "username": "fy403",
-                "credential": "qwertyuiop"
-            },
+        iceServers: [
+            { urls: ['stun:stun.l.google.com:19302'] },
+            { urls: ['turn:tx.fy403.cn:3478?transport=udp'], username: 'fy403', credential: 'qwertyuiop' },
         ],
     };
 

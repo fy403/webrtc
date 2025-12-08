@@ -24,7 +24,6 @@ public:
 
     // SBUS handling
     bool parseSbusFrame(const uint8_t *frame, size_t length, SbusFrame &out_frame) const;
-    static uint16_t normalizedToSbus(double normalized);
     static double sbusToNormalized(uint16_t value);
 
     // Status frame creation (kept independent of SBUS control)
@@ -34,7 +33,6 @@ public:
 private:
     static const uint8_t MAGIC1 = 0xAA;
     static const uint8_t MAGIC2 = 0x55;
-    static const size_t FRAME_SIZE = 8;
 
     uint16_t calculateChecksum(const uint8_t *frame, size_t length) const;
 };

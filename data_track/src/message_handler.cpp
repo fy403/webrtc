@@ -7,7 +7,6 @@
 // Define static const members
 const uint8_t MessageHandler::MAGIC1;
 const uint8_t MessageHandler::MAGIC2;
-const size_t MessageHandler::FRAME_SIZE;
 
 MessageHandler::MessageHandler() {}
 
@@ -45,21 +44,6 @@ bool MessageHandler::parseSbusFrame(const uint8_t *frame, size_t length, SbusFra
     out_frame.failsafe = (flags & 0x08) != 0;
     out_frame.valid = true;
     return true;
-}
-
-uint16_t MessageHandler::normalizedToSbus(double normalized)
-{
-    normalized = std::max(-1.0, std::min(1.0, normalized));
-    if (normalized >= 0.0)
-    {
-        const double span = static_cast<double>(SBUS_MAX - SBUS_CENTER);
-        return static_cast<uint16_t>(std::lround(SBUS_CENTER + normalized * span));
-    }
-    else
-    {
-        const double span = static_cast<double>(SBUS_CENTER - SBUS_MIN);
-        return static_cast<uint16_t>(std::lround(SBUS_CENTER + normalized * span));
-    }
 }
 
 double MessageHandler::sbusToNormalized(uint16_t value)
