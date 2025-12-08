@@ -9,16 +9,16 @@ const int16_t NEUTRAL_PWM = 0;
 const int16_t MAX_FORWARD_PWM = 3500;
 const int16_t MAX_REVERSE_PWM = -3500;
 
-// Message type definitions
+// Status frame message type
 const uint8_t MSG_SYSTEM_STATUS = 0x20;
-const uint8_t MSG_KEY = 0x01;
-const uint8_t MSG_EMERGENCY_STOP = 0x02;
-const uint8_t MSG_CYCLE_THROTTLE = 0x03;
-const uint8_t MSG_STOP_ALL = 0x04;
-const uint8_t MSG_QUIT = 0x05;
-const uint8_t MSG_PING = 0x10;
 
-// Key mapping
-const char KEY_NAMES[4][2] = {"w", "s", "a", "d"};
+// SBUS protocol constants
+const uint8_t SBUS_START_BYTE = 0x0F;
+const uint8_t SBUS_END_BYTE = 0x00;
+const size_t SBUS_FRAME_SIZE = 25;
+const uint8_t SBUS_CHANNELS = 16;
+const uint16_t SBUS_MIN = 172;
+const uint16_t SBUS_CENTER = 992;
+const uint16_t SBUS_MAX = 1811;
 
 #endif // CONSTANTS_H

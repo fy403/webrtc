@@ -21,7 +21,7 @@ public:
 
     void run();
     void stop();
-    void parseFrame(const uint8_t *frame);
+    void parseFrame(const uint8_t *frame, size_t length);
     void setDataChannel(std::shared_ptr<rtc::DataChannel> dc);
     std::shared_ptr<rtc::DataChannel> getDataChannel();
 
@@ -31,6 +31,8 @@ private:
     std::atomic<bool> has_timeout_;
     double heartbeat_timeout_;
     std::chrono::steady_clock::time_point last_heartbeat_;
+    std::atomic<bool> status_thread_running_{false};
+    std::thread status_thread_;
 
     // Data channel for WebRTC communication
     std::shared_ptr<rtc::DataChannel> data_channel_;
@@ -49,6 +51,8 @@ private:
     void heartbeatCheck();
     void resolve_hostname();
     void disconnect();
+    void startStatusLoop();
+    void stopStatusLoop();
 };
 
 void signalHandler(int signal);

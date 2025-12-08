@@ -24,6 +24,7 @@ RCClient::RCClient(const std::string &tty_port, const std::string &gsm_port, int
 
 RCClient::~RCClient()
 {
+    stopStatusLoop();
     disconnect();
     if (motor_controller_)
     {
@@ -34,6 +35,15 @@ RCClient::~RCClient()
 void RCClient::setDataChannel(std::shared_ptr<rtc::DataChannel> dc)
 {
     data_channel_ = dc;
+    if (data_channel_)
+    {
+        running_ = true;
+        startStatusLoop();
+    }
+    else
+    {
+        stopStatusLoop();
+    }
 }
 std::shared_ptr<rtc::DataChannel> RCClient::getDataChannel()
 {
@@ -51,62 +61,28 @@ void RCClient::stop()
     running_ = false;
 }
 
-void RCClient::parseFrame(const uint8_t *frame)
+void RCClient::parseFrame(const uint8_t *frame, size_t length)
 {
-    auto parsed = message_handler_.parseFrame(frame);
-    if (!parsed.valid)
+    MessageHandler::SbusFrame sbus_frame;
+    if (!message_handler_.parseSbusFrame(frame, length, sbus_frame))
     {
+        std::cerr << "Invalid SBUS frame received" << std::endl;
         return;
     }
 
-    uint8_t msg_type = parsed.message_type;
-    uint8_t key_code = parsed.key_code;
-    uint8_t value = parsed.value;
+    last_heartbeat_ = std::chrono::steady_clock::now();
+    has_timeout_ = false;
 
-    if (msg_type == MSG_PING)
-    {
-        last_heartbeat_ = std::chrono::steady_clock::now();
-        has_timeout_ = false;
-        sendSystemStatus();
-        return;
-    }
+    // Channel 0 -> forward/backward, Channel 1 -> left/right
+    const double forward = MessageHandler::sbusToNormalized(sbus_frame.channels[0]);
+    const double turn = MessageHandler::sbusToNormalized(sbus_frame.channels[1]);
+    motor_controller_->applySbus(forward, turn);
 
-    if (msg_type == MSG_KEY)
+    if (sbus_frame.failsafe)
     {
-        if (key_code >= 1 && key_code <= 4)
-        {
-            bool desired = (value != 0);
-            std::cout << "Key event: " << KEY_NAMES[key_code - 1] << " -> "
-                      << (desired ? "pressed" : "released") << std::endl;
-            motor_controller_->setKeyState(KEY_NAMES[key_code - 1], desired);
-        }
-        return;
-    }
-
-    if (msg_type == MSG_EMERGENCY_STOP)
-    {
+        std::cout << "SBUS failsafe detected, triggering emergency stop" << std::endl;
         motor_controller_->emergencyStop();
-        return;
-    }
-
-    if (msg_type == MSG_CYCLE_THROTTLE)
-    {
-        motor_controller_->cycleThrottle();
-        return;
-    }
-
-    if (msg_type == MSG_STOP_ALL)
-    {
-        motor_controller_->stopAll();
-        return;
-    }
-
-    if (msg_type == MSG_QUIT)
-    {
-        running_ = false;
-        motor_controller_->emergencyStop();
-        std::cout << "Received quit command" << std::endl;
-        return;
+        has_timeout_ = true;
     }
 }
 
@@ -128,7 +104,6 @@ void RCClient::sendSystemStatus()
 
     bool net_ok = system_monitor_.getNetworkStats(rx_speed, tx_speed);
     bool cpu_ok = system_monitor_.getCPUUsage(cpu_usage);
-    int speed = motor_controller_->getThrottleSpeed();
 
     bool tty_service = system_monitor_.checkServiceStatus("data_track_rtc.service");
     bool rtsp_service = system_monitor_.checkServiceStatus("av_track_rtc.service");
@@ -139,7 +114,6 @@ void RCClient::sendSystemStatus()
     std::string moduleInfo = system_monitor_.gsm.getModuleInfo();
 
     std::map<std::string, std::string> statusData;
-    statusData["speed"] = std::to_string(speed);
     statusData["rx_speed"] = std::to_string(static_cast<uint16_t>(rx_speed * 100));
     statusData["tx_speed"] = std::to_string(static_cast<uint16_t>(tx_speed * 100));
     // System resources
@@ -186,5 +160,32 @@ void RCClient::resolve_hostname()
 
 void RCClient::disconnect()
 {
+    stopStatusLoop();
     running_ = false;
+}
+
+void RCClient::startStatusLoop()
+{
+    if (status_thread_running_.load())
+    {
+        return;
+    }
+
+    status_thread_running_.store(true);
+    status_thread_ = std::thread([this]() {
+        while (status_thread_running_.load())
+        {
+            sendSystemStatus();
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    });
+}
+
+void RCClient::stopStatusLoop()
+{
+    status_thread_running_.store(false);
+    if (status_thread_.joinable())
+    {
+        status_thread_.join();
+    }
 }

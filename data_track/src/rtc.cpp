@@ -241,12 +241,13 @@ shared_ptr<rtc::PeerConnection> createPeerConnection(const rtc::Configuration &c
 		dc->onMessage([id](auto data) {
 			if (global_client && global_client->getDataChannel() != nullptr) {
 				// Handle both string and binary data
-				if (std::holds_alternative<std::string>(data)) {
-					const std::string& str_data = std::get<std::string>(data);
-					global_client->parseFrame(reinterpret_cast<const uint8_t*>(str_data.data()));
-				} else {
+				if (std::holds_alternative<rtc::binary>(data)) {
 					const rtc::binary& bin_data = std::get<rtc::binary>(data);
-					global_client->parseFrame(reinterpret_cast<const uint8_t*>(bin_data.data()));
+					global_client->parseFrame(reinterpret_cast<const uint8_t*>(bin_data.data()),
+											  bin_data.size());
+				}
+				else {
+					// Text messages are currently informational only; SBUS control uses binary frames.
 				}
 			} else {
 				std::cout << "DataChannel not ready" << std::endl;
