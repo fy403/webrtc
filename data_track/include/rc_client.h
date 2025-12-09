@@ -13,26 +13,25 @@
 #include "constants.h"
 #include "rtc/rtc.hpp"
 
-class RCClient
-{
+class RCClient {
 public:
-    RCClient(const std::string &tty_port = "/dev/ttyUSB0", const std::string &gsm_port = "/dev/ttyACM0", int gsm_baudrate = 115200);
+    RCClient(const std::string &tty_port = "/dev/ttyUSB0", const std::string &gsm_port = "/dev/ttyACM0",
+             int gsm_baudrate = 115200);
+
     ~RCClient();
 
-    void run();
-    void stop();
     void parseFrame(const uint8_t *frame, size_t length);
+
+    void sendSystemStatus();
+
     void setDataChannel(std::shared_ptr<rtc::DataChannel> dc);
+
     std::shared_ptr<rtc::DataChannel> getDataChannel();
 
 private:
     MotorControllerTTY *motor_controller_;
-    std::atomic<bool> running_;
     std::atomic<bool> has_timeout_;
-    double heartbeat_timeout_;
     std::chrono::steady_clock::time_point last_heartbeat_;
-    std::atomic<bool> status_thread_running_{false};
-    std::thread status_thread_;
 
     // Data channel for WebRTC communication
     std::shared_ptr<rtc::DataChannel> data_channel_;
@@ -44,15 +43,7 @@ private:
     // Message handler
     MessageHandler message_handler_;
 
-    // Message types are defined in constants.h
-
     void sendStatusFrame(const std::map<std::string, std::string> &statusData);
-    void sendSystemStatus();
-    void heartbeatCheck();
-    void resolve_hostname();
-    void disconnect();
-    void startStatusLoop();
-    void stopStatusLoop();
 };
 
 void signalHandler(int signal);

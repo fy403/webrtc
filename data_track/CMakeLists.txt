@@ -9,26 +9,26 @@ find_package(PkgConfig REQUIRED)
 
 # Find libav libraries - SINGLE call with all required components
 pkg_check_modules(LIBAV REQUIRED
-	libavformat
-	libavcodec
-	libavutil
-	libswscale
-	libavdevice
+        libavformat
+        libavcodec
+        libavutil
+        libswscale
+        libavdevice
 )
 
 # Find libdatachannel
 find_library(LIBDATACHANNEL_LIBRARY
-	NAMES datachannel
-	PATHS /usr/local/lib
-	NO_DEFAULT_PATH
-	REQUIRED
+        NAMES datachannel
+        PATHS /usr/local/lib
+        NO_DEFAULT_PATH
+        REQUIRED
 )
 
 find_path(LIBDATACHANNEL_INCLUDE_DIR
-	NAMES rtc/rtc.h
-	PATHS /usr/local/include
-	NO_DEFAULT_PATH
-	REQUIRED
+        NAMES rtc/rtc.h
+        PATHS /usr/local/include
+        NO_DEFAULT_PATH
+        REQUIRED
 )
 
 message(STATUS "Found libdatachannel library: ${LIBDATACHANNEL_LIBRARY}")
@@ -36,45 +36,45 @@ message(STATUS "Found libav libraries: ${LIBAV_LIBRARIES}")
 
 # Add executable
 add_executable(webrtc_publisher
-	src/4g_tty.cpp
-	src/getopt.cpp
-	src/main.cpp
-	src/parse_cl.cpp
-	src/rc_client.cpp
-	src/motor_controller.cpp
-	src/system_monitor.cpp
-	src/motor_driver.cpp
-	src/throttle_levels.cpp
-	src/message_handler.cpp
-	src/rtc.cpp
+        src/4g_tty.cpp
+        src/getopt.cpp
+        src/main.cpp
+        src/parse_cl.cpp
+        src/rc_client.cpp
+        src/motor_controller.cpp
+        src/system_monitor.cpp
+        src/motor_driver.cpp
+        src/throttle_levels.cpp
+        src/message_handler.cpp
+        src/main.cpp
 )
 
 # Include directories
 target_include_directories(webrtc_publisher PRIVATE
-	${LIBAV_INCLUDE_DIRS}
-	${LIBDATACHANNEL_INCLUDE_DIR}
-	include
+        ${LIBAV_INCLUDE_DIRS}
+        ${LIBDATACHANNEL_INCLUDE_DIR}
+        include
 )
 
 # Link libraries
 target_link_libraries(webrtc_publisher
-	${LIBAV_LIBRARIES}
-	${LIBDATACHANNEL_LIBRARY}
-	ssl
-	crypto
+        ${LIBAV_LIBRARIES}
+        ${LIBDATACHANNEL_LIBRARY}
+        ssl
+        crypto
 )
 
 # Windows specific libraries
-if(WIN32)
-	target_link_libraries(webrtc_publisher
-		ws2_32
-		crypt32
-	)
-else()
-	target_link_libraries(webrtc_publisher
-		pthread
-	)
-endif()
+if (WIN32)
+    target_link_libraries(webrtc_publisher
+            ws2_32
+            crypt32
+    )
+else ()
+    target_link_libraries(webrtc_publisher
+            pthread
+    )
+endif ()
 
 # C++17 is already set globally, but you can also set it per target
 target_compile_features(webrtc_publisher PRIVATE cxx_std_17)

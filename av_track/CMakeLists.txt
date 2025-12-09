@@ -42,7 +42,6 @@ add_executable(webrtc_publisher
         src/video_capturer.cpp
         src/audio_capturer.cpp
         src/capture.cpp
-        src/encoder.cpp
         src/opus_encoder.cpp
         src/debug_utils.cpp
         src/parse_cl.cpp
@@ -66,16 +65,16 @@ target_link_libraries(webrtc_publisher
 )
 
 # Windows specific libraries
-if (WIN32)
-    target_link_libraries(webrtc_publisher
-            ws2_32
-            crypt32
-    )
-else ()
-    target_link_libraries(webrtc_publisher
-            pthread
-    )
-endif ()
+if(WIN32)
+        target_link_libraries(webrtc_publisher
+                ws2_32
+                crypt32
+        )
+else()
+        target_link_libraries(webrtc_publisher
+                pthread
+        )
+endif()
 
 # C++17 is already set globally, but you can also set it per target
 target_compile_features(webrtc_publisher PRIVATE cxx_std_17)

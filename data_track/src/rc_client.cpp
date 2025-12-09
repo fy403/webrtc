@@ -13,59 +13,30 @@
 extern RCClient *global_client;
 
 RCClient::RCClient(const std::string &tty_port, const std::string &gsm_port, int gsm_baudrate)
-    : running_(false), has_timeout_(false), heartbeat_timeout_(3.0),
-      motor_controller_(new MotorControllerTTY(tty_port)), data_channel_(nullptr),
-      system_monitor_(gsm_port, gsm_baudrate)
-{
+        : has_timeout_(false),
+          motor_controller_(new MotorControllerTTY(tty_port)), data_channel_(nullptr),
+          system_monitor_(gsm_port, gsm_baudrate) {
     last_heartbeat_ = std::chrono::steady_clock::now();
     last_status_time_ = std::chrono::steady_clock::now();
-    // resolve_hostname(); // Implementation needed
 }
 
-RCClient::~RCClient()
-{
-    stopStatusLoop();
-    disconnect();
-    if (motor_controller_)
-    {
+RCClient::~RCClient() {
+    if (motor_controller_) {
         delete motor_controller_;
     }
 }
 
-void RCClient::setDataChannel(std::shared_ptr<rtc::DataChannel> dc)
-{
+void RCClient::setDataChannel(std::shared_ptr<rtc::DataChannel> dc) {
     data_channel_ = dc;
-    if (data_channel_)
-    {
-        running_ = true;
-        startStatusLoop();
-    }
-    else
-    {
-        stopStatusLoop();
-    }
 }
-std::shared_ptr<rtc::DataChannel> RCClient::getDataChannel()
-{
+
+std::shared_ptr<rtc::DataChannel> RCClient::getDataChannel() {
     return data_channel_;
 }
 
-void RCClient::run()
-{
-    // Implementation needed
-    std::cout << "RCClient running..." << std::endl;
-}
-
-void RCClient::stop()
-{
-    running_ = false;
-}
-
-void RCClient::parseFrame(const uint8_t *frame, size_t length)
-{
+void RCClient::parseFrame(const uint8_t *frame, size_t length) {
     MessageHandler::SbusFrame sbus_frame;
-    if (!message_handler_.parseSbusFrame(frame, length, sbus_frame))
-    {
+    if (!message_handler_.parseSbusFrame(frame, length, sbus_frame)) {
         std::cerr << "Invalid SBUS frame received" << std::endl;
         return;
     }
@@ -78,28 +49,24 @@ void RCClient::parseFrame(const uint8_t *frame, size_t length)
     const double turn = MessageHandler::sbusToNormalized(sbus_frame.channels[1]);
     motor_controller_->applySbus(forward, turn);
 
-    if (sbus_frame.failsafe)
-    {
+    if (sbus_frame.failsafe) {
         std::cout << "SBUS failsafe detected, triggering emergency stop" << std::endl;
         motor_controller_->emergencyStop();
         has_timeout_ = true;
     }
 }
 
-void RCClient::sendStatusFrame(const std::map<std::string, std::string> &statusData)
-{
+void RCClient::sendStatusFrame(const std::map<std::string, std::string> &statusData) {
     std::vector<uint8_t> frame;
     message_handler_.createStatusFrame(statusData, frame);
 
     // Send data through RTC data channel if available
-    if (data_channel_)
-    {
+    if (data_channel_) {
         data_channel_->send(reinterpret_cast<const std::byte *>(frame.data()), frame.size());
     }
 }
 
-void RCClient::sendSystemStatus()
-{
+void RCClient::sendSystemStatus() {
     double rx_speed, tx_speed, cpu_usage;
 
     system_monitor_.getNetworkStats(rx_speed, tx_speed);
@@ -132,60 +99,3 @@ void RCClient::sendSystemStatus()
     sendStatusFrame(statusData);
 }
 
-void RCClient::heartbeatCheck()
-{
-    has_timeout_ = false;
-
-    while (running_)
-    {
-        auto current_time = std::chrono::steady_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(current_time - last_heartbeat_).count();
-
-        if (elapsed > heartbeat_timeout_ && !has_timeout_)
-        {
-            std::cout << "Heartbeat timeout, executing emergency stop" << std::endl;
-            motor_controller_->emergencyStop();
-            has_timeout_ = true;
-            exit(2);
-        }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    }
-}
-
-void RCClient::resolve_hostname()
-{
-    // Implementation needed
-}
-
-void RCClient::disconnect()
-{
-    stopStatusLoop();
-    running_ = false;
-}
-
-void RCClient::startStatusLoop()
-{
-    if (status_thread_running_.load())
-    {
-        return;
-    }
-
-    status_thread_running_.store(true);
-    status_thread_ = std::thread([this]() {
-        while (status_thread_running_.load())
-        {
-            sendSystemStatus();
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
-    });
-}
-
-void RCClient::stopStatusLoop()
-{
-    status_thread_running_.store(false);
-    if (status_thread_.joinable())
-    {
-        status_thread_.join();
-    }
-}
