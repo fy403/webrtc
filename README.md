@@ -188,8 +188,39 @@ arecord: set_params:1352: Sample format non available
 Available formats:
 - S16_LE
 ```
+#### 2.3 扬声器参数获取
+```shell
+root@orangepizero2:~# aplay -l
+**** List of PLAYBACK Hardware Devices ****
+card 0: audiocodec [audiocodec], device 0: CDC PCM Codec-0 [CDC PCM Codec-0]
+  Subdevices: 1/1
+  Subdevice #0: subdevice #0
+card 2: ahubhdmi [ahubhdmi], device 0: ahub_plat-i2s-hifi i2s-hifi-0 [ahub_plat-i2s-hifi i2s-hifi-0]
+  Subdevices: 1/1
+  Subdevice #0: subdevice #0
+card 3: Device [USB2.0 Device], device 0: USB Audio [USB Audio] # USB麦克风
+  Subdevices: 1/1
+  Subdevice #0: subdevice #0
+  ```
 
-#### 2.3 电机驱动器接口获取
+获取获取音频参数：采样率，音频格式，通道数
+```shell
+root@orangepizero2:~# cat /proc/asound/card3/stream0
+Generic USB2.0 Device at usb-5200400.usb-1, full speed : USB Audio
+
+Playback:
+  Status: Stop
+  Interface 2
+    Altset 1
+    Format: S16_LE
+    Channels: 2
+    Endpoint: 0x02 (2 OUT) (ADAPTIVE)
+    Rates: 48000
+    Bits: 16
+    Channel map: FL FR
+```
+
+#### 2.4 电机驱动器接口获取
 
 ```shel
 root@orangepizero2:~# ls /dev/ttyUSB*
@@ -197,7 +228,7 @@ root@orangepizero2:~# ls /dev/ttyUSB*
 ```
 
 
-#### 2.4 4G网络模块接口获取
+#### 2.5 4G网络模块接口获取
 使用RNDIS的4G模块，通常第一个以enx开头的就是4G模块的网卡。然后查看路由信息，ping测试一下上网情况。
 
 > 如果没有4G模块，直接配置开发板与电脑连接同一个WIFI也可以控制！
@@ -268,20 +299,26 @@ TARGET_PORT=8000 # 信令服务器端口
 IP_TYPE=4 # ipv4 or ipv6
 VIDEO_DEVICE="/dev/video1" # 首选摄像头设备
 VIDEO_DEVICE_BAK="/dev/video0" # 备选摄像头设备
-AUDIO_DEVICE="hw:CARD=Audio,DEV=0" # 音频设备
-SAMPLE_RATE=48000 # 音频采样率
-CHANNELS=1 # 音频通道数
-AUDIO_FORMAT="S16LE" # 音频格式
+#AUDIO_DEVICE="hw:CARD=Audio,DEV=0" # 音频设备
+#SAMPLE_RATE=48000 # 音频采样率
+#CHANNELS=1 # 音频通道数
+AUDIO_FORMAT="alsa" # 音频输入格式
 CHECK_INTERVAL=2  # Health check interval (seconds)
-CLIENT_ID="cam_id_YvgpEqD4" # 客户端ID：不填写使用随机值
+CLIENT_ID="usbcam" # 客户端ID：不填写使用随机值
 STUN_SERVER="stun.l.google.com" # STUN服务器地址
 STUN_SERVER_PORT=19302 # STUN服务器端口
-TURN_SERVER="turn.cloudflare.com" # TURN服务器地址
-TURN_SERVER_PORT=3478 # TURN服务器端口
-USER="g0xxxxxxxxxxx" # TURN服务器用户名
-PASSWD="95yyyyyyyyy" # TURN服务器密码
-RESOLUTION="1280x720" # 画面分辨率
-FPS=20 # 画面帧率
+TURN_SERVER="tx.fy403.cn"
+TURN_SERVER_PORT=3478
+USER="fy403"
+PASSWD="qwertyuiop"
+RESOLUTION="640x480" # 画面分辨率
+FPS=60 # 画面帧率
+#RESOLUTION="1280x720" # 画面分辨率
+#FPS=10 # 画面帧率
+#ADUIO_PLAYER_DEVICE="USB2.0 Device, USB Audio" # 音频播放设备
+#ADUIO_PLAYER_SAMPLE_RATE=48000 # 音频采样率
+#AUDIO_PLAYER_CHANNELS=2 # 音频通道数
+#AUDIO_PLAYER_VOLUME=1 # 音频播放音量
 ```
 同理，修改data_track/data_track_rtc.sh文件，修改如下：
 ```shell
@@ -289,14 +326,14 @@ FPS=20 # 画面帧率
 TARGET_HOST="fy403.cn" 
 TARGET_PORT=8000
 IP_TYPE=4
-USER="g0xxxxxxxxxxx"
-PASSWD="95yyyyyyyyy"
 CHECK_INTERVAL=2  # Health check interval (seconds)
-CLIENT_ID="data_id_VIH2ahfk"
+CLIENT_ID="dataTrack"
 STUN_SERVER="stun.l.google.com"
 STUN_SERVER_PORT=19302
-TURN_SERVER="turn.cloudflare.com"
+TURN_SERVER="tx.fy403.cn"
 TURN_SERVER_PORT=3478
+USER="fy403"
+PASSWD="qwertyuiop"
 TTY_PORT=/dev/ttyUSB0 # 电机驱动板usb端口
 TTY_BAUDRATE=115200 # 电机驱动板串口波特率
 GSM_PORT=/dev/ttyACM0 # 4g模块usb端口

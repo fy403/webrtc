@@ -20,10 +20,10 @@ RESOLUTION="640x480" # 画面分辨率
 FPS=60 # 画面帧率
 #RESOLUTION="1280x720" # 画面分辨率
 #FPS=10 # 画面帧率
-#ADUIO_PLAYER_DEVICE="USB2.0 Device, USB Audio"
-#ADUIO_PLAYER_SAMPLE_RATE=48000
-#AUDIO_PLAYER_CHANNELS=2
-#AUDIO_PLAYER_VOLUME=1
+#ADUIO_PLAYER_DEVICE="USB2.0 Device, USB Audio" # 音频播放设备
+#ADUIO_PLAYER_SAMPLE_RATE=48000 # 音频采样率
+#AUDIO_PLAYER_CHANNELS=2 # 音频通道数
+#AUDIO_PLAYER_VOLUME=1 # 音频播放音量
 
 # Path to font file - adjust according to your system
 FONT_FILE="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
