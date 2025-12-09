@@ -17,7 +17,7 @@ TURN_SERVER_PORT=3478
 USER="fy403"
 PASSWD="qwertyuiop"
 RESOLUTION="640x480" # 画面分辨率
-FPS=30 # 画面帧率
+FPS=60 # 画面帧率
 #RESOLUTION="1280x720" # 画面分辨率
 #FPS=10 # 画面帧率
 

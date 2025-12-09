@@ -54,7 +54,7 @@ chmod +x ./install && ./install
 ```
 
 > 默认端口是8000, 记得服务器允许防火墙TCP:8000端口流量通过。
-> 如果fy403.cn:8000还能用，那么就不用搭建信令服务器了。直接用我的就行，但是记住一定要配置唯一的`CLIENT_ID="usbcam" # 客户端ID`。【如果冲突，请自行修改】
+> 如果fy403.cn:8000还能用，那么就不用搭建信令服务器了。直接用我的就行，但是记住一定要配置唯一的`CLIENT_ID="cam_id_YvgpEqD4" # 客户端ID`。【如果冲突，请自行修改】
 
 #### 1.2 STUN/TURN服务器准备
 
@@ -273,7 +273,7 @@ SAMPLE_RATE=48000 # 音频采样率
 CHANNELS=1 # 音频通道数
 AUDIO_FORMAT="S16LE" # 音频格式
 CHECK_INTERVAL=2  # Health check interval (seconds)
-CLIENT_ID="usbcam" # 客户端ID：不填写使用随机值
+CLIENT_ID="cam_id_YvgpEqD4" # 客户端ID：不填写使用随机值
 STUN_SERVER="stun.l.google.com" # STUN服务器地址
 STUN_SERVER_PORT=19302 # STUN服务器端口
 TURN_SERVER="turn.cloudflare.com" # TURN服务器地址
@@ -292,7 +292,7 @@ IP_TYPE=4
 USER="g0xxxxxxxxxxx"
 PASSWD="95yyyyyyyyy"
 CHECK_INTERVAL=2  # Health check interval (seconds)
-CLIENT_ID="dataTrack"
+CLIENT_ID="data_id_VIH2ahfk"
 STUN_SERVER="stun.l.google.com"
 STUN_SERVER_PORT=19302
 TURN_SERVER="turn.cloudflare.com"
@@ -389,22 +389,37 @@ libdatachannel client implementing WebRTC Data Channels with WebSocket signaling
     };
 ```
 
-浏览器打开[index.html](data_track/web/index.html)等待画面和信号连接正常后，先按`f`换挡(按一次F换挡一次)，一共五档可调：
-```c++
-// Throttle levels
-const ThrottleLevel THROTTLE_LEVELS[] = {
-    {0, 0, "Stop"},
-    {1, 25, "Low speed"},
-    {2, 50, "Medium speed"},
-    {3, 75, "Fast"},
-    {4, 100, "Full speed"}
-};
-```
-通过`wsad`操作，`空格`急停。按`q`重启开发板的信号服务。
-
-如果自定义了client_id，则需要修改此处。修改后点击Send可以重新建立P2P连接
-
+浏览器打开[index.html](data_track/web/index.html)等待画面和信号连接正常后：通过`wsad`操作，`空格`急停。按`q`重启开发板的信号服务。如果自定义了client_id，则需要修改此处。修改后点击Send可以重新建立P2P连接。
 <img src="README.assets\image-20251030141913114.png" alt="image-20251030141913114" style="zoom:80%;" />
+
+或者在项目根目录(webrtc)下执行下列脚本快速设置所有存在的client_id
+```shell
+#!/bin/bash
+# 生成随机字符串
+RANDOM_CAM=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 8)
+RANDOM_DATA=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 8)
+
+echo "将 usbcam 替换为: cam_id_${RANDOM_CAM}"
+echo "将 dataTrack 替换为: data_id_${RANDOM_DATA}"
+
+# 定义要搜索的目录
+DIRS=("av_track" "data_track")
+
+# 遍历每个目录
+for dir in "${DIRS[@]}"; do
+    if [ -d "$dir" ]; then
+        echo "正在搜索目录: $dir"
+        find "$dir" -type f ! -path "*/.git/*" -exec grep -l -e "usbcam" -e "dataTrack" {} \; | while read file; do
+            # 使用sed一次性替换两个模式
+            sed -i -e "s/usbcam/cam_id_${RANDOM_CAM}/g" \
+                   -e "s/dataTrack/data_id_${RANDOM_DATA}/g" "$file"
+            echo "已处理: $file"
+        done
+    else
+        echo "警告: 目录 $dir 不存在"
+    fi
+done
+```
 
 ## 技术细节
 
