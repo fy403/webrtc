@@ -29,11 +29,36 @@ public:
     condition_.notify_one();
   }
 
+  // Blocking push to front of queue
+  void push_front(T item) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    condition_.wait(lock, [this] { return count_ < capacity_; });
+    head_ = (head_ + capacity_ - 1) % capacity_;
+    buffer_[head_] = std::move(item);
+    ++count_;
+    lock.unlock();
+    condition_.notify_one();
+  }
+
   bool try_push(T item) {
     std::unique_lock<std::mutex> lock(mutex_);
     if (count_ < capacity_) {
       buffer_[tail_] = std::move(item);
       tail_ = (tail_ + 1) % capacity_;
+      ++count_;
+      lock.unlock();
+      condition_.notify_one();
+      return true;
+    }
+    return false;
+  }
+
+  // Try to push to front of queue
+  bool try_push_front(T item) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (count_ < capacity_) {
+      head_ = (head_ + capacity_ - 1) % capacity_;
+      buffer_[head_] = std::move(item);
       ++count_;
       lock.unlock();
       condition_.notify_one();

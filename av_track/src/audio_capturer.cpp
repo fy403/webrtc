@@ -58,11 +58,11 @@ bool AudioCapturer::start() {
   av_dict_set(&options, "sample_rate",
               std::to_string(audio_params_.sample_rate).c_str(), 0);
   // 优化 ALSA 参数以减少 xrun
-  av_dict_set(&options, "thread_queue_size", "8192", 0); // 增大线程队列
+  av_dict_set(&options, "thread_queue_size", "1024", 0);
 
-  // 关键：调整缓冲区参数
-  av_dict_set(&options, "buffer_size", "16384", 0); // 增大缓冲区大小
-  av_dict_set(&options, "period_size", "1024", 0);  // 减小周期大小
+  // 关键：调整缓冲区参数以避免xrun
+  av_dict_set(&options, "period_time", "100000", 0); // 100ms周期
+  av_dict_set(&options, "buffer_time", "500000", 0); // 500ms缓冲区
 
   int ret = avformat_open_input(&format_context_, device_path.c_str(),
                                 input_format, &options);
@@ -148,6 +148,7 @@ void AudioCapturer::stop() {
 void AudioCapturer::capture_loop() {
   AVPacket *packet = av_packet_alloc();
   AVFrame *frame = av_frame_alloc();
+  static auto start_time = std::chrono::steady_clock::now();
   std::string wav_filename = "captured_audio.wav";
   // 等待 track_callback_ 被设置
   {
@@ -161,7 +162,6 @@ void AudioCapturer::capture_loop() {
     av_packet_free(&packet);
     return;
   }
-  static auto start_time = std::chrono::steady_clock::now();
   std::cout << "Capture thread started" << std::endl;
   while (is_running_) {
     if (is_paused_) {

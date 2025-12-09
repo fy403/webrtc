@@ -5,6 +5,7 @@
 #include <future>
 #include <iostream>
 
+#include "audio_player.h"
 #include "opus_encoder.h"
 #include "rtc/rtc.hpp"
 #include <algorithm>
@@ -36,7 +37,7 @@ shared_ptr<rtc::PeerConnection>
 createPeerConnection(const rtc::Configuration &config,
                      weak_ptr<rtc::WebSocket> wws, std::string id,
                      VideoCapturer *video_capturer,
-                     AudioCapturer *audio_capturer) {
+                     AudioCapturer *audio_capturer, AudioPlayer *audio_player) {
   auto pc = std::make_shared<rtc::PeerConnection>(config);
 
   pc->onGatheringStateChange([](rtc::PeerConnection::GatheringState state) {
@@ -69,6 +70,7 @@ createPeerConnection(const rtc::Configuration &config,
   static std::uniform_int_distribution<uint32_t> dis(1, 0xFFFFFFFF);
   shared_ptr<rtc::Track> video_track = nullptr;
   shared_ptr<rtc::Track> audio_track = nullptr;
+
   if (video_capturer != nullptr && video_capturer->is_running()) {
     // Create video track and add to connection
     rtc::Description::Video media("video",
@@ -106,15 +108,6 @@ createPeerConnection(const rtc::Configuration &config,
 
     // 设置轨道的媒体处理器
     video_track->setMediaHandler(packetizer);
-
-    // Note: Audio track creation is handled in the WebRTCPublisher::start()
-    // method because we need access to the audio_capturer_ member variable
-    // which is not available in this function scope.
-
-    pc->onTrack([id](std::shared_ptr<rtc::Track> track) {
-      std::cout << "Track from " << id << " received with mid \""
-                << track->mid() << "\"" << std::endl;
-    });
 
     video_track->onOpen([id, video_track, video_capturer]() {
       std::cout << "Video track to " << id << " is now open" << std::endl;
@@ -158,12 +151,10 @@ createPeerConnection(const rtc::Configuration &config,
     });
   }
 
-  // Handle audio track if audio capturer exists
   if (audio_capturer != nullptr && audio_capturer->is_running()) {
     rtc::Description::Audio audio_media("audio",
-                                        rtc::Description::Direction::SendOnly);
+                                        rtc::Description::Direction::SendRecv);
     audio_media.addOpusCodec(111); // Add Opus codec with payload type 111
-
     uint32_t audio_ssrc = dis(gen);
     std::string audio_cname = "audio_" + std::to_string(audio_ssrc);
     std::string audio_msid = "stream_" + id;
@@ -236,6 +227,33 @@ createPeerConnection(const rtc::Configuration &config,
     });
   }
 
+  // 修复音频接收逻辑
+  std::shared_ptr<rtc::Track> audioReceiver = nullptr;
+  pc->onTrack([audio_player, audioReceiver](
+                  const std::shared_ptr<rtc::Track> &track) mutable {
+    if (track->description().type() == "audio") {
+      audioReceiver = track;
+
+      // Set up the receiving pipeline
+      auto depacketizer = std::make_shared<rtc::OpusRtpDepacketizer>(48000);
+      depacketizer->addToChain(std::make_shared<rtc::RtcpReceivingSession>());
+      audioReceiver->setMediaHandler(depacketizer);
+      audioReceiver->onOpen([audioReceiver]() {
+        std::cout << "Received Audio Track from " << audioReceiver->mid()
+                  << " is now open" << std::endl;
+      });
+      audioReceiver->onClosed([audioReceiver]() {
+        std::cout << "Audio Track from " << audioReceiver->mid() << " closed"
+                  << std::endl;
+      });
+      audioReceiver->onFrame(
+          [audio_player](const rtc::binary &data, const rtc::FrameInfo &info) {
+            if (audio_player != nullptr) {
+              audio_player->receiveAudioData(data, info);
+            }
+          });
+    }
+  });
   // 通道关闭时，停止音视频捕获
   pc->onStateChange(
       [video_capturer, audio_capturer](rtc::PeerConnection::State state) {
@@ -274,6 +292,7 @@ WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Cmdline params)
   } else {
     video_capturer_ = nullptr;
   }
+
   // Initialize audio capturer if audio device is specified
   if (!params.audioDevice().empty()) {
     AudioDeviceParams audio_params;
@@ -281,12 +300,24 @@ WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Cmdline params)
     audio_params.channels = params.channels();
     audio_params.input_format = params.audioFormat();
     audio_params.sample_rate = params.sampleRate();
-
     audio_capturer_ =
         new AudioCapturer(audio_params, params.debug(), 1024, 1024);
   } else {
     audio_capturer_ = nullptr;
   }
+
+  // Initialize audio player with the specified playback device
+  if (!params.speakerDevice().empty()) {
+    AudioPlayerDeviceParams audio_params;
+    audio_params.out_channels = params.outChannels();
+    audio_params.out_device = params.speakerDevice();
+    audio_params.out_sample_rate = params.outSampleRate();
+    audio_params.volume = params.volume();
+    audio_player_ = new AudioPlayer(audio_params);
+  } else {
+    audio_player_ = nullptr;
+  }
+
   std::cout << "WebRTCPublisher init..." << std::endl;
 }
 
@@ -361,6 +392,12 @@ void WebRTCPublisher::start() {
     std::cout << "No audio device is specified" << std::endl;
   }
 
+  // 启动音频播放器
+  if (audio_player_ != nullptr) {
+    audio_player_->start();
+    std::cout << "Audio player started" << std::endl;
+  }
+
   ws_ = std::make_shared<rtc::WebSocket>();
 
   std::promise<void> wsPromise;
@@ -408,7 +445,7 @@ void WebRTCPublisher::start() {
         peerConnectionMap.erase(id);
         std::cout << "Answering to " + id << std::endl;
         pc = createPeerConnection(config, wws, id, this->video_capturer_,
-                                  this->audio_capturer_);
+                                  this->audio_capturer_, this->audio_player_);
 
       } else {
         pc = jt->second;
@@ -416,7 +453,7 @@ void WebRTCPublisher::start() {
     } else if (type == "offer") {
       std::cout << "Answering to " + id << std::endl;
       pc = createPeerConnection(config, wws, id, this->video_capturer_,
-                                this->audio_capturer_);
+                                this->audio_capturer_, this->audio_player_);
 
     } else {
       return;
@@ -477,5 +514,11 @@ void WebRTCPublisher::stop() {
     audio_capturer_->stop();
     delete audio_capturer_;
     audio_capturer_ = nullptr;
+  }
+
+  if (audio_player_ != nullptr) {
+    audio_player_->stop();
+    delete audio_player_;
+    audio_player_ = nullptr;
   }
 }

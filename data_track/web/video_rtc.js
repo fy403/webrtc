@@ -9,6 +9,8 @@ window.addEventListener('load', () => {
         ],
     };
 
+    // Add localStream variable to store the audio stream
+    let localStream;
     const peerConnectionMap = {};
     const dataChannelMap = {};
 
@@ -22,11 +24,28 @@ window.addEventListener('load', () => {
     // Initialize with "No Signal" overlay visible
     toggleNoSignalOverlay(true);
 
+    // Get local audio stream
+    async function getLocalStream() {
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: false,
+            });
+            console.log('获取本地音频流成功');
+        } catch (error) {
+            console.error('获取本地音频流失败:', error);
+        }
+    }
+
     console.log('Connecting to signaling...');
     openSignaling(url)
-        .then((ws) => {
+        .then(async (ws) => {
             console.log('WebSocket connected, signaling ready');
             updateStatus('Signaling connected');
+
+            // Get local audio stream before enabling connections
+            await getLocalStream();
+
             offerId.disabled = false;
             offerBtn.disabled = false;
             offerBtn.onclick = () => offerPeerConnection(ws, offerId.value);
@@ -180,6 +199,12 @@ window.addEventListener('load', () => {
         updateStatus(`Offering to ${id}`);
         const pc = createPeerConnection(ws, id);
 
+        // Add only audio tracks to PeerConnection (even though we captured both)
+        if (localStream) {
+            localStream.getAudioTracks().forEach(track => pc.addTrack(track, localStream));
+            console.log('Added local audio tracks to PeerConnection');
+        }
+
         // Create DataChannel
         const label = "test";
         console.log(`Creating DataChannel with label "${label}"`);
@@ -241,6 +266,7 @@ window.addEventListener('load', () => {
         pc.ontrack = (e) => {
             console.log('Received remote track:', e.track.kind, e.track.id, e.track.readyState);
 
+            // Handle both audio and video tracks from remote peer
             // 检查是否已经设置了媒体源
             if (remoteVideo.srcObject) {
                 console.log('Media source already set, adding track:', e.track.kind);
