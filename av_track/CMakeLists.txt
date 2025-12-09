@@ -42,7 +42,6 @@ add_executable(webrtc_publisher
         src/video_capturer.cpp
         src/audio_capturer.cpp
         src/capture.cpp
-        src/encoder.cpp
         src/opus_encoder.cpp
         src/debug_utils.cpp
         src/parse_cl.cpp
