@@ -34,9 +34,12 @@ find_path(LIBDATACHANNEL_INCLUDE_DIR
 
 # Find SDL2
 pkg_check_modules(SDL2 REQUIRED sdl2)
-
+# 输出详细信息用于调试
+message(STATUS "Found FFmpeg libraries:")
+message(STATUS "  LIBAV_LIBRARIES: ${LIBAV_LIBRARIES}")
+message(STATUS "  LIBAV_INCLUDE_DIRS: ${LIBAV_INCLUDE_DIRS}")
+message(STATUS "  LIBAV_LIBRARY_DIRS: ${LIBAV_LIBRARY_DIRS}")
 message(STATUS "Found libdatachannel library: ${LIBDATACHANNEL_LIBRARY}")
-message(STATUS "Found libav libraries: ${LIBAV_LIBRARIES}")
 message(STATUS "Found SDL2 libraries: ${SDL2_LIBRARIES}")
 
 # Add executable
@@ -73,16 +76,16 @@ target_link_libraries(webrtc_publisher
 )
 
 # Windows specific libraries
-if(WIN32)
-        target_link_libraries(webrtc_publisher
-                ws2_32
-                crypt32
-        )
-else()
-        target_link_libraries(webrtc_publisher
-                pthread
-        )
-endif()
+if (WIN32)
+    target_link_libraries(webrtc_publisher
+            ws2_32
+            crypt32
+    )
+else ()
+    target_link_libraries(webrtc_publisher
+            pthread
+    )
+endif ()
 
 # C++17 is already set globally, but you can also set it per target
 target_compile_features(webrtc_publisher PRIVATE cxx_std_17)

@@ -3,9 +3,14 @@ window.addEventListener('load', () => {
     const localId = randomId(4);
     const url = `ws://fy403.cn:8000/${localId}`;
     const config = {
-        iceServers: [
-            { urls: ['stun:stun.l.google.com:19302'] },
-            { urls: ['turn:tx.fy403.cn:3478?transport=udp'], username: 'fy403', credential: 'qwertyuiop' },
+        iceServers: [{
+                urls: ['stun:stun.l.google.com:19302']
+            },
+            {
+                urls: ['turn:tx.fy403.cn:3478?transport=udp'],
+                username: 'fy403',
+                credential: 'qwertyuiop'
+            },
         ],
     };
 
@@ -29,7 +34,7 @@ window.addEventListener('load', () => {
         try {
             localStream = await navigator.mediaDevices.getUserMedia({
                 audio: true,
-                video: false,
+                video: true,
             });
             console.log('获取本地音频流成功');
         } catch (error) {
