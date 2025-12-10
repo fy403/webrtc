@@ -67,11 +67,14 @@ TURN服务器可以自己搭建[搭建私有TURN服务器](turn_server/README.md
 申请后，只需要通过他提供的一个cmd命令curl获取TURN server host和username，password就行。
 
 #### 1.3 开发板依赖安装
+1.安装ffmpeg-4.4.2版本
+
+ffmpeg手动编译安装教程[Ubuntu编译FFmpeg](https://blog.csdn.net/qq_45765047/article/details/121041181)
+
+2.安装其他依赖
 
 ```shel
-sudo apt install g++ make cmake ffmpeg
-
-# 手动安装libdatachannel
+sudo apt install g++ make cmake
 git clone https://github.com/paullouisageneau/libdatachannel.git
 cd libdatachannel
 git submodule update --init --recursive
@@ -80,9 +83,6 @@ cmake ..
 make -j2
 sudo make install
 ```
-
-> ffmpeg可能安装失败，建立手动编译安装
->
 > 开发板通常是arm架构，可以换成清华的post源
 
 ### 2.设备查找
@@ -201,7 +201,7 @@ card 2: ahubhdmi [ahubhdmi], device 0: ahub_plat-i2s-hifi i2s-hifi-0 [ahub_plat-
 card 3: Device [USB2.0 Device], device 0: USB Audio [USB Audio] # USB麦克风
   Subdevices: 1/1
   Subdevice #0: subdevice #0
-  ```
+```
 
 获取获取音频参数：采样率，音频格式，通道数
 ```shell
