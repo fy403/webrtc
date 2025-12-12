@@ -19,6 +19,32 @@
 
 <iframe src="//player.bilibili.com/player.html?isOutside=true&aid=115489808323280&bvid=BV1VA1kBnEAx&cid=33681311377&page=1&high_quality=1&danmaku=0" allowfullscreen="allowfullscreen" width="100%" height="500" scrolling="no" frameborder="0" sandbox="allow-top-navigation allow-same-origin allow-forms allow-scripts"></iframe>
 
+## 项目Q&A
+
+### Q1: 如果我用的电机驱动方案不存在本项目中，如何驱动电机工作？
+A1: 可以自己实现电机驱动方案，比如使用PWM控制电机，或者使用GPIO控制电机。如果不会编写代码，可以使用CodeBuddy或者Cursor，或者VSCODE的Lingma插件，开启Agent模式。输入以下提示词，替换掉`<your_method>`为实际电机驱动方法。
+```txt
+假如你是本项目的C++开发工程师，帮我添加一个新的motor_driver：(<your_method>)，你可以查看已有的驱动编写模板代码：@include/uart_motor_driver.h @include/motor_driver.h 。
+驱动编写完成后，将其加入到@src/MotorController的构造函数中。你可以阅读整体代码，实现该功能编写。
+```
+
+例如：使用pwm控制电调：
+```markdown
+
+假如你是本项目的C++开发工程师，需要新增一个电机驱动模块。该模块通过**GPIO引脚22**输出**PWM信号**控制**电调**，其**工作频率**为**50Hz（周期20ms）**。
+
+电调初始化流程如下：
+1. 发送**中立位脉冲（1500μs）**，使舵机归中。
+2. 保持该信号**2秒**，完成电调校准（校准成功后会发出**滴滴提示音**）。
+3. 校准完成后，控制量程为 **-3500μs 至 +3500μs**（以1500μs为零点）。
+
+你可参考以下现有驱动的代码结构进行实现：
+- 接口定义：`@include/motor_driver.h`
+- 示例实现：`@include/uart_motor_driver.h`
+
+驱动开发完成后，请将其集成到 **`@src/MotorController` 的构造函数**中，并确保与现有系统兼容。建议先理解整体代码架构，再进行模块化开发。
+```
+
 ## 快速运行
 
 ### 1.依赖安装（ubuntu为例）
