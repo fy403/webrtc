@@ -1,5 +1,6 @@
 #include "motor_controller.h"
 #include "uart_motor_driver.h"
+#include "crsf_motor_driver.h"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -7,43 +8,48 @@
 #include <chrono>
 #include <cstring>
 
-MotorController::MotorController(const MotorControllerConfig &config) {
-    // 初始化电机速度
-    for (int i = 0; i < 4; i++) {
-        motor_speeds[i] = 0;
-    }
+MotorController::MotorController(const MotorControllerConfig &config)
+        : config_(config),
+          motor_driver(nullptr),
+          front_back_speed_(0),
+          left_right_speed_(0) {
 
     // 根据配置中的 motor_driver_type 创建相应的驱动实例
     if (config.motor_driver_type == "uart") {
-        motor_driver = new UartMotorDriver(config.motor_driver_port, config.motor_driver_baudrate);
-    } else {
-        std::cerr << "Unknown motor driver type: " << config.motor_driver_type << std::endl;
-        throw std::runtime_error("Unknown motor driver type");
-    }
+        motor_driver = new UartMotorDriver(config.motor_driver_port,
+                                           config.motor_driver_baudrate,
+                                           config.motor_pwm_forward_max,
+                                           config.motor_pwm_reverse_max,
+                                           config.motor_pwm_neutral,
+                                           config.motor_front_back_id,
+                                           config.motor_left_right_id);
 
-    // 尝试初始化串口驱动
-    // try
-    {
+        // 尝试初始化串口驱动
         if (!motor_driver->connect()) {
             throw std::runtime_error("Failed to connect to serial port");
         }
+    } else if (config.motor_driver_type == "crsf") {
+        motor_driver = new CRSFMotorDriver(config.motor_driver_port,
+                                           config.crsf_servo_min_pulse,
+                                           config.crsf_servo_max_pulse,
+                                           config.crsf_servo_neutral_pulse,
+                                           config.crsf_servo_min_angle,
+                                           config.crsf_servo_max_angle,
+                                           config.crsf_servo_channel,
+                                           config.crsf_esc_min_pulse,
+                                           config.crsf_esc_max_pulse,
+                                           config.crsf_esc_neutral_pulse,
+                                           config.crsf_esc_reversible,
+                                           config.crsf_esc_channel);
 
-        // 简单测试
-        std::string response;
-
-        std::cout << "=== Testing motor type setting ===" << std::endl;
-        if (motor_driver->setMotorType(4, &response)) {
-            std::cout << "Motor type set successfully. Response: " << response << std::endl;
-        } else {
-            std::cout << "Failed to set motor type." << std::endl;
-            throw std::runtime_error("Failed to set motor type.");
+        // 尝试初始化 CRSF 驱动
+        if (!motor_driver->connect()) {
+            throw std::runtime_error("Failed to connect to CRSF serial port");
         }
-        if (motor_driver->readBatteryVoltage(&response)) {
-            std::cout << "串口驱动初始化成功，电池电压: " << response << std::endl;
-        } else {
-            std::cout << "串口驱动初始化成功，但无法读取电池电压" << std::endl;
-            throw std::runtime_error("Faild to read battery params");
-        }
+        std::cout << "CRSF 驱动初始化成功" << std::endl;
+    } else {
+        std::cerr << "Unknown motor driver type: " << config.motor_driver_type << std::endl;
+        throw std::runtime_error("Unknown motor driver type");
     }
     // catch (const std::exception &e)
     //  {
@@ -53,7 +59,8 @@ MotorController::MotorController(const MotorControllerConfig &config) {
     //  }
 
     // 设置电机中位
-    setNeutral();
+    setFrontBackSpeed(0);
+    setLeftRightSpeed(0);
     // std::this_thread::sleep_for(std::chrono::seconds(2));
     std::cout << "电机控制器初始化完成，设置为中位..." << std::endl;
 }
@@ -66,60 +73,16 @@ MotorController::~MotorController() {
     }
 }
 
-void MotorController::setNeutral() {
-    if (motor_driver) {
-        motor_driver->setPWM(NEUTRAL_PWM, NEUTRAL_PWM, NEUTRAL_PWM, NEUTRAL_PWM);
-    } else {
-        std::cout << "模拟模式中位: PWM=0" << std::endl;
-    }
-
-    for (int i = 0; i < 4; i++) {
-        motor_speeds[i] = 0;
-    }
-}
-
-int16_t MotorController::speedToPWM(int speed_percent) {
-    if (speed_percent > 0) {
-        return static_cast<int16_t>((speed_percent / 100.0) * MAX_FORWARD_PWM);
-    } else if (speed_percent < 0) {
-        return static_cast<int16_t>((speed_percent / 100.0) * -MAX_REVERSE_PWM);
-    } else {
-        return NEUTRAL_PWM;
-    }
-}
-
-void MotorController::setMotorSpeed(int motor_id, int speed_percent) {
-    if (motor_id < 1 || motor_id > 4)
-        return;
-
-    int16_t pwm_value = speedToPWM(speed_percent);
-
-    // 根据说明，M2控制前进后退，M4控制左右转向
-    // 只更新目标电机，不要清零其他电机，以避免后续调用覆盖前一个轴的指令
-    if (motor_driver) {
-        motor_speeds[motor_id - 1] = pwm_value;
-        motor_driver->setPWM(motor_speeds[0], motor_speeds[1], motor_speeds[2], motor_speeds[3]);
-    }
-
-    const char *direction = "停止";
-    if (speed_percent > 0)
-        direction = "正转";
-    else if (speed_percent < 0)
-        direction = "反转";
-
-    const char *motor_function = (motor_id == MOTOR_FRONT_BACK) ? "前进" : "转向";
-    std::cout << "控制" << motor_function << "电机" << motor_id << "速度: " << speed_percent
-              << "% (PWM: " << pwm_value << ")" << std::endl;
-}
 
 void MotorController::stopAll() {
-    setNeutral();
+    setFrontBackSpeed(0);
+    setLeftRightSpeed(0);
     std::cout << "已停止所有电机" << std::endl;
 }
 
 void MotorController::printStatus() {
-    std::cout << "前进电机: " << motor_speeds[0] << "% | ";
-    std::cout << "转向电机: " << motor_speeds[1] << "%" << std::endl;
+    std::cout << "前进电机: " << front_back_speed_ << "% | ";
+    std::cout << "转向电机: " << left_right_speed_ << "%" << std::endl;
 }
 
 void MotorController::emergencyStop() {
@@ -146,7 +109,29 @@ void MotorController::applySbus(double forward, double turn) {
     const int forward_percent = to_percent(forward);
     const int turn_percent = to_percent(turn);
 
-    setMotorSpeed(MOTOR_FRONT_BACK, forward_percent);
-    setMotorSpeed(MOTOR_LEFT_RIGHT, turn_percent);
+    setFrontBackSpeed(forward_percent);
+    setLeftRightSpeed(turn_percent);
     printStatus();
+}
+
+void MotorController::setFrontBackSpeed(int speed_percent) {
+    const int clamped = std::max(-100, std::min(100, speed_percent));
+    front_back_speed_ = clamped;
+    if (motor_driver) {
+        motor_driver->setFrontBackPercent(clamped);
+    }
+    const char *direction = (clamped > 0) ? "前进" : (clamped < 0 ? "后退" : "停止");
+    std::cout << "控制前后电机速度: " << speed_percent << "% (clamped: " << clamped
+              << "%, direction: " << direction << ")" << std::endl;
+}
+
+void MotorController::setLeftRightSpeed(int speed_percent) {
+    const int clamped = std::max(-100, std::min(100, speed_percent));
+    left_right_speed_ = clamped;
+    if (motor_driver) {
+        motor_driver->setLeftRightPercent(clamped);
+    }
+    const char *direction = (clamped > 0) ? "右转" : (clamped < 0 ? "左转" : "停止");
+    std::cout << "控制转向电机速度: " << speed_percent << "% (clamped: " << clamped
+              << "%, direction: " << direction << ")" << std::endl;
 }

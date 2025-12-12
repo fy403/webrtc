@@ -44,9 +44,8 @@ add_executable(webrtc_publisher
         src/motor_controller.cpp
         src/system_monitor.cpp
         src/uart_motor_driver.cpp
-        src/throttle_levels.cpp
+        src/crsf_motor_driver.cpp
         src/message_handler.cpp
-        src/main.cpp
 )
 
 # Include directories

@@ -2,7 +2,6 @@
 #define MOTOR_CONTROLLER_H
 
 #include <string>
-#include <atomic>
 #include <chrono>
 #include <thread>
 #include "motor_driver.h"
@@ -19,8 +18,6 @@ public:
 
     ~MotorController();
 
-    void setNeutral();
-
     void stopAll();
 
     void printStatus();
@@ -29,14 +26,15 @@ public:
 
     void applySbus(double forward, double turn);
 
+    void setFrontBackSpeed(int speed_percent);
+
+    void setLeftRightSpeed(int speed_percent);
+
 private:
+    MotorControllerConfig config_;
     MotorDriver *motor_driver;
-
-    int16_t speedToPWM(int speed_percent);
-
-    std::atomic<int16_t> motor_speeds[4];
-
-    void setMotorSpeed(int motor_id, int speed_percent);
+    int front_back_speed_{0};
+    int left_right_speed_{0};
 };
 
 #endif // MOTOR_CONTROLLER_H
