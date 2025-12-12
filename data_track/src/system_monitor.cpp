@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cstring>
 
-SystemMonitor::SystemMonitor(const std::string &gsm_port, int gsm_baudrate)
+SystemMonitor::SystemMonitor()
 {
     last_net_time_ = std::chrono::steady_clock::now();
     last_cpu_time_ = std::chrono::steady_clock::now();
@@ -16,7 +16,24 @@ SystemMonitor::SystemMonitor(const std::string &gsm_port, int gsm_baudrate)
     last_tx_bytes_ = 0;
     last_total_jiffies_ = 0;
     last_work_jiffies_ = 0;
-    gsm.open(gsm_port, gsm_baudrate);
+    gsm_initialized_ = false;
+}
+
+// 初始化4G模块（可选）
+bool SystemMonitor::open_4g(const std::string &gsm_port, int gsm_baudrate)
+{
+    if (gsm_initialized_) {
+        std::cerr << "Warning: 4G module already initialized" << std::endl;
+        return true;
+    }
+    
+    if (gsm_.open(gsm_port, gsm_baudrate)) {
+        gsm_initialized_ = true;
+        return true;
+    } else {
+        std::cerr << "Failed to initialize 4G module on " << gsm_port << std::endl;
+        return false;
+    }
 }
 
 std::string SystemMonitor::executeCommand(const std::string &command)
@@ -133,4 +150,44 @@ bool SystemMonitor::checkServiceStatus(const std::string &service_name)
         std::cerr << "Failed to check service status: " << service_name << " - " << e.what() << std::endl;
         return false;
     }
+}
+
+// GSM/4G module information accessors
+std::string SystemMonitor::getSignalQuality(int timeout_ms)
+{
+    return gsm_.getSignalQuality(timeout_ms);
+}
+
+std::string SystemMonitor::getSimStatus(int timeout_ms)
+{
+    return gsm_.getSimStatus(timeout_ms);
+}
+
+std::string SystemMonitor::getNetworkRegistration(int timeout_ms)
+{
+    return gsm_.getNetworkRegistration(timeout_ms);
+}
+
+std::string SystemMonitor::getModuleInfo(int timeout_ms)
+{
+    return gsm_.getModuleInfo(timeout_ms);
+}
+
+// 一次性获取所有GSM/4G模块信息（需要先调用 open_4g）
+void SystemMonitor::getGsmInfo(std::string &signal, std::string &simStatus,
+                                std::string &network, std::string &moduleInfo,
+                                int timeout_ms)
+{
+    if (!gsm_initialized_) {
+        signal = "N/A";
+        simStatus = "N/A";
+        network = "N/A";
+        moduleInfo = "N/A";
+        return;
+    }
+    
+    signal = gsm_.getSignalQuality(timeout_ms);
+    simStatus = gsm_.getSimStatus(timeout_ms);
+    network = gsm_.getNetworkRegistration(timeout_ms);
+    moduleInfo = gsm_.getModuleInfo(timeout_ms);
 }

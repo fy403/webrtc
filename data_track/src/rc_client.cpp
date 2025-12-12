@@ -12,12 +12,22 @@
 // Global variable for signal handling
 extern RCClient *global_client;
 
-RCClient::RCClient(const std::string &tty_port, const std::string &gsm_port, int gsm_baudrate)
+RCClient::RCClient(const RCClientConfig &config)
         : has_timeout_(false),
-          motor_controller_(new MotorControllerTTY(tty_port)), data_channel_(nullptr),
-          system_monitor_(gsm_port, gsm_baudrate) {
+          // 使用配置类中的 MotorController 配置
+          motor_controller_(new MotorController(config.motor_controller_config)),
+          data_channel_(nullptr),
+          // SystemMonitor 不需要在构造函数中初始化4G模块
+          system_monitor_() {
     last_heartbeat_ = std::chrono::steady_clock::now();
     last_status_time_ = std::chrono::steady_clock::now();
+    
+    // 如果配置中指定了4G模块参数，则初始化4G模块
+    if (config.has4gConfig()) {
+        if (!system_monitor_.open_4g(config.system_monitor_gsm_port, config.system_monitor_gsm_baudrate)) {
+            std::cerr << "Warning: Failed to initialize 4G module, continuing without 4G support" << std::endl;
+        }
+    }
 }
 
 RCClient::~RCClient() {
@@ -63,7 +73,13 @@ void RCClient::sendStatusFrame(const std::map<std::string, std::string> &statusD
     // Send data through RTC data channel if available
     if (data_channel_) {
         data_channel_->send(reinterpret_cast<const std::byte *>(frame.data()), frame.size());
+    } else {
+        std::cout << "Sending status frame faild: data_channel is down!" << std::endl;
     }
+}
+
+void RCClient::stopAll() {
+    motor_controller_->stopAll();
 }
 
 void RCClient::sendSystemStatus() {
@@ -75,10 +91,8 @@ void RCClient::sendSystemStatus() {
     bool tty_service = system_monitor_.checkServiceStatus("data_track_rtc.service");
     bool rtsp_service = system_monitor_.checkServiceStatus("av_track_rtc.service");
 
-    std::string signal = system_monitor_.gsm.getSignalQuality();
-    std::string simStatus = system_monitor_.gsm.getSimStatus();
-    std::string network = system_monitor_.gsm.getNetworkRegistration();
-    std::string moduleInfo = system_monitor_.gsm.getModuleInfo();
+    std::string signal, simStatus, network, moduleInfo;
+    system_monitor_.getGsmInfo(signal, simStatus, network, moduleInfo);
 
     std::map<std::string, std::string> statusData;
     statusData["rx_speed"] = std::to_string(static_cast<uint16_t>(rx_speed * 100));

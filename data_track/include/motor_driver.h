@@ -3,60 +3,69 @@
 
 #include <string>
 #include <vector>
+#include <iostream>
 
 class MotorDriver
 {
 public:
-    MotorDriver(const std::string &port, int baudrate = 115200);
-    ~MotorDriver();
+    MotorDriver() = default;
+    virtual ~MotorDriver() = default;
 
-    bool connect();
-    void disconnect();
+    // 已使用的函数 - 纯虚函数，必须由子类实现
+    virtual bool connect() = 0;
+    virtual void disconnect() = 0;
+    virtual bool setMotorType(int type, std::string *response = nullptr) = 0;
+    virtual bool readBatteryVoltage(std::string *response = nullptr) = 0;
+    virtual void setPWM(int m1, int m2, int m3, int m4) = 0;
 
-    // 1. 配置电机类型
-    bool setMotorType(int type, std::string *response = nullptr);
+    // 未使用的函数 - 虚函数，提供默认实现（提示未实现）
+    virtual bool setDeadZone(int deadzone, std::string *response = nullptr) {
+        std::cerr << "Warning: setDeadZone() is not implemented for this motor driver type" << std::endl;
+        if (response) *response = "Not implemented";
+        return false;
+    }
 
-    // 2. 配置电机死区
-    bool setDeadZone(int deadzone, std::string *response = nullptr);
+    virtual bool setMotorLine(int lines, std::string *response = nullptr) {
+        std::cerr << "Warning: setMotorLine() is not implemented for this motor driver type" << std::endl;
+        if (response) *response = "Not implemented";
+        return false;
+    }
 
-    // 3. 配置电机相位线
-    bool setMotorLine(int lines, std::string *response = nullptr);
+    virtual bool setMotorPhase(int phase, std::string *response = nullptr) {
+        std::cerr << "Warning: setMotorPhase() is not implemented for this motor driver type" << std::endl;
+        if (response) *response = "Not implemented";
+        return false;
+    }
 
-    // 4. 配置电机减速比
-    bool setMotorPhase(int phase, std::string *response = nullptr);
+    virtual bool setWheelDiameter(int diameter, std::string *response = nullptr) {
+        std::cerr << "Warning: setWheelDiameter() is not implemented for this motor driver type" << std::endl;
+        if (response) *response = "Not implemented";
+        return false;
+    }
 
-    // 5. 配置轮子直径（可选）
-    bool setWheelDiameter(int diameter, std::string *response = nullptr);
+    virtual bool setPID(float p, float i, float d, std::string *response = nullptr) {
+        std::cerr << "Warning: setPID() is not implemented for this motor driver type" << std::endl;
+        if (response) *response = "Not implemented";
+        return false;
+    }
 
-    // 6. 配置电机控制的PID参数
-    bool setPID(float p, float i, float d, std::string *response = nullptr);
+    virtual bool resetToFactory(std::string *response = nullptr) {
+        std::cerr << "Warning: resetToFactory() is not implemented for this motor driver type" << std::endl;
+        if (response) *response = "Not implemented";
+        return false;
+    }
 
-    // 7. 恢复出厂设置
-    bool resetToFactory(std::string *response = nullptr);
+    virtual bool setEncoderUpload(bool total, bool realtime, bool speed, std::string *response = nullptr) {
+        std::cerr << "Warning: setEncoderUpload() is not implemented for this motor driver type" << std::endl;
+        if (response) *response = "Not implemented";
+        return false;
+    }
 
-    // 8. 直接控制PWM指令（替代速度控制）- 无返回
-    void setPWM(int m1, int m2, int m3, int m4);
-
-    // 9. 上报编码器数据
-    bool setEncoderUpload(bool total, bool realtime, bool speed, std::string *response = nullptr);
-
-    // 10. 查询Flash变量
-    bool readFlash(std::string *response = nullptr);
-
-    // 11. 查询电池电量
-    bool readBatteryVoltage(std::string *response = nullptr);
-
-private:
-    std::string port_;
-    int baudrate_;
-    int fd_; // 串口文件描述符
-    int error_count_; // 错误计数器
-
-    bool sendCommand(const std::string &cmd, std::string *response, int timeout_ms = 500);
-    bool openSerial();
-    void closeSerial();
-    
-    void checkErrorCount(); // 检查错误计数并根据需要退出程序
+    virtual bool readFlash(std::string *response = nullptr) {
+        std::cerr << "Warning: readFlash() is not implemented for this motor driver type" << std::endl;
+        if (response) *response = "Not implemented";
+        return false;
+    }
 };
 
 #endif // MOTOR_DRIVER_H

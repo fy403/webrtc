@@ -1,3 +1,5 @@
+#!/bin/bash
+dos2unix *
 if [ ! -d "build" ]; then
     mkdir build
 fi

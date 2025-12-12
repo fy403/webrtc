@@ -4,8 +4,8 @@ window.addEventListener('load', () => {
     const url = `ws://fy403.cn:8000/${localId}`;
     const config = {
         iceServers: [{
-                urls: ['stun:stun.l.google.com:19302']
-            },
+            urls: ['stun:stun.l.google.com:19302']
+        },
             {
                 urls: ['turn:tx.fy403.cn:3478?transport=udp'],
                 username: 'fy403',
@@ -29,12 +29,69 @@ window.addEventListener('load', () => {
     // Initialize with "No Signal" overlay visible
     toggleNoSignalOverlay(true);
 
+    // Fullscreen functionality - handle F key press
+    function toggleFullscreen() {
+        // Use video-with-overlay to include all status overlays in fullscreen
+        const videoWithOverlay = document.querySelector('.video-with-overlay');
+        if (!videoWithOverlay) {
+            console.warn('Video with overlay container not found');
+            return;
+        }
+
+        // Check if already in fullscreen (handle different browser prefixes)
+        const isFullscreen = document.fullscreenElement ||
+            document.webkitFullscreenElement ||
+            document.mozFullScreenElement ||
+            document.msFullscreenElement;
+
+        if (isFullscreen) {
+            // Exit fullscreen
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            } else if (document.mozCancelFullScreen) {
+                document.mozCancelFullScreen();
+            } else if (document.msExitFullscreen) {
+                document.msExitFullscreen();
+            }
+            console.log('Exited fullscreen');
+            updateStatus('Exited fullscreen');
+        } else {
+            // Enter fullscreen
+            if (videoWithOverlay.requestFullscreen) {
+                videoWithOverlay.requestFullscreen();
+            } else if (videoWithOverlay.webkitRequestFullscreen) {
+                videoWithOverlay.webkitRequestFullscreen();
+            } else if (videoWithOverlay.mozRequestFullScreen) {
+                videoWithOverlay.mozRequestFullScreen();
+            } else if (videoWithOverlay.msRequestFullscreen) {
+                videoWithOverlay.msRequestFullscreen();
+            }
+            console.log('Entered fullscreen');
+            updateStatus('Entered fullscreen');
+        }
+    }
+
+    // Add keyboard event listener for F key
+    window.addEventListener('keydown', (e) => {
+        // Check if F key is pressed (keyCode 70 or key 'f' or 'F')
+        if (e.key === 'f' || e.key === 'F' || e.keyCode === 70) {
+            // Don't trigger if user is typing in an input field
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+                return;
+            }
+            e.preventDefault();
+            toggleFullscreen();
+        }
+    });
+
     // Get local audio stream
     async function getLocalStream() {
         try {
             localStream = await navigator.mediaDevices.getUserMedia({
                 audio: true,
-                video: true,
+                video: false,
             });
             console.log('获取本地音频流成功');
         } catch (error) {
@@ -411,7 +468,7 @@ window.addEventListener('load', () => {
         } : {};
 
         (type == 'offer' ? pc.createOffer(options) : pc.createAnswer())
-        .then((desc) => {
+            .then((desc) => {
                 console.log(`Created ${type}:`, desc.sdp);
                 return pc.setLocalDescription(desc);
             })

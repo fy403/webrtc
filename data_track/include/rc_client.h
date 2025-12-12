@@ -12,13 +12,19 @@
 #include "message_handler.h"
 #include "constants.h"
 #include "rtc/rtc.hpp"
+#include "rc_client_config.h"
 
 class RCClient {
 public:
-    RCClient(const std::string &tty_port = "/dev/ttyUSB0", const std::string &gsm_port = "/dev/ttyACM0",
-             int gsm_baudrate = 115200);
+    /**
+     * 构造函数 - 使用配置类
+     * @param config RCClient 系统配置，包含所有子组件的配置参数
+     */
+    explicit RCClient(const RCClientConfig &config = RCClientConfig());
 
     ~RCClient();
+
+    void stopAll();
 
     void parseFrame(const uint8_t *frame, size_t length);
 
@@ -29,7 +35,7 @@ public:
     std::shared_ptr<rtc::DataChannel> getDataChannel();
 
 private:
-    MotorControllerTTY *motor_controller_;
+    MotorController *motor_controller_;
     std::atomic<bool> has_timeout_;
     std::chrono::steady_clock::time_point last_heartbeat_;
 

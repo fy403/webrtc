@@ -55,6 +55,7 @@ private:
   int _ttyBaudrate;       // 新添加的ttyBaudrate参数
   std::string _gsmPort;   // 新添加的gsmPort参数
   int _gsmBaudrate;       // 新添加的gsmBaudrate参数
+  std::string _motorDriverType; // 新添加的motorDriverType参数
 
   /* other stuff to keep track of */
   std::string _program_name;
@@ -90,6 +91,7 @@ public:
   int ttyBaudrate() const { return _ttyBaudrate; }    // 新添加的ttyBaudrate getter
   std::string gsmPort() const { return _gsmPort; }    // 新添加的gsmPort getter
   int gsmBaudrate() const { return _gsmBaudrate; }    // 新添加的gsmBaudrate getter
+  std::string motorDriverType() const { return _motorDriverType; } // 新添加的motorDriverType getter
 };
 
 #endif

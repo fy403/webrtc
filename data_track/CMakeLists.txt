@@ -43,7 +43,7 @@ add_executable(webrtc_publisher
         src/rc_client.cpp
         src/motor_controller.cpp
         src/system_monitor.cpp
-        src/motor_driver.cpp
+        src/uart_motor_driver.cpp
         src/throttle_levels.cpp
         src/message_handler.cpp
         src/main.cpp

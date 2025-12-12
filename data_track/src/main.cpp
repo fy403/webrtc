@@ -2,6 +2,7 @@
 #include "rtc/rtc.hpp"
 #include "parse_cl.h"
 #include "rc_client.h"
+#include "rc_client_config.h"
 
 #include <nlohmann/json.hpp>
 
@@ -69,11 +70,16 @@ int main(int argc, char **argv) {
         } else {
             std::cout << "Using specified client ID: " << client_id << std::endl;
         }
-        std::string tty_port = params.usbDevice();
-        std::string gsm_port = params.gsmPort();
-        int gsm_baudrate = params.gsmBaudrate();
+        // 构建 RCClient 配置对象
+        RCClientConfig rcClientConfig(
+                params.usbDevice(),              // MotorController.MotorDriver: 串口设备
+                params.motorDriverType(),         // MotorController.MotorDriver: 驱动类型
+                params.ttyBaudrate(),             // MotorController.MotorDriver: 串口波特率
+                params.gsmPort(),                 // SystemMonitor: 4G模块串口设备
+                params.gsmBaudrate()              // SystemMonitor: 4G模块串口波特率
+        );
 
-        RCClient client(tty_port, gsm_port, gsm_baudrate);
+        RCClient client(rcClientConfig);
         global_client = &client;
         // rtc 初始化
         rtc::InitLogger(rtc::LogLevel::Info);
@@ -141,7 +147,8 @@ int main(int argc, char **argv) {
 
         ws->onClosed([]() {
             std::cout << "WebSocket closed" << std::endl;
-            exit(5);
+            global_client->stopAll();
+            throw std::runtime_error("WebSocket closed");
         });
 
         ws->onMessage([&config, wws = make_weak_ptr(ws)](auto data) {
@@ -167,6 +174,13 @@ int main(int argc, char **argv) {
                 return;
 
             auto type = it->get<std::string>();
+
+            // Handle peer_close message
+            if (type == "peer_close") {
+                std::cout << "Received peer_close from " << id << ", stopping all and exiting" << std::endl;
+                global_client->stopAll();
+                throw std::runtime_error("Peer closed connection");
+            }
 
             shared_ptr<rtc::PeerConnection> pc;
             if (auto jt = peerConnectionMap.find(id); jt != peerConnectionMap.end()) {
@@ -212,10 +226,7 @@ int main(int argc, char **argv) {
 
         // 检查是否在连接建立之前收到了关闭信号
         if (g_shutdown_requested.load()) {
-            std::cout << "Shutdown requested before main loop started" << std::endl;
-            dataChannelMap.clear();
-            peerConnectionMap.clear();
-            return 0;
+            throw std::runtime_error("Shutdown requested before main loop started");
         }
 
         // 主循环 - 处理睡眠和状态更新
@@ -228,6 +239,7 @@ int main(int argc, char **argv) {
         }
 
         std::cout << "Cleaning up..." << std::endl;
+        global_client->stopAll();
         ws->close();
         dataChannelMap.clear();
         peerConnectionMap.clear();
@@ -283,6 +295,9 @@ shared_ptr<rtc::PeerConnection> createPeerConnection(const rtc::Configuration &c
 
         dc->onClosed([id]() {
             std::cout << "DataChannel from " << id << " closed" << std::endl;
+            global_client->stopAll();
+            global_client->setDataChannel(nullptr);
+            dataChannelMap.erase(id);
         });
 
         dc->onMessage([id](auto data) {

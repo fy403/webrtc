@@ -61,6 +61,7 @@ Cmdline::Cmdline(int argc, char *argv[]) // ISO C++17 not allowed: throw (std::s
           {"ttyBaudrate", required_argument, NULL, 'T'},
           {"gsmPort", required_argument, NULL, 'g'},
           {"gsmBaudrate", required_argument, NULL, 'G'},
+          {"motorDriver", required_argument, NULL, 'M'},
           {"help", no_argument, NULL, 'h'},
           {NULL, 0, NULL, 0}};
 
@@ -90,9 +91,10 @@ Cmdline::Cmdline(int argc, char *argv[]) // ISO C++17 not allowed: throw (std::s
   _ttyBaudrate = 115200;
   _gsmPort = "/dev/ttyACM0";
   _gsmBaudrate = 115200;
+  _motorDriverType = "uart"; // 默认使用 uart_motor_driver
 
   optind = 0;
-  while ((c = getopt_long(argc, argv, "s:t:w:x:u:p:U:P:i:c:dI:T:B:g:G:nehmv", long_options, &optind)) != -1)
+  while ((c = getopt_long(argc, argv, "s:t:w:x:u:p:U:P:i:c:dI:T:B:g:G:M:nehmv", long_options, &optind)) != -1)
   {
     switch (c)
     {
@@ -205,6 +207,10 @@ Cmdline::Cmdline(int argc, char *argv[]) // ISO C++17 not allowed: throw (std::s
       _gsmBaudrate = atoi(optarg);
       break;
 
+    case 'M':
+      _motorDriverType = optarg;
+      break;
+
     default:
       this->usage(EXIT_FAILURE);
     }
@@ -267,6 +273,8 @@ libdatachannel client implementing WebRTC Data Channels with WebSocket signaling
           GSM port for 4G module.\n\
    [ -G ] [ --gsmBaudrate ] (type=INTEGER, default=115200)\n\
           GSM baudrate for 4G module.\n\
+   [ -M ] [ --motorDriver ] (type=STRING, default=uart)\n\
+          Motor driver type (uart, etc.).\n\
    [ -c ] [ --client_id ] (type=STRING)\n\
           Client identifier.\n\
    [ -d ] [ --debug ] (type=FLAG)\n\
