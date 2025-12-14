@@ -104,6 +104,12 @@ void MotorController::applySbus(double forward, double turn) {
         turn = 0.0;
     }
 
+    // 当后退时，转向方向需要反转（因为车辆是倒着走的）
+    if (forward < 0) {
+        turn = -turn;
+    }
+
+
     const auto to_percent = [](double v) { return static_cast<int>(std::round(v * 100.0)); };
 
     const int forward_percent = to_percent(forward);
@@ -115,23 +121,19 @@ void MotorController::applySbus(double forward, double turn) {
 }
 
 void MotorController::setFrontBackSpeed(int speed_percent) {
-    const int clamped = std::max(-100, std::min(100, speed_percent));
-    front_back_speed_ = clamped;
+    front_back_speed_ = speed_percent;
     if (motor_driver) {
-        motor_driver->setFrontBackPercent(clamped);
+        motor_driver->setFrontBackPercent(speed_percent);
     }
-    const char *direction = (clamped > 0) ? "前进" : (clamped < 0 ? "后退" : "停止");
-    std::cout << "控制前后电机速度: " << speed_percent << "% (clamped: " << clamped
-              << "%, direction: " << direction << ")" << std::endl;
+    const char *direction = (speed_percent > 0) ? "前进" : (speed_percent < 0 ? "后退" : "停止");
+    std::cout << "控制前后电机速度: " << speed_percent << "% (direction: " << direction << ")" << std::endl;
 }
 
 void MotorController::setLeftRightSpeed(int speed_percent) {
-    const int clamped = std::max(-100, std::min(100, speed_percent));
-    left_right_speed_ = clamped;
+    left_right_speed_ = speed_percent;
     if (motor_driver) {
-        motor_driver->setLeftRightPercent(clamped);
+        motor_driver->setLeftRightPercent(speed_percent);
     }
-    const char *direction = (clamped > 0) ? "右转" : (clamped < 0 ? "左转" : "停止");
-    std::cout << "控制转向电机速度: " << speed_percent << "% (clamped: " << clamped
-              << "%, direction: " << direction << ")" << std::endl;
+    const char *direction = (speed_percent > 0) ? "右转" : (speed_percent < 0 ? "左转" : "停止");
+    std::cout << "控制转向电机速度: " << speed_percent << "% (direction: " << direction << ")" << std::endl;
 }
