@@ -15,6 +15,8 @@ public:
     std::string motor_driver_port = "/dev/ttyUSB0";
     // 电机驱动类型（例如：uart,crsf 等）
     std::string motor_driver_type = "uart";
+    // 后退时是否反转转向方向（默认：true）
+    bool reverse_turn_when_backward = true;
 
 
     // ========== UART MotorDriver 配置参数 ==========

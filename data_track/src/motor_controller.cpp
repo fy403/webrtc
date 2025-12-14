@@ -104,8 +104,8 @@ void MotorController::applySbus(double forward, double turn) {
         turn = 0.0;
     }
 
-    // 当后退时，转向方向需要反转（因为车辆是倒着走的）
-    if (forward < 0) {
+    // 当后退时，根据配置决定是否反转转向方向（因为车辆倒车时转向方向需要反转）
+    if (forward < 0 && config_.reverse_turn_when_backward) {
         turn = -turn;
     }
 
