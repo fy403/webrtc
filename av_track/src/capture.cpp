@@ -10,6 +10,12 @@
 #include <random>
 #include <sstream>
 
+#ifdef __linux__
+#include <pthread.h>
+#include <sched.h>
+#include <sys/sysinfo.h>
+#endif
+
 #include "rtc/rtc.hpp"
 
 Capture::Capture(bool debug_enabled, size_t encode_queue_capacity,
@@ -100,4 +106,32 @@ void Capture::resume_capture() {
   // 通知等待的线程，采集已恢复
   callback_cv_.notify_all();
   std::cout << "Capture resumed!!!" << std::endl;
+}
+
+int Capture::get_cpu_count() {
+#ifdef __linux__
+  return get_nprocs();
+#else
+  return 0; // 非Linux系统不支持CPU绑定
+#endif
+}
+
+void Capture::bind_thread_to_cpu(std::thread& thread, int cpu_id) {
+#ifdef __linux__
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  CPU_SET(cpu_id, &cpuset);
+  
+  pthread_t thread_handle = thread.native_handle();
+  int result = pthread_setaffinity_np(thread_handle, sizeof(cpu_set_t), &cpuset);
+  
+  if (result == 0) {
+    std::cout << "Thread bound to CPU " << cpu_id << " successfully" << std::endl;
+  } else {
+    std::cerr << "Failed to bind thread to CPU " << cpu_id << ", error: " << result << std::endl;
+  }
+#else
+  // 非Linux系统不执行绑定操作
+  std::cout << "CPU binding is only supported on Linux systems" << std::endl;
+#endif
 }

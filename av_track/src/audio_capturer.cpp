@@ -127,6 +127,17 @@ bool AudioCapturer::start() {
   encode_thread_ = std::thread(&AudioCapturer::encode_loop, this);
   send_thread_ = std::thread(&AudioCapturer::send_loop, this);
 
+  // 如果CPU数量大于等于3，则绑定线程到不同的CPU
+  int cpu_count = get_cpu_count();
+  if (cpu_count >= 3) {
+    std::cout << "Detected " << cpu_count << " CPUs, binding threads to different CPUs" << std::endl;
+    bind_thread_to_cpu(capture_thread_, 0); // 采集线程绑定到CPU 0
+    bind_thread_to_cpu(encode_thread_, 1);  // 编码线程绑定到CPU 1
+    bind_thread_to_cpu(send_thread_, 2);    // 发送线程绑定到CPU 2
+  } else {
+    std::cout << "CPU count: " << cpu_count << ", skipping CPU binding" << std::endl;
+  }
+
   std::cout << "Audio capture started successfully" << std::endl;
   return true;
 }

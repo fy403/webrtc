@@ -43,6 +43,8 @@ protected:
   virtual void capture_loop() = 0;
   virtual void encode_loop() = 0;
   virtual void send_loop() = 0;
+  void bind_thread_to_cpu(std::thread& thread, int cpu_id);
+  int get_cpu_count();
 
   bool debug_enabled_;
   std::atomic<bool> is_running_ = false;
