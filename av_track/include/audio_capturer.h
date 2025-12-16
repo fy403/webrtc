@@ -32,6 +32,7 @@ class Track;
 class AudioCapturer : public Capture {
 public:
   AudioCapturer(const AudioDeviceParams &params, bool debug_enabled = false,
+                size_t decode_queue_capacity = 512,
                 size_t encode_queue_capacity = 512,
                 size_t send_queue_capacity = 512);
   ~AudioCapturer();
@@ -41,6 +42,7 @@ public:
 
 private:
   void capture_loop() override;
+  void decode_loop() override;
   void encode_loop() override;
   void send_loop() override;
 

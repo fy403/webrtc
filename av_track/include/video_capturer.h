@@ -25,6 +25,7 @@ public:
                 bool debug_enabled = false,
                 const std::string &resolution = "640x480", int framerate = 30,
                 const std::string &video_format = "mjpeg",
+                size_t decode_queue_capacity = 512,
                 size_t encode_queue_capacity = 512,
                 size_t send_queue_capacity = 512);
   ~VideoCapturer();
@@ -33,6 +34,7 @@ public:
 
 private:
   void capture_loop() override;
+  void decode_loop() override;
   void encode_loop() override;
   void send_loop() override;
 

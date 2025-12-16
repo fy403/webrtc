@@ -18,11 +18,13 @@
 
 #include "rtc/rtc.hpp"
 
-Capture::Capture(bool debug_enabled, size_t encode_queue_capacity,
-                 size_t send_queue_capacity)
+Capture::Capture(bool debug_enabled, size_t decode_queue_capacity,
+                 size_t encode_queue_capacity, size_t send_queue_capacity)
     : debug_enabled_(debug_enabled), is_running_(false), is_paused_(false),
-      encode_queue_(encode_queue_capacity), send_queue_(send_queue_capacity) {
+      decode_queue_(decode_queue_capacity), encode_queue_(encode_queue_capacity), 
+      send_queue_(send_queue_capacity) {
   avdevice_register_all();
+  decode_queue_.set_deleter([](AVPacket *packet) { av_packet_free(&packet); });
   encode_queue_.set_deleter([](AVFrame *frame) { av_frame_free(&frame); });
   send_queue_.set_deleter([](AVPacket *packet) { av_packet_free(&packet); });
 }
@@ -50,16 +52,22 @@ void Capture::stop() {
   callback_cv_.notify_all();
 
   // 清空队列
+  decode_queue_.clear();
   encode_queue_.clear();
   send_queue_.clear();
   
   // 推送空指针以解除阻塞的消费者
+  decode_queue_.push(nullptr);
   encode_queue_.push(nullptr);
   send_queue_.push(nullptr);
 
   // 等待所有线程完成
   if (capture_thread_.joinable()) {
     capture_thread_.join();
+  }
+
+  if (decode_thread_.joinable()) {
+    decode_thread_.join();
   }
 
   if (encode_thread_.joinable()) {
@@ -71,6 +79,13 @@ void Capture::stop() {
   }
 
   // 清理队列中剩余的元素
+  while (!decode_queue_.empty()) {
+    AVPacket *packet;
+    if (decode_queue_.pop(packet)) {
+      av_packet_free(&packet);
+    }
+  }
+
   while (!encode_queue_.empty()) {
     AVFrame *frame;
     if (encode_queue_.pop(frame)) {
@@ -95,6 +110,7 @@ void Capture::pause_capture() {
   is_paused_ = true;
 
   // 清空队列
+  decode_queue_.clear();
   encode_queue_.clear();
   send_queue_.clear();
 

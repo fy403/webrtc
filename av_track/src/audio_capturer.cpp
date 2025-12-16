@@ -25,9 +25,11 @@ extern "C" {
 extern std::string av_error_string(int errnum);
 
 AudioCapturer::AudioCapturer(const AudioDeviceParams &params,
-                             bool debug_enabled, size_t encode_queue_capacity,
+                             bool debug_enabled, 
+                             size_t decode_queue_capacity,
+                             size_t encode_queue_capacity,
                              size_t send_queue_capacity)
-    : Capture(debug_enabled, encode_queue_capacity, send_queue_capacity),
+    : Capture(debug_enabled, decode_queue_capacity, encode_queue_capacity, send_queue_capacity),
       audio_params_(params) {
   avdevice_register_all();
   // Initialize Opus encoder instead of AAC
@@ -124,14 +126,16 @@ bool AudioCapturer::start() {
   is_running_ = true;
   // 等待 track_callback_ 设置后再启动采集线程
   capture_thread_ = std::thread(&AudioCapturer::capture_loop, this);
+  decode_thread_ = std::thread(&AudioCapturer::decode_loop, this);
   encode_thread_ = std::thread(&AudioCapturer::encode_loop, this);
   send_thread_ = std::thread(&AudioCapturer::send_loop, this);
 
-  // 如果CPU数量大于等于3，则绑定线程到不同的CPU
+  // 如果CPU数量大于等于4，则绑定线程到不同的CPU
   int cpu_count = get_cpu_count();
-  if (cpu_count >= 3) {
+  if (cpu_count >= 4) {
     std::cout << "Detected " << cpu_count << " CPUs, binding threads to different CPUs" << std::endl;
     bind_thread_to_cpu(capture_thread_, 0); // 采集线程绑定到CPU 0
+    bind_thread_to_cpu(decode_thread_, 3);  // 解码线程绑定到CPU 3
     bind_thread_to_cpu(encode_thread_, 1);  // 编码线程绑定到CPU 1
     bind_thread_to_cpu(send_thread_, 2);    // 发送线程绑定到CPU 2
   } else {
@@ -158,9 +162,6 @@ void AudioCapturer::stop() {
 
 void AudioCapturer::capture_loop() {
   AVPacket *packet = av_packet_alloc();
-  AVFrame *frame = av_frame_alloc();
-  static auto start_time = std::chrono::steady_clock::now();
-  std::string wav_filename = "captured_audio.wav";
   // 等待 track_callback_ 被设置
   {
     std::unique_lock<std::mutex> lock(callback_mutex_);
@@ -169,7 +170,6 @@ void AudioCapturer::capture_loop() {
   }
 
   if (!is_running_) {
-    av_frame_free(&frame);
     av_packet_free(&packet);
     return;
   }
@@ -205,56 +205,88 @@ void AudioCapturer::capture_loop() {
     }
 
     if (packet->stream_index == audio_stream_index_) {
-      ret = avcodec_send_packet(codec_context_, packet);
-      if (ret < 0) {
-        std::cerr << "avcodec_send_packet error: " << av_error_string(ret)
-                  << std::endl;
-        av_packet_unref(packet);
-        continue;
-      }
-
-      while (ret >= 0) {
-        // 解码数据包
-        ret = avcodec_receive_frame(codec_context_, frame);
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-          break;
-        } else if (ret < 0) {
-          std::cerr << "avcodec_receive_frame error: " << av_error_string(ret)
-                    << std::endl;
-          break;
-        }
+      // 将数据包放入解码队列
+      AVPacket *clone_packet = av_packet_alloc();
+      av_packet_ref(clone_packet, packet);
+      
+      // 使用非阻塞方式推入队列
+      if (!decode_queue_.try_push(clone_packet)) {
         if (debug_enabled_) {
-          auto current_time = std::chrono::steady_clock::now();
-          if (current_time - start_time <= std::chrono::seconds(10)) {
-            DebugUtils::save_raw_audio_packet(packet, wav_filename);
-          } else {
-            DebugUtils::finalize_raw_audio_file();
-          }
+          std::cout << "Audio Decode queue full, dropping packet" << std::endl;
+          std::cout << "Audio Decode queue Len: " << decode_queue_.size()
+                    << ", Capacity: " << decode_queue_.capacity()
+                    << std::endl;
         }
-
-        // 使用非阻塞方式推入队列
-        if (!encode_queue_.try_push(frame)) {
-          if (debug_enabled_) {
-            std::cout << "Audio Encode queue full, dropping audio frame"
-                      << std::endl;
-            std::cout << "Audio Encode queue Len: " << encode_queue_.size()
-                      << ", Capacity: " << encode_queue_.capacity()
-                      << std::endl;
-          }
-          av_frame_unref(frame);
-          encode_queue_.clear();
-          send_queue_.clear();
-        } else {
-          frame = av_frame_alloc();
-        }
+        av_packet_free(&clone_packet);
+        decode_queue_.clear();
+        encode_queue_.clear();
+        send_queue_.clear();
       }
     }
     av_packet_unref(packet);
   }
 
-  av_frame_free(&frame);
   av_packet_free(&packet);
 }
+
+void AudioCapturer::decode_loop() {
+  AVPacket *packet = nullptr;
+  AVFrame *frame = av_frame_alloc();
+  static auto start_time = std::chrono::steady_clock::now();
+  std::string wav_filename = "captured_audio.wav";
+  while (is_running_) {
+    decode_queue_.wait_and_pop(packet);
+    
+    if (!packet)
+      continue;
+
+    int ret = avcodec_send_packet(codec_context_, packet);
+    if (ret < 0) {
+      av_packet_free(&packet);
+      continue;
+    }
+
+    while (ret >= 0) {
+      // 解码数据包
+      ret = avcodec_receive_frame(codec_context_, frame);
+      if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+        break;
+      } else if (ret < 0) {
+        std::cerr << "avcodec_receive_frame error: " << av_error_string(ret)
+                  << std::endl;
+        break;
+      }
+      
+      if (debug_enabled_) {
+        auto current_time = std::chrono::steady_clock::now();
+        if (current_time - start_time <= std::chrono::seconds(10)) {
+          DebugUtils::save_raw_audio_packet(packet, wav_filename);
+        } else {
+          DebugUtils::finalize_raw_audio_file();
+        }
+      }
+
+      // 使用非阻塞方式推入队列
+      if (!encode_queue_.try_push(frame)) {
+        if (debug_enabled_) {
+          std::cout << "Audio Encode queue full, dropping audio frame"
+                    << std::endl;
+          std::cout << "Audio Encode queue Len: " << encode_queue_.size()
+                    << ", Capacity: " << encode_queue_.capacity()
+                    << std::endl;
+        }
+        av_frame_unref(frame);
+        encode_queue_.clear();
+        send_queue_.clear();
+      } else {
+        frame = av_frame_alloc();
+      }
+    }
+    av_packet_free(&packet);
+  }
+  av_frame_free(&frame);
+}
+
 void AudioCapturer::encode_loop() {
   AVPacket *packet = av_packet_alloc();
   AVFrame *frame = nullptr;

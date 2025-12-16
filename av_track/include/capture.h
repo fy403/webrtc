@@ -26,8 +26,8 @@ class Track;
 
 class Capture {
 public:
-  Capture(bool debug_enabled = false, size_t encode_queue_capacity = 512,
-          size_t send_queue_capacity = 512);
+  Capture(bool debug_enabled = false, size_t decode_queue_capacity = 512,
+          size_t encode_queue_capacity = 512, size_t send_queue_capacity = 512);
   virtual ~Capture();
 
   bool is_running();
@@ -41,6 +41,7 @@ public:
 
 protected:
   virtual void capture_loop() = 0;
+  virtual void decode_loop() {}
   virtual void encode_loop() = 0;
   virtual void send_loop() = 0;
   void bind_thread_to_cpu(std::thread& thread, int cpu_id);
@@ -50,6 +51,7 @@ protected:
   std::atomic<bool> is_running_ = false;
   std::atomic<bool> is_paused_ = true;
   std::thread capture_thread_;
+  std::thread decode_thread_;
   std::thread encode_thread_;
   std::thread send_thread_;
   TrackCallback track_callback_;
@@ -63,6 +65,7 @@ protected:
   std::condition_variable callback_cv_;
 
   // Queues for async processing
+  SafeQueue<AVPacket *> decode_queue_;
   SafeQueue<AVFrame *> encode_queue_;
   SafeQueue<AVPacket *> send_queue_;
 };

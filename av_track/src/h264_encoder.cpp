@@ -48,9 +48,9 @@ bool H264Encoder::open_encoder(int width, int height, int fps) {
   encoder_context_->has_b_frames = 0; // 标记流中无B帧
 
   // 码率控制：VBR运行较大波动
-  encoder_context_->bit_rate = 800000;
-  encoder_context_->rc_max_rate = 800000;
-  encoder_context_->rc_buffer_size = 800000;
+  encoder_context_->bit_rate = 1200000;
+  encoder_context_->rc_max_rate = 1200000;
+  encoder_context_->rc_buffer_size = 1200000;
 
   // 设置编码器参数
   av_opt_set(encoder_context_->priv_data, "preset", "ultrafast", 0);
@@ -58,7 +58,10 @@ bool H264Encoder::open_encoder(int width, int height, int fps) {
   av_opt_set(encoder_context_->priv_data, "crf", "29", 0);
   av_opt_set(encoder_context_->priv_data, "profile", "baseline", 0);
   encoder_context_->level = 31;
-  
+
+  // 设置4个线程用于并行编码
+  encoder_context_->thread_count = 2;
+
   std::cout << "Encoder configured with GOP size: "
             << encoder_context_->gop_size << std::endl;
 

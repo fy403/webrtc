@@ -28,9 +28,10 @@ std::string av_error_string(int errnum) {
 VideoCapturer::VideoCapturer(const std::string &device, bool debug_enabled,
                              const std::string &resolution, int framerate,
                              const std::string &video_format,
+                             size_t decode_queue_capacity,
                              size_t encode_queue_capacity,
                              size_t send_queue_capacity)
-    : Capture(debug_enabled, encode_queue_capacity, send_queue_capacity),
+    : Capture(debug_enabled, decode_queue_capacity, encode_queue_capacity, send_queue_capacity),
       device_(device), resolution_(resolution), framerate_(framerate),
       video_format_(video_format) {
   avdevice_register_all();
@@ -110,7 +111,10 @@ bool VideoCapturer::start() {
     return false;
   }
 
-  // Initialize encoder
+    // 设置4个线程用于解码
+    codec_context_->thread_count = 2;
+
+    // Initialize encoder
   if (!encoder_->open_encoder(width, height, framerate_)) {
     std::cerr << "Cannot open H.264 encoder" << std::endl;
     return false;
@@ -129,15 +133,17 @@ bool VideoCapturer::start() {
   is_running_ = true;
   // 等待 track_callback_ 设置后再启动采集线程
   capture_thread_ = std::thread(&VideoCapturer::capture_loop, this);
+  decode_thread_ = std::thread(&VideoCapturer::decode_loop, this);
   encode_thread_ = std::thread(&VideoCapturer::encode_loop, this);
   send_thread_ = std::thread(&VideoCapturer::send_loop, this);
 
-  // 如果CPU数量大于等于3，则绑定线程到不同的CPU
+  // 如果CPU数量大于等于4，则绑定线程到不同的CPU
   int cpu_count = get_cpu_count();
-  if (cpu_count >= 3) {
+  if (cpu_count >= 4) {
     std::cout << "Detected " << cpu_count << " CPUs, binding threads to different CPUs" << std::endl;
     bind_thread_to_cpu(capture_thread_, 0); // 采集线程绑定到CPU 0
-    bind_thread_to_cpu(encode_thread_, 1);  // 编码线程绑定到CPU 1
+//    bind_thread_to_cpu(decode_thread_, 3);  // 解码线程绑定到CPU 3
+//    bind_thread_to_cpu(encode_thread_, 1);  // 编码线程绑定到CPU 1
     bind_thread_to_cpu(send_thread_, 2);    // 发送线程绑定到CPU 2
   } else {
     std::cout << "CPU count: " << cpu_count << ", skipping CPU binding" << std::endl;
@@ -168,12 +174,10 @@ void VideoCapturer::stop() {
 
 void VideoCapturer::capture_loop() {
   AVPacket *packet = av_packet_alloc();
-  AVFrame *frame = av_frame_alloc();
 
   int encoder_out_fps = encoder_->get_context()->framerate.num;
   int capture_in_fps =
       format_context_->streams[video_stream_index_]->avg_frame_rate.num;
-  static int saved_count = 0;
   static int frame_counter = 0;
   int frame_drop_factor = 1; // 默认值，可以根据需要调整
   if (encoder_out_fps < capture_in_fps) {
@@ -190,7 +194,6 @@ void VideoCapturer::capture_loop() {
   }
 
   if (!is_running_) {
-    av_frame_free(&frame);
     av_packet_free(&packet);
     return;
   }
@@ -216,78 +219,111 @@ void VideoCapturer::capture_loop() {
       // 帧率控制逻辑：根据frame_drop_factor决定是否丢弃帧
       frame_counter++;
       if (frame_drop_factor > 1 && (frame_counter % frame_drop_factor) != 1) {
-        // 跳过这一帧（不进行编码）
+        // 跳过这一帧（不进行解码）
         av_packet_unref(packet);
         continue;
       }
 
-      ret = avcodec_send_packet(codec_context_, packet);
-      if (ret < 0) {
-        av_packet_unref(packet);
-        continue;
-      }
-
-      while (ret >= 0) {
-        ret = avcodec_receive_frame(codec_context_, frame);
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-          break;
-        } else if (ret < 0) {
-          break;
-        }
-
-        // 保存前几帧用于调试
+      // 将数据包放入解码队列
+      AVPacket *clone_packet = av_packet_alloc();
+      av_packet_ref(clone_packet, packet);
+      
+      // 使用非阻塞方式推入队列
+      if (!decode_queue_.try_push(clone_packet)) {
         if (debug_enabled_) {
-          static int saved_count = 0;
-          if (saved_count < 5) {
-            std::stringstream filename;
-            filename << "captured_frame_" << saved_count << "_" << frame->width
-                     << "x" << frame->height << ".ppm";
-            DebugUtils::save_frame_to_ppm(frame, filename.str());
-
-            std::stringstream yuv_filename;
-            yuv_filename << "captured_frame_" << saved_count << ".yuv";
-            DebugUtils::save_frame_to_yuv(frame, yuv_filename.str());
-
-            saved_count++;
-          }
+          std::cout << "Video Decode queue full, dropping packet" << std::endl;
+          std::cout << "Video Decode queue Len: " << decode_queue_.size()
+                    << ", Capacity: " << decode_queue_.capacity()
+                    << std::endl;
         }
-
-        // Convert frame input_format and put in encode queue
-        AVFrame *scaled_frame = av_frame_alloc();
-        scaled_frame->format = AV_PIX_FMT_YUV420P;
-        scaled_frame->width = encoder_->get_context()->width;
-        scaled_frame->height = encoder_->get_context()->height;
-
-        av_frame_get_buffer(scaled_frame, 0);
-
-        sws_scale(sws_context_, frame->data, frame->linesize, 0, frame->height,
-                  scaled_frame->data, scaled_frame->linesize);
-
-        scaled_frame->pts = frame->pts;
-
-        av_frame_unref(frame);
-        // encode_queue_.push(scaled_frame);
-        // 使用非阻塞方式推入队列
-        if (!encode_queue_.try_push(scaled_frame)) {
-          if (debug_enabled_) {
-            std::cout << "Video Encode queue full, dropping audio frame"
-                      << std::endl;
-            std::cout << "Video Encode queue Len: " << encode_queue_.size()
-                      << ", Capacity: " << encode_queue_.capacity()
-                      << std::endl;
-          }
-          av_frame_free(&scaled_frame);
-          encode_queue_.clear();
-          send_queue_.clear();
-        }
+        av_packet_free(&clone_packet);
+        decode_queue_.clear();
+        encode_queue_.clear();
+        send_queue_.clear();
       }
     }
 
     av_packet_unref(packet);
   }
 
-  av_frame_free(&frame);
   av_packet_free(&packet);
+}
+
+void VideoCapturer::decode_loop() {
+  AVFrame *frame = av_frame_alloc();
+
+  while (is_running_) {
+    AVPacket *packet = nullptr;
+
+    decode_queue_.wait_and_pop(packet);
+
+    if (!packet)
+      continue;
+
+    int ret = avcodec_send_packet(codec_context_, packet);
+    if (ret < 0) {
+      av_packet_free(&packet);
+      continue;
+    }
+
+    while (ret >= 0) {
+      ret = avcodec_receive_frame(codec_context_, frame);
+      if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+        break;
+      } else if (ret < 0) {
+        break;
+      }
+
+      // 保存前几帧用于调试
+      if (debug_enabled_) {
+        static int saved_count = 0;
+        if (saved_count < 5) {
+          std::stringstream filename;
+          filename << "captured_frame_" << saved_count << "_" << frame->width
+                   << "x" << frame->height << ".ppm";
+          DebugUtils::save_frame_to_ppm(frame, filename.str());
+
+          std::stringstream yuv_filename;
+          yuv_filename << "captured_frame_" << saved_count << ".yuv";
+          DebugUtils::save_frame_to_yuv(frame, yuv_filename.str());
+
+          saved_count++;
+        }
+      }
+
+      // Convert frame input_format and put in encode queue
+      AVFrame *scaled_frame = av_frame_alloc();
+      scaled_frame->format = AV_PIX_FMT_YUV420P;
+      scaled_frame->width = encoder_->get_context()->width;
+      scaled_frame->height = encoder_->get_context()->height;
+
+      av_frame_get_buffer(scaled_frame, 0);
+
+      sws_scale(sws_context_, frame->data, frame->linesize, 0, frame->height,
+                scaled_frame->data, scaled_frame->linesize);
+
+      scaled_frame->pts = frame->pts;
+
+      // encode_queue_.push(scaled_frame);
+      // 使用非阻塞方式推入队列
+      if (!encode_queue_.try_push(scaled_frame)) {
+        if (debug_enabled_) {
+          std::cout << "Video Encode queue full, dropping audio frame"
+                    << std::endl;
+          std::cout << "Video Encode queue Len: " << encode_queue_.size()
+                    << ", Capacity: " << encode_queue_.capacity()
+                    << std::endl;
+        }
+        av_frame_free(&scaled_frame);
+        encode_queue_.clear();
+        send_queue_.clear();
+      }
+    }
+    
+    av_packet_free(&packet);
+  }
+
+  av_frame_free(&frame);
 }
 
 void VideoCapturer::encode_loop() {
