@@ -61,6 +61,8 @@ bool H264Encoder::open_encoder(int width, int height, int fps) {
 
   // 设置4个线程用于并行编码
   encoder_context_->thread_count = 2;
+  std::cout << "H264 Encoder Using " << encoder_context_->thread_count << " threads"
+            << std::endl;
 
   std::cout << "Encoder configured with GOP size: "
             << encoder_context_->gop_size << std::endl;

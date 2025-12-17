@@ -65,6 +65,7 @@ bool VideoCapturer::start() {
   av_dict_set(&options, "input_format", video_format_.c_str(),
               0); // 使用视频输入格式参数
   // 移除 pixel_format 设置，让 ffmpeg 自动检测
+  std::cout << "Using video input format: " << video_format_ << std::endl;
   int ret = avformat_open_input(&format_context_, device_path.c_str(),
                                 input_format, &options);
   if (ret < 0) {
@@ -111,8 +112,11 @@ bool VideoCapturer::start() {
     return false;
   }
 
-    // 设置4个线程用于解码
-    codec_context_->thread_count = 2;
+  // 设置4个线程用于解码
+  codec_context_->thread_count = 2;
+
+    std::cout << "Capturer Decoder Using " << codec_context_->thread_count << " threads"
+              << std::endl;
 
     // Initialize encoder
   if (!encoder_->open_encoder(width, height, framerate_)) {
