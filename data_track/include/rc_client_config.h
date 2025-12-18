@@ -21,6 +21,11 @@ public:
     // 4G模块串口波特率（仅在 system_monitor_gsm_port 不为空时有效）
     int system_monitor_gsm_baudrate = 115200;
     
+    // ========== 失控保护配置参数 ==========
+    // Watchdog超时时间（毫秒），如果超过此时间未收到控制命令，自动停止电机
+    // 默认值：300ms，建议范围：200-500ms
+    int watchdog_timeout_ms = 300;
+    
     // 检查是否配置了4G模块
     bool has4gConfig() const { return !system_monitor_gsm_port.empty(); }
 

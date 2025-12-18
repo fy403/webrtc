@@ -69,10 +69,13 @@ window.addEventListener('load', () => {
     };
 
     let uiSpeed = 0;
+    let lastSentState = { forward: 0, turn: 0 };
+    let heartbeatInterval = null;
 
     // SBUS control pipeline
     const controllerManager = new ControllerManager((state) => {
-        dataSendSbus(state.forward || 0, state.turn || 0);
+        lastSentState = { forward: state.forward || 0, turn: state.turn || 0 };
+        dataSendSbus(lastSentState.forward, lastSentState.turn);
     });
 
     function dataSendSbus(forward, turn) {
@@ -84,6 +87,25 @@ window.addEventListener('load', () => {
             dataCurrentDataChannel.send(frame);
         } catch (e) {
             console.error('Failed to send SBUS frame', e);
+        }
+    }
+
+    // 启动心跳机制：定期发送当前状态，防止丢包导致失控
+    // 心跳间隔100ms，小于C++端watchdog超时时间（300ms），确保即使丢包也能及时恢复
+    function startHeartbeat() {
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        heartbeatInterval = setInterval(() => {
+            if (dataCurrentDataChannel && dataCurrentDataChannel.readyState === 'open') {
+                // 定期发送当前状态作为心跳，即使没有变化也发送
+                dataSendSbus(lastSentState.forward, lastSentState.turn);
+            }
+        }, 100);
+    }
+
+    function stopHeartbeat() {
+        if (heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+            heartbeatInterval = null;
         }
     }
 
@@ -143,8 +165,8 @@ window.addEventListener('load', () => {
         const {rxSpeed, txSpeed, cpuUsage, ttyService, rtspService, signalStrength, sim_status, lastUpdate} =
             dataSystemStatus;
 
-        if (dataElements.rxSpeed) dataElements.rxSpeed.textContent = `${rxSpeed.toFixed(2)} KB/s`;
-        if (dataElements.txSpeed) dataElements.txSpeed.textContent = `${txSpeed.toFixed(2)} KB/s`;
+        if (dataElements.rxSpeed) dataElements.rxSpeed.textContent = `${rxSpeed.toFixed(2)} KBit/s`;
+        if (dataElements.txSpeed) dataElements.txSpeed.textContent = `${txSpeed.toFixed(2)} KBit/s`;
         if (dataElements.cpuUsage) dataElements.cpuUsage.textContent = `${cpuUsage.toFixed(2)}%`;
         if (dataElements.serviceStatus)
             dataElements.serviceStatus.textContent = `🕹:${ttyService ? 'ON' : 'OFF'} / 🖼:${rtspService ? 'ON' : 'OFF'}`;
@@ -251,6 +273,7 @@ window.addEventListener('load', () => {
 
     // Send peer_close on page unload
     window.addEventListener('beforeunload', () => {
+        stopHeartbeat();
         dataSendPeerClose();
     });
 
@@ -380,12 +403,16 @@ window.addEventListener('load', () => {
             dataCurrentDataChannel = dc;
             dataUpdateConnStatus('connected', 'CONNECTED');
             dc.send(`Hello from ${dataLocalId}`);
+            // 启动心跳机制
+            startHeartbeat();
         };
         dc.onclose = () => {
             updateStatus(`Data channel closed with ${id}`);
             if (dataCurrentDataChannel === dc) {
                 dataCurrentDataChannel = null;
                 dataUpdateConnStatus('disconnected', 'DISCONNECTED');
+                // 停止心跳机制
+                stopHeartbeat();
             }
         };
         dc.onmessage = (ev) => {

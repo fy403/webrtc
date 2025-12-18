@@ -21,6 +21,10 @@ public:
      * @param config RCClient 系统配置，包含所有子组件的配置参数
      */
     explicit RCClient(const RCClientConfig &config = RCClientConfig());
+    
+    // 禁止拷贝构造和赋值
+    RCClient(const RCClient &) = delete;
+    RCClient &operator=(const RCClient &) = delete;
 
     ~RCClient();
 
@@ -49,7 +53,13 @@ private:
     // Message handler
     MessageHandler message_handler_;
 
+    // Watchdog for failsafe protection
+    std::atomic<bool> watchdog_running_;
+    std::thread watchdog_thread_;
+    int watchdog_timeout_ms_;
+
     void sendStatusFrame(const std::map<std::string, std::string> &statusData);
+    void watchdogLoop();
 };
 
 void signalHandler(int signal);

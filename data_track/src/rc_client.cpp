@@ -14,23 +14,35 @@ extern RCClient *global_client;
 
 RCClient::RCClient(const RCClientConfig &config)
         : has_timeout_(false),
-          // 使用配置类中的 MotorController 配置
+        // 使用配置类中的 MotorController 配置
           motor_controller_(new MotorController(config.motor_controller_config)),
           data_channel_(nullptr),
-          // SystemMonitor 不需要在构造函数中初始化4G模块
-          system_monitor_() {
+        // SystemMonitor 不需要在构造函数中初始化4G模块
+          system_monitor_(),
+          watchdog_running_(true),
+          watchdog_timeout_ms_(config.watchdog_timeout_ms) {
     last_heartbeat_ = std::chrono::steady_clock::now();
     last_status_time_ = std::chrono::steady_clock::now();
-    
+
     // 如果配置中指定了4G模块参数，则初始化4G模块
     if (config.has4gConfig()) {
         if (!system_monitor_.open_4g(config.system_monitor_gsm_port, config.system_monitor_gsm_baudrate)) {
             std::cerr << "Warning: Failed to initialize 4G module, continuing without 4G support" << std::endl;
         }
     }
+
+    // 启动watchdog线程
+    watchdog_thread_ = std::thread(&RCClient::watchdogLoop, this);
+    std::cout << "Watchdog保护已启动，超时时间: " << watchdog_timeout_ms_ << "ms" << std::endl;
 }
 
 RCClient::~RCClient() {
+    // 停止watchdog线程
+    watchdog_running_ = false;
+    if (watchdog_thread_.joinable()) {
+        watchdog_thread_.join();
+    }
+
     if (motor_controller_) {
         delete motor_controller_;
     }
@@ -52,7 +64,6 @@ void RCClient::parseFrame(const uint8_t *frame, size_t length) {
     }
 
     last_heartbeat_ = std::chrono::steady_clock::now();
-    has_timeout_ = false;
 
     // Channel 0 -> forward/backward, Channel 1 -> left/right
     const double forward = MessageHandler::sbusToNormalized(sbus_frame.channels[0]);
@@ -111,5 +122,30 @@ void RCClient::sendSystemStatus() {
     statusData["timestamp"] = std::to_string(std::time(nullptr));
     // Send system status frame
     sendStatusFrame(statusData);
+}
+
+void RCClient::watchdogLoop() {
+    while (watchdog_running_) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50)); // 每50ms检查一次
+
+        if (!watchdog_running_) {
+            break;
+        }
+
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_heartbeat_).count();
+
+        if (has_timeout_) {
+            has_timeout_ = false;
+//            std::cout << "SBUS failsafe detected, triggering emergency stop" << std::endl;
+            motor_controller_->stopAll();
+            continue;
+        }
+
+        if (elapsed > watchdog_timeout_ms_) {
+//            std::cout << "Watchdog超时检测: " << elapsed << "ms未收到控制命令，自动停止电机" << std::endl;
+            motor_controller_->stopAll();
+        }
+    }
 }
 

@@ -27,11 +27,11 @@
 						<div class="status-group">
 							<div class="status-item-inline">
 								<div class="hint">上行网速</div>
-								<div class="mono" id="txSpeed">0.00 KB/s</div>
+								<div class="mono" id="txSpeed">0.00 KBit/s</div>
 							</div>
 							<div class="status-item-inline">
 								<div class="hint">下行网速</div>
-								<div class="mono" id="rxSpeed">0.00 KB/s</div>
+								<div class="mono" id="rxSpeed">0.00 KBit/s</div>
 							</div>
 							<div class="status-item-inline">
 								<div class="hint">CPU使用率</div>
@@ -39,7 +39,7 @@
 							</div>
 						</div>
 					</div>
-					
+
 					<!-- 右侧状态面板 -->
 					<div class="status-overlay right-overlay">
 						<div class="status-group">
@@ -57,7 +57,7 @@
 							</div>
 						</div>
 					</div>
-					
+
 					<!-- 速度显示面板 -->
 					<div class="status-overlay speed-overlay">
 						<div class="speed-display">
@@ -65,7 +65,7 @@
 							<div class="speed-unit">%</div>
 						</div>
 					</div>
-					
+
 					<!-- 底部状态面板 -->
 					<div class="status-overlay bottom-overlay">
 						<div class="signal-indicator-container">
@@ -86,7 +86,7 @@
 							<div class="hint">最后更新: <span id="lastUpdate">--</span></div>
 						</div>
 					</div>
-					
+
 					<div class="video-container">
 						<video id="remoteVideo" autoplay playsinline style=";"></video>
 						<div id="noSignalOverlay" class="no-signal-overlay">
@@ -111,7 +111,7 @@
 						<button id="reconnectBtn" class="btn">重新连接</button>
 						<button id="stopAllBtn" class="btn">STOP ALL (Space)</button>
 						<button id="emgBtn" class="btn">急停 T</button>
-<!--						<button id="throttleBtn" class="btn">档位调整 F</button>-->
+						<!--						<button id="throttleBtn" class="btn">档位调整 F</button>-->
 					</div>
 				</div>
 
@@ -127,7 +127,7 @@
 					</div>
 				</div>
 			</div>
-			
+
 			<div class="card">
 				<div id="debugInfo" class="debug-info">
 					<h3>Debug Information</h3>
@@ -150,12 +150,12 @@
 		<div class="card">
 			<div class="video-controls">
 				<span class="badge">Send offer to:</span>
-				<input id="offerId" class="input mono" placeholder="remote ID" value="usbcam" />
+				<input id="offerId" class="input mono" placeholder="remote ID" value="cam_dYFh3H3kf" />
 				<button id="offerBtn" class="btn">Send</button>
 			</div>
 			<div class="video-controls">
 				<span class="badge">Send offer to:</span>
-				<input id="dataOfferId" class="input mono" placeholder="remote ID" value="dataTrack" />
+				<input id="dataOfferId" class="input mono" placeholder="remote ID" value="data_Dd8fgkoKo90" />
 				<button id="dataOfferBtn" class="btn">Send</button>
 			</div>
 		</div>
@@ -169,15 +169,15 @@ MSG_SYSTEM_STATUS=0x20 (扩展帧12字节: 3:rx_speed_H,4:rx_speed_L,5:tx_speed_
 			</pre>
 		</div> -->
 	</div>
-	
+
 	<script>
 		// 设备检测并重定向逻辑
 		function isMobileDevice() {
 			return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 		}
-		
+
 		// 页面加载完成后执行检查
-		document.addEventListener('DOMContentLoaded', function() {
+		document.addEventListener('DOMContentLoaded', function () {
 			// 如果当前不是mobile.html页面且检测到是移动设备，则跳转到mobile.html
 			if (!window.location.pathname.includes('mobile.html') && isMobileDevice()) {
 				window.location.href = 'mobile.html';
