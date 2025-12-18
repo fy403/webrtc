@@ -124,9 +124,12 @@ bool VideoCapturer::start() {
     return false;
   }
   AVCodecContext *encoder_context = encoder_->get_context();
+  encoder_out_width_ = encoder_context->width;
+  encoder_out_height_ = encoder_context->height;
+  encoder_out_pix_fmt_ = encoder_context->pix_fmt;
   sws_context_ = sws_getContext(
       codec_context_->width, codec_context_->height, codec_context_->pix_fmt,
-      encoder_context->width, encoder_context->height, encoder_context->pix_fmt,
+      encoder_out_width_, encoder_out_height_, encoder_out_pix_fmt_,
       SWS_BILINEAR, nullptr, nullptr, nullptr);
 
   if (!sws_context_) {
@@ -165,6 +168,8 @@ void VideoCapturer::stop() {
     sws_context_ = nullptr;
   }
 
+  clear_frame_pool();
+
   if (codec_context_) {
     avcodec_free_context(&codec_context_);
     codec_context_ = nullptr;
@@ -179,14 +184,33 @@ void VideoCapturer::stop() {
 void VideoCapturer::capture_loop() {
   AVPacket *packet = av_packet_alloc();
 
-  int encoder_out_fps = encoder_->get_context()->framerate.num;
-  int capture_in_fps =
-      format_context_->streams[video_stream_index_]->avg_frame_rate.num;
-  static int frame_counter = 0;
+  // 计算实际采集/编码 FPS，避免只使用 num 导致不准确
+  int encoder_out_fps = 0;
+  if (encoder_->get_context()->framerate.den != 0) {
+    encoder_out_fps = encoder_->get_context()->framerate.num /
+                      encoder_->get_context()->framerate.den;
+  }
+  AVRational avg_rate =
+      format_context_->streams[video_stream_index_]->avg_frame_rate;
+  int capture_in_fps = 0;
+  if (avg_rate.den != 0) {
+    capture_in_fps = avg_rate.num / avg_rate.den;
+  }
+
+  if (encoder_out_fps <= 0) {
+    encoder_out_fps = framerate_;
+  }
+  if (capture_in_fps <= 0) {
+    capture_in_fps = encoder_out_fps;
+  }
+
   int frame_drop_factor = 1; // 默认值，可以根据需要调整
   if (encoder_out_fps < capture_in_fps) {
-    frame_drop_factor = std::max(1, capture_in_fps / encoder_out_fps);
+    frame_drop_factor =
+        std::max(1, static_cast<int>(std::round(static_cast<double>(capture_in_fps) /
+                                                static_cast<double>(encoder_out_fps))));
   }
+  int frame_counter = 0;
   std::cout << "Capture FPS: " << capture_in_fps
             << ", Encode FPS: " << encoder_out_fps
             << ", Frame Drop Factor: " << frame_drop_factor << std::endl;
@@ -251,6 +275,7 @@ void VideoCapturer::capture_loop() {
   }
 
   av_packet_free(&packet);
+  std::cout << "Video capture stopped" << std::endl;
 }
 
 void VideoCapturer::decode_loop() {
@@ -259,13 +284,22 @@ void VideoCapturer::decode_loop() {
   while (is_running_) {
     AVPacket *packet = nullptr;
 
-    decode_queue_.wait_and_pop(packet);
+    decode_queue_.wait_pop(packet);
 
-    if (!packet)
+    // nullptr 作为结束标记，方便线程在 stop() 时优雅退出
+    if (!packet) {
+      if (!is_running_) {
+        break;
+      }
       continue;
+    }
 
     int ret = avcodec_send_packet(codec_context_, packet);
     if (ret < 0) {
+      if (debug_enabled_) {
+        std::cerr << "avcodec_send_packet failed: " << av_error_string(ret)
+                  << std::endl;
+      }
       av_packet_free(&packet);
       continue;
     }
@@ -275,6 +309,10 @@ void VideoCapturer::decode_loop() {
       if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
         break;
       } else if (ret < 0) {
+        if (debug_enabled_) {
+          std::cerr << "avcodec_receive_frame failed: " << av_error_string(ret)
+                    << std::endl;
+        }
         break;
       }
 
@@ -295,20 +333,41 @@ void VideoCapturer::decode_loop() {
         }
       }
 
-      // Convert frame input_format and put in encode queue
-      AVFrame *scaled_frame = av_frame_alloc();
-      scaled_frame->format = AV_PIX_FMT_YUV420P;
-      scaled_frame->width = encoder_->get_context()->width;
-      scaled_frame->height = encoder_->get_context()->height;
+      // 根据实际帧尺寸/像素格式检测是否需要重新创建 sws_context_
+      if (!sws_context_ || frame->width != codec_context_->width ||
+          frame->height != codec_context_->height ||
+          frame->format != codec_context_->pix_fmt) {
+        if (sws_context_) {
+          sws_freeContext(sws_context_);
+        }
+        sws_context_ = sws_getContext(
+            frame->width, frame->height, static_cast<AVPixelFormat>(frame->format),
+            encoder_out_width_, encoder_out_height_, encoder_out_pix_fmt_,
+            SWS_BILINEAR, nullptr, nullptr, nullptr);
+        if (!sws_context_) {
+          std::cerr << "Cannot recreate SwsContext for frame " << frame->width
+                    << "x" << frame->height << std::endl;
+          continue;
+        }
+      }
 
-      av_frame_get_buffer(scaled_frame, 0);
+      // Convert frame format and put in encode queue using frame pool
+      AVFrame *scaled_frame = acquire_scaled_frame();
+      if (!scaled_frame) {
+        // 如果无法从池中获取，直接跳过本帧，避免崩溃
+        if (debug_enabled_) {
+          std::cerr << "Failed to acquire scaled frame from pool, dropping frame"
+                    << std::endl;
+        }
+        continue;
+      }
 
       sws_scale(sws_context_, frame->data, frame->linesize, 0, frame->height,
                 scaled_frame->data, scaled_frame->linesize);
 
       scaled_frame->pts = frame->pts;
 
-      // encode_queue_.push(scaled_frame);
+      // encode_queue_.wait_push(scaled_frame);
       // 使用非阻塞方式推入队列
       if (!encode_queue_.try_push(scaled_frame)) {
         if (debug_enabled_) {
@@ -318,16 +377,17 @@ void VideoCapturer::decode_loop() {
                     << ", Capacity: " << encode_queue_.capacity()
                     << std::endl;
         }
-        av_frame_free(&scaled_frame);
+        release_scaled_frame(scaled_frame);
         encode_queue_.clear();
         send_queue_.clear();
       }
     }
-    
+
     av_packet_free(&packet);
   }
 
   av_frame_free(&frame);
+  std::cout << "Video Decode thread exiting" << std::endl;
 }
 
 void VideoCapturer::encode_loop() {
@@ -336,26 +396,33 @@ void VideoCapturer::encode_loop() {
   while (is_running_) {
     AVFrame *frame = nullptr;
 
-    encode_queue_.wait_and_pop(frame);
+    encode_queue_.wait_pop(frame);
 
-    if (!frame)
+    // nullptr 作为结束标记
+    if (!frame) {
+      if (!is_running_) {
+        break;
+      }
       continue;
+    }
 
     bool encoded = encoder_->encode_frame(frame, packet);
-    av_frame_free(&frame);
+    // 使用 frame pool 复用内存
+    release_scaled_frame(frame);
 
     if (encoded) {
       // Put packet in send queue
       // Clone packet for sending thread
       AVPacket *clone_packet = av_packet_alloc();
       av_packet_ref(clone_packet, packet);
-      send_queue_.push(clone_packet);
+        send_queue_.wait_push(clone_packet);
 
       av_packet_unref(packet);
     }
   }
 
   av_packet_free(&packet);
+  std::cout << "Video Encode thread exiting" << std::endl;
 }
 
 void VideoCapturer::send_loop() {
@@ -363,10 +430,15 @@ void VideoCapturer::send_loop() {
     AVPacket *packet = nullptr;
 
     // Get packet from send queue
-    send_queue_.wait_and_pop(packet);
+    send_queue_.wait_pop(packet);
 
-    if (!packet)
+    // nullptr 作为结束标记
+    if (!packet) {
+      if (!is_running_) {
+        break;
+      }
       continue;
+    }
 
     if (!is_running_) {
       av_packet_free(&packet);
@@ -383,4 +455,53 @@ void VideoCapturer::send_loop() {
 
     av_packet_free(&packet);
   }
+  std::cout << "Video Send thread exiting" << std::endl;
+}
+
+AVFrame *VideoCapturer::acquire_scaled_frame() {
+  std::lock_guard<std::mutex> lock(frame_pool_mutex_);
+  AVFrame *frame = nullptr;
+  if (!scaled_frame_pool_.empty()) {
+    frame = scaled_frame_pool_.back();
+    scaled_frame_pool_.pop_back();
+  } else {
+    frame = av_frame_alloc();
+    if (!frame) {
+      return nullptr;
+    }
+    frame->format = encoder_out_pix_fmt_;
+    frame->width = encoder_out_width_;
+    frame->height = encoder_out_height_;
+    if (av_frame_get_buffer(frame, 0) < 0) {
+      av_frame_free(&frame);
+      return nullptr;
+    }
+  }
+  // 确保数据可写
+  if (av_frame_make_writable(frame) < 0) {
+    return nullptr;
+  }
+  return frame;
+}
+
+void VideoCapturer::release_scaled_frame(AVFrame *frame) {
+  if (!frame) {
+    return;
+  }
+  std::lock_guard<std::mutex> lock(frame_pool_mutex_);
+  // 简单限制池大小，避免无限增长
+  constexpr size_t kMaxPoolSize = 32;
+  if (scaled_frame_pool_.size() < kMaxPoolSize) {
+    scaled_frame_pool_.push_back(frame);
+  } else {
+    av_frame_free(&frame);
+  }
+}
+
+void VideoCapturer::clear_frame_pool() {
+  std::lock_guard<std::mutex> lock(frame_pool_mutex_);
+  for (auto *frame : scaled_frame_pool_) {
+    av_frame_free(&frame);
+  }
+  scaled_frame_pool_.clear();
 }

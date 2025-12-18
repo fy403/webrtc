@@ -38,6 +38,11 @@ private:
   void encode_loop() override;
   void send_loop() override;
 
+  // Frame pool for scaled YUV420P frames to reduce frequent alloc/free
+  AVFrame *acquire_scaled_frame();
+  void release_scaled_frame(AVFrame *frame);
+  void clear_frame_pool();
+
   std::string device_;
   std::string resolution_;
   int framerate_;
@@ -46,6 +51,15 @@ private:
   AVCodecContext *codec_context_ = nullptr;
   SwsContext *sws_context_ = nullptr;
   int video_stream_index_ = -1;
+
+  // Cached encoder output parameters for sws_context_ and frame pool
+  int encoder_out_width_ = 0;
+  int encoder_out_height_ = 0;
+  AVPixelFormat encoder_out_pix_fmt_ = AV_PIX_FMT_YUV420P;
+
+  // A small pool of reusable scaled frames
+  std::vector<AVFrame *> scaled_frame_pool_;
+  std::mutex frame_pool_mutex_;
 
   std::shared_ptr<rtc::Track> track_;
 };

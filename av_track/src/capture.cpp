@@ -48,18 +48,13 @@ void Capture::stop() {
   is_running_ = false;
   is_paused_ = false;
 
-  // 通知所有等待的线程
+  // 通知所有等待的线程（如 capture_loop 中的条件等待）
   callback_cv_.notify_all();
 
-  // 清空队列
-  decode_queue_.clear();
-  encode_queue_.clear();
-  send_queue_.clear();
-  
-  // 推送空指针以解除阻塞的消费者
-  decode_queue_.push(nullptr);
-  encode_queue_.push(nullptr);
-  send_queue_.push(nullptr);
+  // 停止并清空各个队列，唤醒其中阻塞的线程
+  decode_queue_.stop();
+  encode_queue_.stop();
+  send_queue_.stop();
 
   // 等待所有线程完成
   if (capture_thread_.joinable()) {
@@ -76,28 +71,6 @@ void Capture::stop() {
 
   if (send_thread_.joinable()) {
     send_thread_.join();
-  }
-
-  // 清理队列中剩余的元素
-  while (!decode_queue_.empty()) {
-    AVPacket *packet;
-    if (decode_queue_.pop(packet)) {
-      av_packet_free(&packet);
-    }
-  }
-
-  while (!encode_queue_.empty()) {
-    AVFrame *frame;
-    if (encode_queue_.pop(frame)) {
-      av_frame_free(&frame);
-    }
-  }
-
-  while (!send_queue_.empty()) {
-    AVPacket *packet;
-    if (send_queue_.pop(packet)) {
-      av_packet_free(&packet);
-    }
   }
 
   // Encoder context is managed by the Encoder class

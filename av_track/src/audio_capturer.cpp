@@ -235,7 +235,7 @@ void AudioCapturer::decode_loop() {
   static auto start_time = std::chrono::steady_clock::now();
   std::string wav_filename = "captured_audio.wav";
   while (is_running_) {
-    decode_queue_.wait_and_pop(packet);
+    decode_queue_.wait_pop(packet);
     
     if (!packet)
       continue;
@@ -292,7 +292,7 @@ void AudioCapturer::encode_loop() {
   AVFrame *frame = nullptr;
 
   while (is_running_) {
-    encode_queue_.wait_and_pop(frame);
+    encode_queue_.wait_pop(frame);
     if (!frame)
       continue;
 
@@ -303,7 +303,7 @@ void AudioCapturer::encode_loop() {
 
     bool encoded = encoder_->encode_frame(frame, packet);
     if (encoded) {
-      send_queue_.push(packet);
+        send_queue_.wait_push(packet);
       packet = av_packet_alloc();
     }
     av_frame_free(&frame);
@@ -314,7 +314,7 @@ void AudioCapturer::encode_loop() {
 void AudioCapturer::send_loop() {
   AVPacket *packet = nullptr;
   while (is_running_) {
-    send_queue_.wait_and_pop(packet);
+    send_queue_.wait_pop(packet);
     if (!packet)
       continue;
 

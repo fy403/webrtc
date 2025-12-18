@@ -221,7 +221,7 @@ void AudioPlayer::audioCallback(Uint8 *stream, int len) {
   float volume_scale = volume_.load();
 
   AVFrame *frame = nullptr;
-  if (!audio_sample_queue_.pop(frame)) {
+  if (!audio_sample_queue_.try_pop(frame)) {
     // 队列为空，跳出循环
     return;
   }
@@ -303,7 +303,7 @@ void AudioPlayer::decodeThread() {
   while (running_) {
     AVPacket *packet = nullptr;
     // 使用带超时的等待，避免线程无法及时退出
-    decode_queue_.wait_and_pop(packet);
+    decode_queue_.wait_pop(packet);
 
     if (!running_) {
       if (packet)
