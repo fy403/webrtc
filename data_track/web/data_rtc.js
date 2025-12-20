@@ -5,9 +5,14 @@ window.addEventListener('load', () => {
     const dataLocalId = dataRandomId(5);
     const dataUrl = `ws://fy403.cn:8000/${dataLocalId}`;
     const dataConfig = {
-        iceServers: [
-            {urls: ['stun:stun.l.google.com:19302']},
-            {urls: ['turn:tx.fy403.cn:3478?transport=udp'], username: 'fy403', credential: 'qwertyuiop'},
+        iceServers: [{
+            urls: ['stun:stun.l.google.com:19302']
+        },
+            {
+                urls: ['turn:tx.fy403.cn:3478?transport=udp'],
+                username: 'fy403',
+                credential: 'qwertyuiop'
+            },
         ],
     };
 
