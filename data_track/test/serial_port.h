@@ -118,7 +118,7 @@ public:
         if (ioctl(fd, TCGETS2, &verify_tty) == 0) {
             if (verify_tty.c_ispeed != CRSF_BAUDRATE || verify_tty.c_ospeed != CRSF_BAUDRATE) {
                 std::cerr << "警告: CRSF波特率设置验证失败！" << std::endl;
-                std::cerr << "期望: " << CRSF_BAUDRATE << ", 实际输入: " << verify_tty.c_ispeed 
+                std::cerr << "期望: " << CRSF_BAUDRATE << ", 实际输入: " << verify_tty.c_ispeed
                           << ", 实际输出: " << verify_tty.c_ospeed << std::endl;
             } else {
                 std::cout << "CRSF波特率设置验证成功: " << verify_tty.c_ispeed << " bps" << std::endl;
@@ -142,14 +142,14 @@ public:
 
         ssize_t written = write(fd, data, length);
         if (written != static_cast<ssize_t>(length)) {
-            std::cerr << "[ERROR] 写入数据不完整: 期望=" << length 
+            std::cerr << "[ERROR] 写入数据不完整: 期望=" << length
                       << "字节, 实际=" << written << "字节" << std::endl;
             return false;
         }
-        
+
         // 确保数据发送完成
         tcdrain(fd);
-        
+
         return true;
     }
 
@@ -181,7 +181,7 @@ public:
             std::cerr << "无法读取串口属性进行验证: " << strerror(errno) << std::endl;
             return false;
         }
-        std::cout << "当前CRSF波特率设置 - 输入: " << tty.c_ispeed 
+        std::cout << "当前CRSF波特率设置 - 输入: " << tty.c_ispeed
                   << " bps, 输出: " << tty.c_ospeed << " bps" << std::endl;
         if (tty.c_cflag & BOTHER) {
             std::cout << "使用自定义波特率模式 (BOTHER)" << std::endl;

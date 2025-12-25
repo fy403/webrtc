@@ -2,7 +2,7 @@ window.addEventListener('load', () => {
 
     const localId = randomId(4);
     const url = `ws://fy403.cn:8000/${localId}`;
-    
+
     // ========== 优化配置：低延迟 WebRTC ==========
     const config = {
         iceServers: [{
@@ -36,7 +36,7 @@ window.addEventListener('load', () => {
     // ========== 性能优化模块 ==========
     // 使用独立的优化类
     const PerformanceOptimizer = new WebRTCOptimizer(remoteVideo);
-    
+
     // 初始化性能优化器
     PerformanceOptimizer.init();
 
@@ -303,13 +303,13 @@ window.addEventListener('load', () => {
 
             try {
                 const receiver = transceiver.receiver;
-                
+
                 // 检查 getParameters 方法是否存在
                 if (typeof receiver.getParameters !== 'function') {
                     // 静默返回，依赖 SDP 优化
                     return;
                 }
-                
+
                 const parameters = receiver.getParameters();
 
                 console.log('=======parameters:', parameters);
@@ -350,7 +350,7 @@ window.addEventListener('load', () => {
                     hasDelayParams = true;
                     console.log('Setting minPlayoutDelay to 30ms');
                 }
-                
+
                 // 设置最大播放延迟
                 if (parameters.maxPlayoutDelay !== undefined) {
                     parameters.maxPlayoutDelay = 0.1; // 100ms（秒为单位）
@@ -359,9 +359,9 @@ window.addEventListener('load', () => {
                 }
 
                 // 只有在有可修改的参数时才调用 setParameters
-                const hasModifications = parameters.degradationPreference !== undefined || 
-                                       hasDelayParams || 
-                                       (parameters.encodings && parameters.encodings.length > 0);
+                const hasModifications = parameters.degradationPreference !== undefined ||
+                    hasDelayParams ||
+                    (parameters.encodings && parameters.encodings.length > 0);
 
                 if (hasModifications) {
                     receiver.setParameters(parameters).then(() => {
@@ -437,12 +437,12 @@ window.addEventListener('load', () => {
                 if (e.transceiver) {
                     // 立即配置
                     configureLowLatency(e.transceiver);
-                    
+
                     // 延迟再次配置（确保参数已完全初始化）
                     setTimeout(() => {
                         configureLowLatency(e.transceiver);
                     }, 500);
-                    
+
                     // 再次延迟配置（某些浏览器需要多次尝试）
                     setTimeout(() => {
                         configureLowLatency(e.transceiver);
@@ -456,10 +456,10 @@ window.addEventListener('load', () => {
                         const params = receiver.getParameters();
                         if (params && params.codecs) {
                             console.log('Available codecs:', params.codecs.map(c => c.mimeType));
-                            
+
                             // 如果支持硬件解码，优先选择硬件编解码器
                             if (PerformanceOptimizer.preferredCodec) {
-                                const preferredCodec = params.codecs.find(c => 
+                                const preferredCodec = params.codecs.find(c =>
                                     c.mimeType.includes(PerformanceOptimizer.preferredCodec) ||
                                     PerformanceOptimizer.preferredCodec.includes(c.mimeType)
                                 );
@@ -468,7 +468,7 @@ window.addEventListener('load', () => {
                                 }
                             }
                         }
-                        
+
                         // 尝试直接设置播放延迟（如果 API 支持）
                         if (params) {
                             // 某些浏览器可能支持直接设置
@@ -517,6 +517,9 @@ window.addEventListener('load', () => {
 
             // ========== 视频轨道特殊优化 ==========
             if (e.track.kind === 'video') {
+                // 设置 peer connection 到优化器
+                PerformanceOptimizer.setPeerConnection(pc);
+
                 // 应用缓冲区最小化
                 PerformanceOptimizer.adaptBufferSize();
             }
@@ -630,66 +633,66 @@ window.addEventListener('load', () => {
         (type == 'offer' ? pc.createOffer(options) : pc.createAnswer())
             .then((desc) => {
                 // console.log(`Created ${type}:`, desc.sdp);
-                
+
                 // ========== SDP 优化：低延迟配置 ==========
                 // 修改 SDP 以优化延迟
                 if (desc.sdp) {
                     let sdp = desc.sdp;
-                    
+
                     // ========== 关键优化：降低抖动缓冲区延迟 ==========
                     // 添加 Google 特定的播放延迟控制（Chrome/Edge 支持）
                     // 目标：将 jitter buffer 延迟从 226ms 降低到 30-50ms
-                    
+
                     // 查找视频媒体行（m=video）
                     const videoMediaMatch = sdp.match(/m=video\s+\d+\s+[^\r\n]+/);
                     if (videoMediaMatch) {
                         const videoMediaLine = videoMediaMatch[0];
                         const videoMediaIndex = sdp.indexOf(videoMediaLine);
-                        
+
                         // 在视频媒体行后查找第一个属性行
                         let insertPosition = sdp.indexOf('\r\n', videoMediaIndex) + 2;
-                        
+
                         // 检查是否已存在播放延迟设置
-                        if (!sdp.includes('x-google-min-playout-delay-ms') && 
+                        if (!sdp.includes('x-google-min-playout-delay-ms') &&
                             !sdp.includes('x-google-max-playout-delay-ms')) {
-                            
+
                             // 插入最小播放延迟（30ms）
                             const minDelayLine = 'a=x-google-min-playout-delay-ms:20\r\n';
                             // 插入最大播放延迟（100ms）
                             const maxDelayLine = 'a=x-google-max-playout-delay-ms:50\r\n';
-                            
+
                             // 在视频媒体行后插入延迟设置
-                            sdp = sdp.slice(0, insertPosition) + 
-                                  minDelayLine + 
-                                  maxDelayLine + 
-                                  sdp.slice(insertPosition);
-                            
+                            sdp = sdp.slice(0, insertPosition) +
+                                minDelayLine +
+                                maxDelayLine +
+                                sdp.slice(insertPosition);
+
                             console.log('Added jitter buffer delay control to SDP (20-50ms)');
                         }
                     }
-                    
+
                     // 优先使用硬件编解码器
                     if (PerformanceOptimizer.preferredCodec) {
                         // 重新排序编解码器，将首选编解码器放在前面
-                        const codecPattern = PerformanceOptimizer.preferredCodec.includes('h264') ? 
+                        const codecPattern = PerformanceOptimizer.preferredCodec.includes('h264') ?
                             /(a=rtpmap:\d+ (h264|H264)[^\r\n]*)/g :
                             /(a=rtpmap:\d+ (vp8|VP8)[^\r\n]*)/g;
-                        
+
                         // 这里可以添加 SDP 修改逻辑（如果需要）
                         console.log('Applying preferred codec optimization');
                     }
-                    
+
                     // 添加低延迟标志（某些浏览器支持）
                     // 对于视频会议场景，可以添加 conference 标志
                     if (type === 'offer' && !sdp.includes('x-google-flag:conference')) {
                         // 在视频媒体描述中添加低延迟标志
-                        sdp = sdp.replace(/(m=video[^\r\n]+\r\n)/, 
+                        sdp = sdp.replace(/(m=video[^\r\n]+\r\n)/,
                             '$1a=x-google-flag:conference\r\n');
                     }
-                    
+
                     desc.sdp = sdp;
                 }
-                
+
                 return pc.setLocalDescription(desc);
             })
             .then(() => {
@@ -776,7 +779,7 @@ window.addEventListener('load', () => {
     // setInterval(() => {
     //     if (remoteVideo.srcObject) {
     //         updateVideoInfo(remoteVideo.srcObject);
-            
+
     //         // ========== 性能监控输出 ==========
     //         const metrics = PerformanceOptimizer.getMetrics();
     //         if (metrics.totalLatency > 0) {
@@ -791,24 +794,93 @@ window.addEventListener('load', () => {
     // }, 2000);
 
     // ========== 自适应优化：根据性能调整 ==========
-    setInterval(() => {
-        if (!remoteVideo || !remoteVideo.srcObject) return;
-        
-        const metrics = PerformanceOptimizer.getMetrics();
-        
-        // 如果总延迟过高，采取应急措施
-        if (metrics.totalLatency > 150) {
-            console.warn('High latency detected, applying emergency optimizations');
-            
-            // 可以在这里添加应急优化措施
-            // 例如：降低分辨率、增加缓冲区等
-            PerformanceOptimizer.adaptBufferSize(100, 0.05); // 增加缓冲区以抗抖动
-        } 
-        // 如果延迟很低，可以尝试更激进的优化
-        else if (metrics.totalLatency < 80) {
-            // 可以在这里添加更多优化措施
+    let adaptiveOptimizationInterval = null;
+
+    function startAdaptiveOptimization() {
+        // 如果已经在运行，先停止
+        if (adaptiveOptimizationInterval) {
+            clearInterval(adaptiveOptimizationInterval);
         }
-    }, 5000);
+
+        adaptiveOptimizationInterval = setInterval(async () => {
+            if (!remoteVideo || !remoteVideo.srcObject) return;
+
+            // 获取所有活跃的 peer connections
+            const activeConnections = Object.values(peerConnectionMap).filter(
+                pc => pc && pc.connectionState === 'connected'
+            );
+
+            if (activeConnections.length === 0) return;
+
+            // 使用第一个活跃连接
+            const pc = activeConnections[0];
+
+            // 设置 peer connection 到优化器
+            PerformanceOptimizer.setPeerConnection(pc);
+
+            // 从 WebRTC stats 更新性能指标
+            const metrics = await PerformanceOptimizer.getMetrics(true);
+
+            // ========== 自适应优化策略 ==========
+
+            // 策略 1: 高延迟处理（> 150ms）
+            if (metrics.totalPlaybackDelay > 150) {
+                console.warn('⚠️ 高延迟检测:', {
+                    '总延迟': metrics.totalPlaybackDelay.toFixed(2) + 'ms',
+                    '抖动缓冲': metrics.avgJitterBufferDelay.toFixed(2) + 'ms',
+                    '视频缓冲': metrics.videoBufferDelay.toFixed(2) + 'ms',
+                    '解码延迟': metrics.avgDecodeTime.toFixed(2) + 'ms'
+                });
+
+                // 如果抖动缓冲区延迟过高，增加缓冲区以抗抖动
+                if (metrics.avgJitterBufferDelay > 50) {
+                    PerformanceOptimizer.adaptBufferSize(100, metrics.packetLossRate);
+                    console.log('📈 应用抗抖动模式：增加缓冲区');
+                }
+
+                // 如果视频元素缓冲过大，尝试减小
+                if (metrics.videoBufferDelay > 200) {
+                    console.log('📉 视频元素缓冲过大，TODO：尝试优化');
+                    // 可以尝试调整播放速率或跳过缓冲
+                }
+            }
+            // 策略 2: 低延迟优化（< 80ms）- 可以更激进
+            else if (metrics.totalPlaybackDelay < 80) {
+                // 如果延迟很低且网络稳定，可以进一步优化
+                if (metrics.packetLossRate < 0.01 && metrics.avgJitterBufferDelay < 30) {
+                    PerformanceOptimizer.adaptBufferSize(30, 0);
+                    // console.log('✅ 低延迟模式：进一步优化缓冲区');
+                }
+            }
+
+            // 策略 3: 丢帧处理
+            if (metrics.framesDropped > 0) {
+                const dropRate = metrics.framesDropped / (metrics.framesDecoded + metrics.framesDropped);
+                if (dropRate > 0.05) { // 丢帧率 > 5%
+                    console.warn('⚠️ 高丢帧率:', (dropRate * 100).toFixed(2) + '%');
+                    // 增加缓冲区以减少丢帧
+                    PerformanceOptimizer.adaptBufferSize(150, metrics.packetLossRate);
+                }
+            }
+
+            // 策略 4: 帧率下降处理
+            if (metrics.framesPerSecond > 0 && metrics.framesPerSecond < 25) {
+                console.warn('⚠️ 帧率下降:', metrics.framesPerSecond.toFixed(2) + 'fps');
+                // 可以尝试降低分辨率或调整编码参数
+            }
+
+            // 策略 5: 丢包处理
+            if (metrics.packetLossRate > 0.02) { // 丢包率 > 2%
+                console.warn('⚠️ 高丢包率:', (metrics.packetLossRate * 100).toFixed(2) + '%');
+                // 增加缓冲区以应对网络抖动
+                PerformanceOptimizer.adaptBufferSize(200, metrics.packetLossRate);
+            }
+
+        }, 5000); // 每 5 秒检查一次
+    }
+
+    // 启动自适应优化
+    startAdaptiveOptimization();
 
     // Helper function to generate a random ID
     function randomId(length) {

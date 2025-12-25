@@ -30,6 +30,17 @@ window.addEventListener('load', () => {
 
     // UI state
     const dataState = {W: false, A: false, S: false, D: false};
+    const dataThrottlePresets = {
+        Digit1: {limit: 0.25, label: '25%'},
+        Digit2: {limit: 0.5, label: '50%'},
+        Digit3: {limit: 0.75, label: '75%'},
+        Digit4: {limit: 1.0, label: '100%'},
+        Numpad1: {limit: 0.25, label: '25%'},
+        Numpad2: {limit: 0.5, label: '50%'},
+        Numpad3: {limit: 0.75, label: '75%'},
+        Numpad4: {limit: 1.0, label: '100%'},
+    };
+    let dataThrottleLimit = 1.0; // 默认不限速
 
     // DOM references
     const dataElements = {
@@ -59,6 +70,7 @@ window.addEventListener('load', () => {
         cpuUsage: document.getElementById('cpuUsage'),
         lastUpdate: document.getElementById('lastUpdate'),
         speedValue: document.getElementById('speedValue'),
+        throttleLimitIndicator: document.getElementById('throttleLimitIndicator'),
     };
 
     // System status snapshot
@@ -83,12 +95,35 @@ window.addEventListener('load', () => {
         dataSendSbus(lastSentState.forward, lastSentState.turn);
     });
 
+    function dataApplyThrottleLimit(forward) {
+        const safeForward = forward || 0;
+        const capped = Math.min(Math.max(safeForward, -dataThrottleLimit), dataThrottleLimit);
+        return capped;
+    }
+
+    function dataShowThrottleLimitMessage(limit) {
+        const percent = Math.round(limit * 100);
+        const text = `油门最大比例切换到 ${percent}%`;
+        if (dataStatusDiv) dataStatusDiv.textContent = 'Status: ' + text;
+        if (dataElements.throttleLimitIndicator) dataElements.throttleLimitIndicator.textContent = `${percent}%`;
+        console.log(text);
+    }
+
+    function dataSetThrottleLimit(limit, notify = true) {
+        if (limit === dataThrottleLimit) return;
+        dataThrottleLimit = limit;
+        if (notify) dataShowThrottleLimitMessage(limit);
+        // 立即按照新的限幅重新发送一次
+        dataSendSbus(lastSentState.forward, lastSentState.turn);
+    }
+
     function dataSendSbus(forward, turn) {
         if (!dataCurrentDataChannel || dataCurrentDataChannel.readyState !== 'open') return;
-        uiSpeed = Math.round(Math.abs(forward) * 100);
+        const limitedForward = dataApplyThrottleLimit(forward);
+        uiSpeed = Math.round(Math.abs(limitedForward) * 100);
         dataUpdateSystemStatusDisplay();
         try {
-            const frame = SBUSEncoder.encode({ch1: forward, ch2: turn});
+            const frame = SBUSEncoder.encode({ch1: limitedForward, ch2: turn || 0});
             dataCurrentDataChannel.send(frame);
         } catch (e) {
             console.error('Failed to send SBUS frame', e);
@@ -261,6 +296,15 @@ window.addEventListener('load', () => {
         dataUpdateConnStatus('connected', 'CONNECTED');
     }
 
+    function dataHandleThrottlePreset(ev) {
+        const activeTag = document.activeElement?.tagName;
+        if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
+        const preset = dataThrottlePresets[ev.code];
+        if (!preset) return;
+        ev.preventDefault();
+        dataSetThrottleLimit(preset.limit);
+    }
+
     // Button bindings (neutralize SBUS)
     if (dataElements.reconnectBtn) dataElements.reconnectBtn.addEventListener('click', () => window.location.reload());
     if (dataElements.stopAllBtn) dataElements.stopAllBtn.addEventListener('click', () => dataSendSbus(0, 0));
@@ -272,6 +316,11 @@ window.addEventListener('load', () => {
     if (dataElements.emgBtnMobile) dataElements.emgBtnMobile.addEventListener('click', () => dataSendSbus(0, 0));
     if (dataElements.throttleBtnMobile)
         dataElements.throttleBtnMobile.addEventListener('click', () => dataSendSbus(0, 0));
+
+    // 键盘 1/2/3/4 切换油门最大值
+    window.addEventListener('keydown', dataHandleThrottlePreset);
+    // 初始化显示
+    if (dataElements.throttleLimitIndicator) dataElements.throttleLimitIndicator.textContent = '不限';
 
     // Initialize controllers
     initControllers();

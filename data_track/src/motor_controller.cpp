@@ -77,7 +77,7 @@ MotorController::~MotorController() {
 void MotorController::stopAll() {
     setFrontBackSpeed(0);
     setLeftRightSpeed(0);
-    std::cout << "已停止所有电机" << std::endl;
+//    std::cout << "已停止所有电机" << std::endl;
 }
 
 void MotorController::printStatus() {
@@ -126,7 +126,7 @@ void MotorController::setFrontBackSpeed(int speed_percent) {
         motor_driver->setFrontBackPercent(speed_percent);
     }
     const char *direction = (speed_percent > 0) ? "前进" : (speed_percent < 0 ? "后退" : "停止");
-    std::cout << "控制前后电机速度: " << speed_percent << "% (direction: " << direction << ")" << std::endl;
+//    std::cout << "控制前后电机速度: " << speed_percent << "% (direction: " << direction << ")" << std::endl;
 }
 
 void MotorController::setLeftRightSpeed(int speed_percent) {
@@ -135,5 +135,5 @@ void MotorController::setLeftRightSpeed(int speed_percent) {
         motor_driver->setLeftRightPercent(speed_percent);
     }
     const char *direction = (speed_percent > 0) ? "右转" : (speed_percent < 0 ? "左转" : "停止");
-    std::cout << "控制转向电机速度: " << speed_percent << "% (direction: " << direction << ")" << std::endl;
+//    std::cout << "控制转向电机速度: " << speed_percent << "% (direction: " << direction << ")" << std::endl;
 }

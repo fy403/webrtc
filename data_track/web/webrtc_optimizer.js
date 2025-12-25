@@ -8,17 +8,27 @@ class WebRTCOptimizer {
         
         // 性能指标
         this.metrics = {
-            decodeLatency: 0,
-            bufferDelay: 0,
-            renderLatency: 0,
-            totalLatency: 0,
-            frameDrops: 0,
-            lastFrameTime: 0
+            // 延迟指标
+            avgJitterBufferDelay: 0,
+            avgJitterBufferTargetDelay: 0,
+            avgJitterBufferMinimumDelay: 0,
+            avgDecodeTime: 0,
+            avgTotalProcessingDelay: 0,
+            videoBufferDelay: 0,
+            totalPlaybackDelay: 0,
+            // 质量指标
+            framesDropped: 0,
+            framesPerSecond: 0,
+            packetLossRate: 0,
+            framesDecoded: 0
         };
 
         // 硬件解码检测
         this.hardwareDecodingSupported = false;
         this.preferredCodec = null;
+        
+        // WebRTC 连接引用
+        this.peerConnection = null;
     }
 
     /**
@@ -156,57 +166,103 @@ class WebRTCOptimizer {
 
     /**
      * 设置性能监控
+     * 注意：所有性能指标都通过 updateMetricsFromStats() 从 WebRTC stats 获取，
+     * 这里不再需要单独监控，避免重复计算和资源浪费
      */
     setupPerformanceMonitoring() {
-        if (!this.videoElement) return;
+        // 性能监控已集成到 updateMetricsFromStats() 中
+        // 所有指标都从 WebRTC stats 获取，保证数据的一致性和准确性
+    }
 
-        // 使用 requestVideoFrameCallback 监控帧率
-        if ('requestVideoFrameCallback' in this.videoElement) {
-            let frameCount = 0;
-            let lastTime = performance.now();
-
-            const monitorFrame = (now, metadata) => {
-                frameCount++;
-                const elapsed = now - lastTime;
-                
-                if (elapsed >= 1000) {
-                    const fps = (frameCount * 1000) / elapsed;
-                    this.metrics.renderLatency = 1000 / fps; // 估算渲染延迟
-                    frameCount = 0;
-                    lastTime = now;
-                }
-
-                // 继续监控
-                this.videoElement.requestVideoFrameCallback(monitorFrame);
-            };
-
-            this.videoElement.addEventListener('loadedmetadata', () => {
-                this.videoElement.requestVideoFrameCallback(monitorFrame);
-            });
+    /**
+     * 从 WebRTC 统计信息更新性能指标
+     * @param {RTCPeerConnection} peerConnection - WebRTC 连接对象
+     * @returns {Promise<boolean>} 是否成功更新
+     */
+    async updateMetricsFromStats(peerConnection) {
+        if (!peerConnection || peerConnection.connectionState === 'closed') {
+            return false;
         }
 
-        // 监控播放延迟
-        setInterval(() => {
+        this.peerConnection = peerConnection;
+
+        try {
+            const stats = await peerConnection.getStats();
+            let videoStats = null;
+
+            // 查找入站视频统计
+            for (const [id, report] of stats.entries()) {
+                if (report.type === 'inbound-rtp' && report.kind === 'video') {
+                    videoStats = report;
+                    break;
+                }
+            }
+
+            if (!videoStats) return false;
+
+            // 计算平均延迟指标
+            const jitterBufferEmittedCount = videoStats.jitterBufferEmittedCount || 0;
+            const framesDecoded = videoStats.framesDecoded || 0;
+
+            if (jitterBufferEmittedCount === 0 || framesDecoded === 0) return false;
+
+            // 计算平均延迟（累计值除以计数）
+            this.metrics.avgJitterBufferDelay = ((videoStats.jitterBufferDelay || 0) / jitterBufferEmittedCount) * 1000;
+            this.metrics.avgJitterBufferTargetDelay = ((videoStats.jitterBufferTargetDelay || 0) / jitterBufferEmittedCount) * 1000;
+            this.metrics.avgJitterBufferMinimumDelay = ((videoStats.jitterBufferMinimumDelay || 0) / jitterBufferEmittedCount) * 1000;
+            this.metrics.avgDecodeTime = ((videoStats.totalDecodeTime || 0) / framesDecoded) * 1000;
+            this.metrics.avgTotalProcessingDelay = ((videoStats.totalProcessingDelay || 0) / jitterBufferEmittedCount) * 1000;
+
+            // 计算视频元素缓冲区延迟
+            let videoBufferDelay = 0;
             if (this.videoElement && this.videoElement.readyState >= 2) {
                 const currentTime = this.videoElement.currentTime;
                 const buffered = this.videoElement.buffered;
-                
                 if (buffered && buffered.length > 0) {
                     const bufferedEnd = buffered.end(buffered.length - 1);
-                    this.metrics.bufferDelay = (bufferedEnd - currentTime) * 1000; // 转换为毫秒
+                    videoBufferDelay = (bufferedEnd - currentTime) * 1000;
                 }
             }
-        }, 500);
+            this.metrics.videoBufferDelay = videoBufferDelay;
+
+            // 计算总播放延迟
+            this.metrics.totalPlaybackDelay = this.metrics.avgJitterBufferDelay + videoBufferDelay + this.metrics.avgDecodeTime;
+
+            // 获取其他性能指标
+            this.metrics.framesDropped = videoStats.framesDropped || 0;
+            this.metrics.framesPerSecond = videoStats.framesPerSecond || 0;
+            this.metrics.framesDecoded = framesDecoded;
+            
+            const packetsLost = videoStats.packetsLost || 0;
+            const packetsReceived = videoStats.packetsReceived || 0;
+            this.metrics.packetLossRate = packetsReceived > 0 ? packetsLost / packetsReceived : 0;
+
+            return true;
+        } catch (err) {
+            console.warn('更新性能指标失败:', err);
+            return false;
+        }
+    }
+
+    /**
+     * 设置 WebRTC 连接（用于自动更新指标）
+     * @param {RTCPeerConnection} peerConnection - WebRTC 连接对象
+     */
+    setPeerConnection(peerConnection) {
+        this.peerConnection = peerConnection;
     }
 
     /**
      * 获取性能指标
+     * @param {boolean} updateFromStats - 是否从 WebRTC stats 更新指标（如果 peerConnection 可用）
+     * @returns {Promise<Object>} 性能指标对象
      */
-    getMetrics() {
-        this.metrics.totalLatency = 
-            this.metrics.decodeLatency + 
-            this.metrics.bufferDelay + 
-            this.metrics.renderLatency;
+    async getMetrics(updateFromStats = false) {
+        // 如果请求从 stats 更新且 peerConnection 可用，则更新指标
+        if (updateFromStats && this.peerConnection) {
+            await this.updateMetricsFromStats(this.peerConnection);
+        }
+
         return { ...this.metrics };
     }
 }

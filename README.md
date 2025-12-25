@@ -111,14 +111,27 @@ TURN服务器可以自己搭建[搭建私有TURN服务器](turn_server/README.md
 申请后，只需要通过他提供的一个cmd命令curl获取TURN server host和username，password就行。
 
 #### 1.3 控制板部分：依赖安装
-1.安装ffmpeg-4.4.2版本
+1.安装ffmpeg
 
-ffmpeg手动编译安装教程[手动编译FFmpeg](https://blog.csdn.net/qq_45765047/article/details/121041181)
-
+```shell
+sudo apt-get update
+sudo apt-get install -y libavdevice-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev
+sudo apt-get install -y ffmpeg
+```
 2.安装其他依赖
 
-```shel
-sudo apt install g++ make cmake
+```shell
+sudo apt install -y g++ make dos2unix
+sudo apt install -y libsdl2-dev
+sudo apt install -y libssl-dev
+wget https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3.tar.gz
+tar -xzvf cmake-3.28.3.tar.gz
+cd cmake-3.28.3
+./configure
+make -j 3
+sudo make install
+ln -sf /usr/local/bin/cmake /usr/bin/cmake
+sudo apt-get install -y nlohmann-json3-dev
 git clone https://github.com/paullouisageneau/libdatachannel.git
 cd libdatachannel
 git submodule update --init --recursive
@@ -133,7 +146,7 @@ sudo make install
 
 #### 2.1 摄像头参数获取
 
-```shel
+```shell
 root@orangepizero2:~# sudo v4l2-ctl --list-device
 cedrus (platform:cedrus):
         /dev/video0
