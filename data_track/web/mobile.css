@@ -339,6 +339,11 @@
 			padding: 6px 10px;
 		}
 
+		/* 陀螺仪按钮激活状态 */
+		.btn:active {
+			background: #475f9e;
+		}
+
 		/* Status overlays for mobile fullscreen */
 		.status-overlay {
 			background: rgba(18, 24, 51, 0.5);

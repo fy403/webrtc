@@ -174,6 +174,9 @@ window.addEventListener('load', () => {
         controllerManager.register('keyboard', keyboard, 10);
         controllerManager.register('xbox', xbox, 8);
         controllerManager.register('joystick', joystick, 5);
+
+        // Expose controllerManager for gyroscope controller access
+        window.controllerManager = controllerManager;
     }
 
     function updateStatus(message) {

@@ -9,3 +9,6 @@ av_track/.idea
 data_track/.idea
 cmake*/
 *.htaccess
+.history
+data_track/.history
+av_track/.history

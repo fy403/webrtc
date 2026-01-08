@@ -13,6 +13,7 @@
 	<script src="keyboard_controller.js"></script>
 	<script src="virtual_joystick_controller.js"></script>
 	<script src="xbox_controller.js"></script>
+	<script src="gyroscope_controller.js"></script>
 	<script src="controller_manager.js"></script>
 	<script src="data_rtc.js"></script>
 </head>
@@ -37,6 +38,8 @@
 							<button id="reconnectBtnMobile" class="btn mobile-btn">重新连接</button>
 							<button id="stopAllBtnMobile" class="btn mobile-btn">STOP ALL</button>
 							<button id="emgBtnMobile" class="btn mobile-btn">急停</button>
+							<button id="gyroToggleBtn" class="btn mobile-btn" style="display: none;">陀螺仪</button>
+							<button id="gyroCalibrateBtn" class="btn mobile-btn" style="display: none;">校准</button>
 							<!--							<button id="throttleBtnMobile" class="btn mobile-btn">档位调整</button>-->
 							<button id="fullscreenBtn" class="btn mobile-btn">全屏</button>
 						</div>
@@ -273,6 +276,153 @@
 					}
 				}
 			}
+
+			// 陀螺仪支持检测和初始化
+			const gyroToggleBtn = document.getElementById('gyroToggleBtn');
+			const gyroCalibrateBtn = document.getElementById('gyroCalibrateBtn');
+			let gyroscopeController = null;
+			let gyroEnabled = false;
+
+			// 检测陀螺仪支持
+			function checkGyroscopeSupport() {
+				if (typeof GyroscopeController !== 'undefined' && GyroscopeController) {
+					const testController = new GyroscopeController();
+					if (testController.isSupported()) {
+						if (gyroToggleBtn) {
+							gyroToggleBtn.style.display = 'inline-block';
+							// iOS需要权限，显示初始状态
+							if (testController.requiresPermission()) {
+								gyroToggleBtn.textContent = '陀螺仪(未授权)';
+							} else {
+								gyroToggleBtn.textContent = '陀螺仪关';
+							}
+						}
+						if (gyroCalibrateBtn) {
+							gyroCalibrateBtn.style.display = 'inline-block';
+						}
+						console.log('Gyroscope supported');
+						return true;
+					}
+				}
+				console.log('Gyroscope not supported');
+				return false;
+			}
+
+			// 初始化陀螺仪控制器
+			function initGyroscopeController() {
+				if (typeof GyroscopeController === 'undefined') return null;
+
+				const controller = new GyroscopeController({
+					sensitivity: 0.5,  // 降低灵敏度
+					deadzone: 8,      // 增加死区
+					onChange: (state) => {
+						console.log('Gyroscope onChange:', state);
+						if (window.controllerManager) {
+							window.controllerManager._handle('gyroscope', state);
+						}
+					}
+				});
+				return controller;
+			}
+
+			// 陀螺仪按钮点击处理
+			if (gyroToggleBtn) {
+				gyroToggleBtn.addEventListener('click', async function() {
+					if (!gyroscopeController) {
+						gyroscopeController = initGyroscopeController();
+					}
+
+					if (!gyroEnabled) {
+						// 开启陀螺仪
+						let granted = true;
+						if (gyroscopeController.requiresPermission()) {
+							console.log('Requesting gyroscope permission...');
+							granted = await gyroscopeController.requestPermission();
+							console.log('Permission granted:', granted);
+						}
+
+						if (granted) {
+							// 先启动控制器（register会再次调用start，但此时权限已设置）
+							gyroscopeController.start();
+
+							// 注册到controllerManager
+							if (window.controllerManager) {
+								window.controllerManager.register('gyroscope', gyroscopeController, 6);
+							}
+
+							gyroEnabled = true;
+							gyroToggleBtn.textContent = '陀螺仪开';
+							gyroToggleBtn.style.background = '#10b981';
+							gyroToggleBtn.style.color = '#fff';
+
+							// 显示校准按钮
+							if (gyroCalibrateBtn) {
+								gyroCalibrateBtn.style.display = 'inline-block';
+							}
+
+							// 隐藏虚拟手柄以避免冲突
+							const joystickContainer = document.getElementById('virtualJoystickContainer');
+							if (joystickContainer) {
+								joystickContainer.style.opacity = '0.3';
+								joystickContainer.style.pointerEvents = 'none';
+							}
+
+							console.log('Gyroscope enabled and registered');
+						} else {
+							alert('陀螺仪权限未授予');
+							gyroToggleBtn.textContent = '陀螺仪(未授权)';
+						}
+					} else {
+						// 关闭陀螺仪
+						gyroscopeController.stop();
+						gyroEnabled = false;
+						gyroToggleBtn.textContent = '陀螺仪关';
+						gyroToggleBtn.style.background = '';
+						gyroToggleBtn.style.color = '';
+
+						// 隐藏校准按钮
+						if (gyroCalibrateBtn) {
+							gyroCalibrateBtn.style.display = 'none';
+						}
+
+						// 恢复虚拟手柄
+						const joystickContainer = document.getElementById('virtualJoystickContainer');
+						if (joystickContainer) {
+							joystickContainer.style.opacity = '';
+							joystickContainer.style.pointerEvents = '';
+						}
+
+						console.log('Gyroscope disabled');
+					}
+				});
+
+				// 校准按钮点击处理
+				if (gyroCalibrateBtn) {
+					gyroCalibrateBtn.addEventListener('click', function() {
+						if (gyroscopeController && gyroEnabled) {
+							// 获取当前传感器数据并校准
+							const handleOrientation = (event) => {
+								if (event.beta !== null && event.gamma !== null) {
+									gyroscopeController.recalibrate(event.beta, event.gamma);
+									window.removeEventListener('deviceorientation', handleOrientation);
+									console.log('Gyroscope recalibrated to current position');
+									// 给用户反馈
+									gyroCalibrateBtn.textContent = '已校准';
+									setTimeout(() => {
+										gyroCalibrateBtn.textContent = '校准';
+									}, 1000);
+								}
+							};
+
+							// 添加一次性监听器获取当前值
+							window.addEventListener('deviceorientation', handleOrientation);
+						}
+					});
+				}
+			}
+
+			// 页面加载完成后检测陀螺仪支持
+			checkGyroscopeSupport();
 		});
 	</script>
 </body>

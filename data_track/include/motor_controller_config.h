@@ -43,7 +43,7 @@ public:
     // 电调配置（用于控制前后/前进后退）
     uint16_t crsf_esc_min_pulse = 900;        // 电调最小脉冲宽度（微秒）
     uint16_t crsf_esc_max_pulse = 2100;       // 电调最大脉冲宽度（微秒）
-    uint16_t crsf_esc_neutral_pulse = 1500;   // 电调中位脉冲宽度（微秒）
+    uint16_t crsf_esc_neutral_pulse = 1520;   // 电调中位脉冲宽度（微秒）
     bool crsf_esc_reversible = true;          // 电调是否支持倒转
     uint8_t crsf_esc_channel = 1;             // CRSF 电调通道编号（1-16）
 

@@ -19,7 +19,7 @@
 
 <iframe src="//player.bilibili.com/player.html?isOutside=true&aid=115489808323280&bvid=BV1VA1kBnEAx&cid=33681311377&page=1&high_quality=1&danmaku=0" allowfullscreen="allowfullscreen" width="100%" height="500" scrolling="no" frameborder="0" sandbox="allow-top-navigation allow-same-origin allow-forms allow-scripts"></iframe>
 
-
+[B站视频](https://www.bilibili.com/video/BV1VA1kBnEAx?share_source=copy_web)
 
 ------
 
@@ -166,17 +166,6 @@ ioctl: VIDIOC_ENUM_FMT
         [0]: 'MJPG' (Motion-JPEG, compressed) # 视频格式
                 Size: Discrete 640x480 # 支持的分辨率
                         Interval: Discrete 0.033s (30.000 fps) # 各种帧率支持
-                        Interval: Discrete 0.040s (25.000 fps)
-                        Interval: Discrete 0.050s (20.000 fps)
-                        Interval: Discrete 0.067s (15.000 fps)
-                        Interval: Discrete 0.100s (10.000 fps)
-                        Interval: Discrete 0.200s (5.000 fps)
-                        Interval: Discrete 0.033s (30.000 fps)
-                        Interval: Discrete 0.040s (25.000 fps)
-                        Interval: Discrete 0.050s (20.000 fps)
-                        Interval: Discrete 0.067s (15.000 fps)
-                        Interval: Discrete 0.100s (10.000 fps)
-                        Interval: Discrete 0.200s (5.000 fps)
                 Size: Discrete 1920x1080
                 ......
 
@@ -186,41 +175,8 @@ ioctl: VIDIOC_ENUM_FMT
 
 ```shel
 root@orangepizero2:~# arecord -L
-null
-    Discard all samples (playback) or generate zero samples (capture)
-hw:CARD=ahubhdmi,DEV=0
-    ahubhdmi, ahub_plat-i2s-hifi i2s-hifi-0
-    Direct hardware device without any conversions
-plughw:CARD=ahubhdmi,DEV=0
-    ahubhdmi, ahub_plat-i2s-hifi i2s-hifi-0
-    Hardware device with all software conversions
-default:CARD=ahubhdmi
-    ahubhdmi, ahub_plat-i2s-hifi i2s-hifi-0
-    Default Audio Device
-sysdefault:CARD=ahubhdmi
-    ahubhdmi, ahub_plat-i2s-hifi i2s-hifi-0
-    Default Audio Device
-dsnoop:CARD=ahubhdmi,DEV=0
-    ahubhdmi, ahub_plat-i2s-hifi i2s-hifi-0
-    Direct sample snooping device
 hw:CARD=Audio,DEV=0 # 第一个USB麦克风
     AB13X USB Audio, USB Audio
-    Direct hardware device without any conversions
-plughw:CARD=Audio,DEV=0
-    AB13X USB Audio, USB Audio
-    Hardware device with all software conversions
-default:CARD=Audio
-    AB13X USB Audio, USB Audio
-    Default Audio Device
-sysdefault:CARD=Audio
-    AB13X USB Audio, USB Audio
-    Default Audio Device
-front:CARD=Audio,DEV=0
-    AB13X USB Audio, USB Audio
-    Front output / input
-dsnoop:CARD=Audio,DEV=0
-    AB13X USB Audio, USB Audio
-    Direct sample snooping device
 ```
 识别到后，就需要获取采样参数：采样率，音频格式，通道数。
 ```shell
@@ -290,12 +246,6 @@ root@orangepizero2:~# ls /dev/ttyUSB*
 
 ```shel
 root@orangepizero2:~# ip a
-1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
-    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-    inet 127.0.0.1/8 scope host lo
-       valid_lft forever preferred_lft forever
-    inet6 ::1/128 scope host
-       valid_lft forever preferred_lft forever
 5: enx2089846a96ab: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UNKNOWN group default qlen 1000
     link/ether 20:89:84:6a:96:ab brd ff:ff:ff:ff:ff:ff
     inet 192.168.10.2/24 brd 192.168.10.255 scope global dynamic noprefixroute 
@@ -408,32 +358,39 @@ GSM_BAUDRATE=115200 # 4g模块串口波特率
 前往：[data_rtc.js](data_track/web/data_rtc.js)
 
 ```js
- const dataConfig = {
-    iceServers: [{
-      urls: 'stun:stun.l.google.com:19302', // change to your STUN server
-    }],
-  };
-
-
-  const dataUrl = `ws://fy403.cn:8000/${dataLocalId}`;
+    const dataUrl = `ws://fy403.cn:8000/${dataLocalId}`;
+    const dataConfig = {
+        iceServers: [{
+            urls: ['stun:stun.l.google.com:19302']
+        },
+            {
+                urls: ['turn:tx.fy403.cn:3478?transport=udp'],
+                username: 'fy403',
+                credential: 'qwertyuiop'
+            },
+        ],
+    };
 ```
 前往：[video_rtc.js](data_track/web/video_rtc.js)
 ```js
     const url = `ws://fy403.cn:8000/${localId}`;
+
+    // ========== 优化配置：低延迟 WebRTC ==========
     const config = {
         iceServers: [{
-                "urls": ["stun:stun.cloudflare.com:3478",
-                    // "stun:stun.cloudflare.com:53"
-                ]
-            },
+            urls: ['stun:stun.l.google.com:19302']
+        },
             {
-                "urls": [
-                    "turn:turn.cloudflare.com:3478?transport=udp",
-                ],
-                "username": "g0xxxxxxxxxxx",
-                "credential": "95yyyyyyyyy"
+                urls: ['turn:tx.fy403.cn:3478?transport=udp'],
+                username: 'fy403',
+                credential: 'qwertyuiop'
             },
         ],
+        // 低延迟优化配置
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require',
+        // 启用低延迟模式（实验性API，如果支持）
+        encodedInsertableStreams: false, // 某些浏览器可能不支持
     };
 ```
 
@@ -443,12 +400,25 @@ GSM_BAUDRATE=115200 # 4g模块串口波特率
 或者在项目根目录(webrtc)下执行下列脚本快速设置所有存在的client_id。
 ```shell
 #!/bin/bash
+
 # 生成随机字符串
 RANDOM_CAM=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 8)
 RANDOM_DATA=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 8)
 
-echo "将 usbcam 替换为: cam_id_${RANDOM_CAM}"
-echo "将 dataTrack 替换为: data_id_${RANDOM_DATA}"
+# 从 data_track_rtc.sh 中提取 CLIENT_ID
+DATA_CLIENT_ID=$(grep "^CLIENT_ID=" data_track/data_track_rtc.sh | cut -d'"' -f2)
+
+# 从 av_track_rtc.sh 中提取 CLIENT_ID
+AV_CLIENT_ID=$(grep "^CLIENT_ID=" av_track/av_track_rtc.sh | cut -d'"' -f2)
+
+echo "将 $DATA_CLIENT_ID 替换为: data_id_${RANDOM_DATA}"
+echo "将 $AV_CLIENT_ID 替换为: cam_id_${RANDOM_CAM}"
+
+# 更新 data_track_rtc.sh 中的 CLIENT_ID
+sed -i "s/^CLIENT_ID=\"$DATA_CLIENT_ID\"/CLIENT_ID=\"data_id_${RANDOM_DATA}\"/" data_track/data_track_rtc.sh
+
+# 更新 av_track_rtc.sh 中的 CLIENT_ID
+sed -i "s/^CLIENT_ID=\"$AV_CLIENT_ID\"/CLIENT_ID=\"cam_id_${RANDOM_CAM}\"/" av_track/av_track_rtc.sh
 
 # 定义要搜索的目录
 DIRS=("av_track" "data_track")
@@ -457,10 +427,10 @@ DIRS=("av_track" "data_track")
 for dir in "${DIRS[@]}"; do
     if [ -d "$dir" ]; then
         echo "正在搜索目录: $dir"
-        find "$dir" -type f ! -path "*/.git/*" -exec grep -l -e "usbcam" -e "dataTrack" {} \; | while read file; do
+        find "$dir" -type f ! -path "*/.git/*" -exec grep -l -e "$AV_CLIENT_ID" -e "$DATA_CLIENT_ID" {} \; | while read file; do
             # 使用sed一次性替换两个模式
-            sed -i -e "s/usbcam/cam_id_${RANDOM_CAM}/g" \
-                   -e "s/dataTrack/data_id_${RANDOM_DATA}/g" "$file"
+            sed -i -e "s/$AV_CLIENT_ID/cam_id_${RANDOM_CAM}/g" \
+                   -e "s/$DATA_CLIENT_ID/data_id_${RANDOM_DATA}/g" "$file"
             echo "已处理: $file"
         done
     else

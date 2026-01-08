@@ -8,13 +8,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(PkgConfig REQUIRED)
 
 # Find libav libraries - SINGLE call with all required components
-pkg_check_modules(LIBAV REQUIRED
-        libavformat
-        libavcodec
-        libavutil
-        libswscale
-        libavdevice
-)
+#pkg_check_modules(LIBAV REQUIRED
+#        libavformat
+#        libavcodec
+#        libavutil
+#        libswscale
+#        libavdevice
+#)
 
 # Find libdatachannel
 find_library(LIBDATACHANNEL_LIBRARY
@@ -57,7 +57,7 @@ target_include_directories(webrtc_publisher PRIVATE
 
 # Link libraries
 target_link_libraries(webrtc_publisher
-        ${LIBAV_LIBRARIES}
+        #        ${LIBAV_LIBRARIES}
         ${LIBDATACHANNEL_LIBRARY}
         ssl
         crypto
