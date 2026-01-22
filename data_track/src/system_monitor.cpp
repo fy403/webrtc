@@ -84,8 +84,8 @@ bool SystemMonitor::getNetworkStats(double &rx_speed, double &tx_speed)
         double time_diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_net_time_).count() / 1000.0;
 
         if (last_rx_bytes_ > 0 && time_diff > 0) {
-            rx_speed = (total_rx - last_rx_bytes_) / time_diff / 1024.0; // KB/s
-            tx_speed = (total_tx - last_tx_bytes_) / time_diff / 1024.0; // KB/s
+            rx_speed = (total_rx - last_rx_bytes_) / time_diff / 1024.0; // Kbit/s
+            tx_speed = (total_tx - last_tx_bytes_) / time_diff / 1024.0; // Kbit/s
         } else {
             rx_speed = 0;
             tx_speed = 0;

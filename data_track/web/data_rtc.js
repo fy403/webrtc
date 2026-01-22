@@ -249,8 +249,8 @@ window.addEventListener('load', () => {
         const {rxSpeed, txSpeed, cpuUsage, ttyService, rtspService, signalStrength, sim_status, lastUpdate} =
             dataSystemStatus;
 
-        if (dataElements.rxSpeed) dataElements.rxSpeed.textContent = `${rxSpeed.toFixed(2)} KBit/s`;
-        if (dataElements.txSpeed) dataElements.txSpeed.textContent = `${txSpeed.toFixed(2)} KBit/s`;
+        if (dataElements.rxSpeed) dataElements.rxSpeed.textContent = `${rxSpeed.toFixed(2)} Kbit/s`;
+        if (dataElements.txSpeed) dataElements.txSpeed.textContent = `${txSpeed.toFixed(2)} Kbit/s`;
         if (dataElements.cpuUsage) dataElements.cpuUsage.textContent = `${cpuUsage.toFixed(2)}%`;
         if (dataElements.serviceStatus)
             dataElements.serviceStatus.textContent = `🕹:${ttyService ? 'ON' : 'OFF'} / 🖼:${rtspService ? 'ON' : 'OFF'}`;

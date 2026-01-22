@@ -284,7 +284,7 @@ WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Cmdline params)
     : client_id_(client_id), params_(params) {
   rtc::InitLogger(rtc::LogLevel::Info);
   localId = client_id;
-    size_t queue_size = params.framerate()*2;
+    size_t queue_size = params.framerate()*4;
   // Initialize video capturer
   if (!params.inputDevice().empty()) {
     video_capturer_ = new VideoCapturer(params.inputDevice(), params.debug(),

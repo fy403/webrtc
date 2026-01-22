@@ -17,10 +17,5 @@ private:
   bool debug_enabled_;
   AVCodecContext *encoder_context_;
   const AVCodec *codec_;
-
-  // VAAPI 硬件编码相关
-  bool use_vaapi_ = false;
-  AVBufferRef *hw_device_ctx_ = nullptr;
-  AVBufferRef *hw_frames_ref_ = nullptr;
 };
 #endif // H264_ENCODER_H
