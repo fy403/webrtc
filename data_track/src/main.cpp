@@ -27,13 +27,13 @@ std::atomic<bool> g_shutdown_requested{false};
 // 信号处理函数
 void signal_handler(int signal) {
     std::cout << "Received signal " << signal << ", shutting down gracefully..."
-              << std::endl;
+            << std::endl;
     g_shutdown_requested.store(true);
 }
 
 // 设置信号处理器
 void setup_signal_handlers() {
-    std::signal(SIGINT, signal_handler);  // Ctrl+C
+    std::signal(SIGINT, signal_handler); // Ctrl+C
     std::signal(SIGTERM, signal_handler); // 终止信号
 #ifdef SIGPIPE
     // 忽略 SIGPIPE 信号，防止网络连接断开时程序异常退出
@@ -46,15 +46,16 @@ weak_ptr<T> make_weak_ptr(shared_ptr<T> ptr) { return ptr; }
 
 using nlohmann::json;
 
-std::unordered_map<std::string, shared_ptr<rtc::PeerConnection>> peerConnectionMap;
-std::unordered_map<std::string, shared_ptr<rtc::DataChannel>> dataChannelMap;
+std::unordered_map<std::string, shared_ptr<rtc::PeerConnection> > peerConnectionMap;
+std::unordered_map<std::string, shared_ptr<rtc::DataChannel> > dataChannelMap;
 
-shared_ptr<rtc::PeerConnection> createPeerConnection(const rtc::Configuration &config,
-                                                     weak_ptr<rtc::WebSocket> wws, std::string id);
+shared_ptr<rtc::PeerConnection> createPeerConnection(
+    const rtc::Configuration &config,
+    weak_ptr<rtc::WebSocket> wws,
+    std::string id,
+    std::shared_ptr<RCClient> client);
 
 std::string randomId(size_t length);
-
-RCClient *global_client = nullptr;
 
 int main(int argc, char **argv) {
     try {
@@ -72,23 +73,24 @@ int main(int argc, char **argv) {
         }
         // 构建 RCClient 配置对象
         RCClientConfig rcClientConfig(
-                params.usbDevice(),              // MotorController.MotorDriver: 串口设备
-                params.motorDriverType(),         // MotorController.MotorDriver: 驱动类型
-                params.ttyBaudrate(),             // MotorController.MotorDriver: 串口波特率
-                params.gsmPort(),                 // SystemMonitor: 4G模块串口设备
-                params.gsmBaudrate()              // SystemMonitor: 4G模块串口波特率
+            params.usbDevice(), // MotorController.MotorDriver: 串口设备
+            params.motorDriverType(), // MotorController.MotorDriver: 驱动类型
+            params.ttyBaudrate(), // MotorController.MotorDriver: 串口波特率
+            params.gsmPort(), // SystemMonitor: 4G模块串口设备
+            params.gsmBaudrate() // SystemMonitor: 4G模块串口波特率
         );
 
-        RCClient client(rcClientConfig);
-        global_client = &client;
+        // 创建局部的 RCClient 实例，使用智能指针管理
+        std::shared_ptr<RCClient> client = std::make_shared<RCClient>(rcClientConfig);
+        client->stopAll();
         // rtc 初始化
         rtc::InitLogger(rtc::LogLevel::Info);
         rtc::Configuration config;
         std::string stunServer = "";
         if (params.noStun()) {
             std::cout << "No STUN server is configured. Only local hosts and public IP "
-                         "addresses supported."
-                      << std::endl;
+                    "addresses supported."
+                    << std::endl;
         } else {
             if (params.stunServer().substr(0, 5).compare("stun:") != 0) {
                 stunServer = "stun:";
@@ -106,22 +108,22 @@ int main(int argc, char **argv) {
             int turnPort = params.turnPort();
 
             std::cout << "TURN server is " << turnServer << ":" << turnPort
-                      << std::endl;
+                    << std::endl;
 
             // TURN 服务器 - 使用带参数的构造函数
             config.iceServers.push_back(
-                    rtc::IceServer(turnServer,                        // hostname
-                                   turnPort,                          // port
-                                   turnUser,                          // username
-                                   turnPass,                          // password
-                                   rtc::IceServer::RelayType::TurnUdp // relay type
-                    ));
+                rtc::IceServer(turnServer, // hostname
+                               turnPort, // port
+                               turnUser, // username
+                               turnPass, // password
+                               rtc::IceServer::RelayType::TurnUdp // relay type
+                ));
         }
 
         // 如果收到关闭信号，则退出
         if (g_shutdown_requested.load()) {
             std::cout << "Shutdown requested before WebSocket connection established"
-                      << std::endl;
+                    << std::endl;
             return 0;
         }
 
@@ -145,13 +147,13 @@ int main(int argc, char **argv) {
             wsPromise.set_exception(std::make_exception_ptr(std::runtime_error(s)));
         });
 
-        ws->onClosed([]() {
+        ws->onClosed([client]() {
             std::cout << "WebSocket closed" << std::endl;
-            global_client->stopAll();
+            client->stopAll();
             throw std::runtime_error("WebSocket closed");
         });
 
-        ws->onMessage([&config, wws = make_weak_ptr(ws)](auto data) {
+        ws->onMessage([&config, client, wws = make_weak_ptr(ws)](auto data) {
             // 如果收到关闭信号，则忽略新消息
             if (g_shutdown_requested.load()) {
                 return;
@@ -178,7 +180,7 @@ int main(int argc, char **argv) {
             // Handle peer_close message
             if (type == "peer_close") {
                 std::cout << "Received peer_close from " << id << ", stopping all and exiting" << std::endl;
-                global_client->stopAll();
+                client->stopAll();
                 throw std::runtime_error("Peer closed connection");
             }
 
@@ -191,13 +193,13 @@ int main(int argc, char **argv) {
                     peerConnectionMap.erase(id);
                     dataChannelMap.erase(id);
                     std::cout << "Answering to " + id << std::endl;
-                    pc = createPeerConnection(config, wws, id);
+                    pc = createPeerConnection(config, wws, id, client);
                 } else {
                     pc = jt->second;
                 }
             } else if (type == "offer") {
                 std::cout << "Answering to " + id << std::endl;
-                pc = createPeerConnection(config, wws, id);
+                pc = createPeerConnection(config, wws, id, client);
             } else {
                 return;
             }
@@ -235,11 +237,11 @@ int main(int argc, char **argv) {
             // 每秒钟检查一次状态更新
             std::this_thread::sleep_for(std::chrono::seconds(1));
             // 在主线程中处理系统状态更新
-            global_client->sendSystemStatus();
+            client->sendSystemStatus();
         }
 
         std::cout << "Cleaning up..." << std::endl;
-        global_client->stopAll();
+        client->stopAll();
         ws->close();
         dataChannelMap.clear();
         peerConnectionMap.clear();
@@ -253,8 +255,11 @@ int main(int argc, char **argv) {
 }
 
 // Create and setup a PeerConnection
-shared_ptr<rtc::PeerConnection> createPeerConnection(const rtc::Configuration &config,
-                                                     weak_ptr<rtc::WebSocket> wws, std::string id) {
+shared_ptr<rtc::PeerConnection> createPeerConnection(
+    const rtc::Configuration &config,
+    weak_ptr<rtc::WebSocket> wws,
+    std::string id,
+    std::shared_ptr<RCClient> client) {
     auto pc = std::make_shared<rtc::PeerConnection>(config);
 
     pc->onStateChange([](rtc::PeerConnection::State state) {
@@ -266,47 +271,51 @@ shared_ptr<rtc::PeerConnection> createPeerConnection(const rtc::Configuration &c
     });
 
     pc->onLocalDescription([wws, id](rtc::Description description) {
-        json message = {{"id",          id},
-                        {"type",        description.typeString()},
-                        {"description", std::string(description)}};
+        json message = {
+            {"id", id},
+            {"type", description.typeString()},
+            {"description", std::string(description)}
+        };
 
         if (auto ws = wws.lock())
             ws->send(message.dump());
     });
 
     pc->onLocalCandidate([wws, id](rtc::Candidate candidate) {
-        json message = {{"id",        id},
-                        {"type",      "candidate"},
-                        {"candidate", std::string(candidate)},
-                        {"mid",       candidate.mid()}};
+        json message = {
+            {"id", id},
+            {"type", "candidate"},
+            {"candidate", std::string(candidate)},
+            {"mid", candidate.mid()}
+        };
 
         if (auto ws = wws.lock())
             ws->send(message.dump());
     });
 
-    pc->onDataChannel([id](shared_ptr<rtc::DataChannel> dc) {
+    pc->onDataChannel([id, client](shared_ptr<rtc::DataChannel> dc) {
         std::cout << "DataChannel from " << id << " received with label \""
-                  << dc->label() << "\"" << std::endl;
+                << dc->label() << "\"" << std::endl;
 
-        dc->onOpen([id, dc]() {
+        dc->onOpen([id, dc, client]() {
             std::cout << "DataChannel from " << id << " open" << std::endl;
-            global_client->setDataChannel(dc);
+            client->setDataChannel(dc);
         });
 
-        dc->onClosed([id]() {
+        dc->onClosed([id, client]() {
             std::cout << "DataChannel from " << id << " closed" << std::endl;
-            global_client->stopAll();
-            global_client->setDataChannel(nullptr);
+            client->stopAll();
+            client->setDataChannel(nullptr);
             dataChannelMap.erase(id);
         });
 
-        dc->onMessage([id](auto data) {
+        dc->onMessage([id, client](auto data) {
             // Handle both string and binary data
             if (std::holds_alternative<rtc::binary>(data)) {
                 const rtc::binary &bin_data = std::get<rtc::binary>(data);
-                global_client->parseFrame(
-                        reinterpret_cast<const uint8_t *>(bin_data.data()),
-                        bin_data.size());
+                client->parseFrame(
+                    reinterpret_cast<const uint8_t *>(bin_data.data()),
+                    bin_data.size());
             } else {
                 // Text messages are currently informational only; SBUS control uses
                 // binary frames.
@@ -323,9 +332,9 @@ shared_ptr<rtc::PeerConnection> createPeerConnection(const rtc::Configuration &c
 std::string randomId(size_t length) {
     using std::chrono::high_resolution_clock;
     static thread_local std::mt19937 rng(static_cast<unsigned int>(
-                                                 high_resolution_clock::now().time_since_epoch().count()));
+        high_resolution_clock::now().time_since_epoch().count()));
     static const std::string characters(
-            "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
+        "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
     std::string id(length, '0');
     std::uniform_int_distribution<int> uniform(0, int(characters.size() - 1));
     std::generate(id.begin(), id.end(),

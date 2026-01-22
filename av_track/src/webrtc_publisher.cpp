@@ -284,11 +284,13 @@ WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Cmdline params)
     : client_id_(client_id), params_(params) {
   rtc::InitLogger(rtc::LogLevel::Info);
   localId = client_id;
+    size_t queue_size = params.framerate()*2;
   // Initialize video capturer
   if (!params.inputDevice().empty()) {
     video_capturer_ = new VideoCapturer(params.inputDevice(), params.debug(),
                                         params.resolution(), params.framerate(),
-                                        params.videoFormat());
+                                        params.videoFormat(), queue_size,
+                                        queue_size, queue_size);
   } else {
     video_capturer_ = nullptr;
   }
@@ -301,7 +303,8 @@ WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Cmdline params)
     audio_params.input_format = params.audioFormat();
     audio_params.sample_rate = params.sampleRate();
     audio_capturer_ =
-        new AudioCapturer(audio_params, params.debug(), 1024, 1024, 1024);
+        new AudioCapturer(audio_params, params.debug(), queue_size,
+            queue_size, queue_size);
   } else {
     audio_capturer_ = nullptr;
   }

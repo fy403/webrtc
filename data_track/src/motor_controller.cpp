@@ -9,11 +9,10 @@
 #include <cstring>
 
 MotorController::MotorController(const MotorControllerConfig &config)
-        : config_(config),
-          motor_driver(nullptr),
-          front_back_speed_(0),
-          left_right_speed_(0) {
-
+    : config_(config),
+      motor_driver(nullptr),
+      front_back_speed_(0),
+      left_right_speed_(0) {
     // 根据配置中的 motor_driver_type 创建相应的驱动实例
     if (config.motor_driver_type == "uart") {
         motor_driver = new UartMotorDriver(config.motor_driver_port,
@@ -77,7 +76,7 @@ MotorController::~MotorController() {
 void MotorController::stopAll() {
     setFrontBackSpeed(0);
     setLeftRightSpeed(0);
-//    std::cout << "已停止所有电机" << std::endl;
+    //    std::cout << "已停止所有电机" << std::endl;
 }
 
 void MotorController::printStatus() {
@@ -90,7 +89,11 @@ void MotorController::emergencyStop() {
     std::cout << "紧急停止执行" << std::endl;
 }
 
-void MotorController::applySbus(double forward, double turn) {
+void MotorController::applySbus(const MessageHandler::SbusFrame &sbus_frame) {
+    // Channel 0 -> forward/backward, Channel 1 -> left/right
+    double forward = MessageHandler::sbusToNormalized(sbus_frame.channels[0]);
+    double turn = MessageHandler::sbusToNormalized(sbus_frame.channels[1]);
+
     constexpr double DEADZONE = 0.02;
     auto clamp_unit = [](double v) { return std::max(-1.0, std::min(1.0, v)); };
 
@@ -126,7 +129,7 @@ void MotorController::setFrontBackSpeed(int speed_percent) {
         motor_driver->setFrontBackPercent(speed_percent);
     }
     const char *direction = (speed_percent > 0) ? "前进" : (speed_percent < 0 ? "后退" : "停止");
-//    std::cout << "控制前后电机速度: " << speed_percent << "% (direction: " << direction << ")" << std::endl;
+    // std::cout << "控制前后电机速度: " << speed_percent << "% (direction: " << direction << ")" << std::endl;
 }
 
 void MotorController::setLeftRightSpeed(int speed_percent) {
@@ -135,5 +138,5 @@ void MotorController::setLeftRightSpeed(int speed_percent) {
         motor_driver->setLeftRightPercent(speed_percent);
     }
     const char *direction = (speed_percent > 0) ? "右转" : (speed_percent < 0 ? "左转" : "停止");
-//    std::cout << "控制转向电机速度: " << speed_percent << "% (direction: " << direction << ")" << std::endl;
+    // std::cout << "控制转向电机速度: " << speed_percent << "% (direction: " << direction << ")" << std::endl;
 }

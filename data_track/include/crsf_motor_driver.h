@@ -442,6 +442,12 @@ private:
     uint16_t angleToPWM(float angle);
     void setThrottlePWM(uint16_t pwm_us);
     void setServoAngle(float angle);
+    
+    // 检查是否为转向舵机模式（而非转向马达模式）
+    bool isSteeringServo();
+    
+    // 设置转向马达
+    void setSteeringMotor(int percent);
 };
 
 #endif // CRSF_MOTOR_DRIVER_H

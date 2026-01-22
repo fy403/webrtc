@@ -59,6 +59,11 @@ window.addEventListener('load', () => {
         joystickContainer: document.getElementById('virtualJoystickContainer'),
         joystickBase: document.getElementById('joystickBase'),
         joystickHandle: document.getElementById('joystickHandle'),
+        // Dual joystick elements (for mobile)
+        leftJoystickBase: document.getElementById('leftJoystickBase'),
+        leftJoystickHandle: document.getElementById('leftJoystickHandle'),
+        rightJoystickBase: document.getElementById('rightJoystickBase'),
+        rightJoystickHandle: document.getElementById('rightJoystickHandle'),
         connStatus: document.getElementById('connStatus'),
         signalStrength: document.getElementById('signalStrength'),
         signalIndicator: document.getElementById('signalIndicator'),
@@ -71,6 +76,10 @@ window.addEventListener('load', () => {
         lastUpdate: document.getElementById('lastUpdate'),
         speedValue: document.getElementById('speedValue'),
         throttleLimitIndicator: document.getElementById('throttleLimitIndicator'),
+        // Controller status elements
+        keyboardStatus: document.getElementById('keyboardStatus'),
+        xboxStatus: document.getElementById('xboxStatus'),
+        gyroStatus: document.getElementById('gyroStatus'),
     };
 
     // System status snapshot
@@ -161,22 +170,54 @@ window.addEventListener('load', () => {
             },
         });
 
-        const joystick = new VirtualJoystickController({
-            elements: {
-                container: dataElements.joystickContainer,
-                base: dataElements.joystickBase,
-                handle: dataElements.joystickHandle,
-            },
-        });
-
         const xbox = new XboxController({});
 
         controllerManager.register('keyboard', keyboard, 10);
         controllerManager.register('xbox', xbox, 8);
-        controllerManager.register('joystick', joystick, 5);
+
+        // For desktop, register single joystick if elements exist
+        if (dataElements.joystickContainer && dataElements.joystickBase && dataElements.joystickHandle) {
+            const joystick = new VirtualJoystickController({
+                elements: {
+                    container: dataElements.joystickContainer,
+                    base: dataElements.joystickBase,
+                    handle: dataElements.joystickHandle,
+                },
+            });
+            controllerManager.register('joystick', joystick, 5);
+        }
+
+        // Dual joystick is initialized separately in dual_joystick_init.js for mobile
+
+        // Set up controller status change callback
+        controllerManager.setControllerStatusCallback((statuses) => {
+            updateControllerStatusIcons(statuses);
+        });
 
         // Expose controllerManager for gyroscope controller access
         window.controllerManager = controllerManager;
+    }
+
+    function updateControllerStatusIcons(statuses) {
+        // Update keyboard status
+        updateStatusIcon(dataElements.keyboardStatus, statuses.keyboard);
+
+        // Update xbox status
+        updateStatusIcon(dataElements.xboxStatus, statuses.xbox);
+
+        // Update gyroscope status
+        updateStatusIcon(dataElements.gyroStatus, statuses.gyroscope || statuses.gyro);
+    }
+
+    function updateStatusIcon(element, active) {
+        if (!element) return;
+        if (active) {
+            element.classList.add('active');
+            element.classList.remove('inactive');
+        } else {
+            element.classList.remove('active');
+            element.classList.add('inactive');
+        }
     }
 
     function updateStatus(message) {

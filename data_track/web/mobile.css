@@ -235,17 +235,29 @@
 			color: #e5e7eb;
 		}
 
-		/* 虚拟手柄样式 - 右手大拇指区域 */
-		.virtual-joystick-container {
-			position: absolute;
-			right: 15%;
-			bottom: 13%;
-			z-index: 30;
-			touch-action: none;
-			-webkit-touch-callout: none;
-			-webkit-user-select: none;
-			user-select: none;
-		}
+	/* 虚拟手柄样式 - 左摇杆（前后控制） */
+	.virtual-joystick-container.left-joystick {
+		position: absolute;
+		left: 15%;
+		bottom: 13%;
+		z-index: 30;
+		touch-action: none;
+		-webkit-touch-callout: none;
+		-webkit-user-select: none;
+		user-select: none;
+	}
+
+	/* 虚拟手柄样式 - 右摇杆（左右控制） */
+	.virtual-joystick-container.right-joystick {
+		position: absolute;
+		right: 15%;
+		bottom: 13%;
+		z-index: 30;
+		touch-action: none;
+		-webkit-touch-callout: none;
+		-webkit-user-select: none;
+		user-select: none;
+	}
 
 		.joystick-base {
 			width: 120px;
@@ -486,3 +498,52 @@
 			visibility: visible !important;
 			opacity: 1 !important;
 		}
+
+	/* Controller and media status indicators for mobile */
+	.status-indicators-container {
+		display: flex;
+		align-items: center;
+		gap: 15px;
+		margin-right: 10px;
+	}
+
+	.controller-status,
+	.media-status {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.status-icon {
+		width: 20px;
+		height: 20px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 4px;
+		transition: all 0.3s ease;
+		opacity: 0.4;
+	}
+
+	.status-icon svg {
+		width: 16px;
+		height: 16px;
+		stroke: #93a4d6;
+	}
+
+	.status-icon.active {
+		opacity: 1;
+		background: rgba(16, 185, 129, 0.2);
+	}
+
+	.status-icon.active svg {
+		stroke: #10b981;
+	}
+
+	.status-icon.inactive {
+		opacity: 0.4;
+	}
+
+	.status-icon.inactive svg {
+		stroke: #93a4d6;
+	}

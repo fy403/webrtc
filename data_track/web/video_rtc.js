@@ -6,8 +6,8 @@ window.addEventListener('load', () => {
     // ========== 优化配置：低延迟 WebRTC ==========
     const config = {
         iceServers: [{
-            urls: ['stun:stun.l.google.com:19302']
-        },
+                urls: ['stun:stun.l.google.com:19302']
+            },
             {
                 urls: ['turn:tx.fy403.cn:3478?transport=udp'],
                 username: 'fy403',
@@ -32,6 +32,47 @@ window.addEventListener('load', () => {
     const remoteVideo = document.getElementById('remoteVideo');
     const statusDiv = document.getElementById('status');
     _localId.textContent = localId;
+
+    // Track status elements
+    const videoTrackStatus = document.getElementById('videoTrackStatus');
+    const audioTrackStatus = document.getElementById('audioTrackStatus');
+
+    // Function to update track status indicators
+    function updateTrackStatus() {
+        if (!remoteVideo.srcObject) {
+            // No stream - both tracks disabled
+            updateStatusIcon(videoTrackStatus, false);
+            updateStatusIcon(audioTrackStatus, false);
+            return;
+        }
+
+        const tracks = remoteVideo.srcObject.getTracks();
+        const videoTracks = tracks.filter(t => t.kind === 'video');
+        const audioTracks = tracks.filter(t => t.kind === 'audio');
+
+        // Update video track status
+        const videoEnabled = videoTracks.length > 0 && videoTracks[0].enabled;
+        updateStatusIcon(videoTrackStatus, videoEnabled);
+
+        // Update audio track status
+        const audioEnabled = audioTracks.length > 0 && audioTracks[0].enabled;
+        updateStatusIcon(audioTrackStatus, audioEnabled);
+    }
+
+    // Function to update a single status icon
+    function updateStatusIcon(element, enabled) {
+        if (!element) return;
+        if (enabled) {
+            element.classList.add('active');
+            element.classList.remove('inactive');
+        } else {
+            element.classList.remove('active');
+            element.classList.add('inactive');
+        }
+    }
+
+    // Initialize track status
+    updateTrackStatus();
 
     // ========== 性能优化模块 ==========
     // 使用独立的优化类
@@ -105,7 +146,7 @@ window.addEventListener('load', () => {
         try {
             localStream = await navigator.mediaDevices.getUserMedia({
                 audio: true,
-                video: false,
+                video: true,
             });
             console.log('获取本地音频流成功');
         } catch (error) {
@@ -499,12 +540,18 @@ window.addEventListener('load', () => {
                 // 添加新的轨道
                 stream.addTrack(e.track);
                 console.log(`Added ${e.track.kind} track to existing stream`);
+
+                // Update track status when tracks are replaced
+                setTimeout(updateTrackStatus, 100);
             } else {
                 // 创建新的媒体流，包含这个轨道
                 console.log(`Creating new stream with ${e.track.kind} track`);
                 const stream = new MediaStream([e.track]);
                 remoteVideo.srcObject = stream;
                 toggleNoSignalOverlay(false); // 当有媒体流时隐藏"无信号"覆盖层
+
+                // Update track status when new stream is created
+                setTimeout(updateTrackStatus, 100);
             }
 
             // 设置轨道属性
@@ -631,7 +678,7 @@ window.addEventListener('load', () => {
         } : {};
 
         (type == 'offer' ? pc.createOffer(options) : pc.createAnswer())
-            .then((desc) => {
+        .then((desc) => {
                 // console.log(`Created ${type}:`, desc.sdp);
 
                 // ========== SDP 优化：低延迟配置 ==========

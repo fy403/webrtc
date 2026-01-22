@@ -16,6 +16,7 @@
 	<script src="gyroscope_controller.js"></script>
 	<script src="controller_manager.js"></script>
 	<script src="data_rtc.js"></script>
+	<script src="dual_joystick_init.js"></script>
 </head>
 
 <body>
@@ -24,10 +25,18 @@
 		<div class="video-section">
 			<div class="video-wrapper">
 				<div class="video-with-overlay">
-					<!-- 虚拟手柄控制层 -->
-					<div class="virtual-joystick-container" id="virtualJoystickContainer">
-						<div class="joystick-base" id="joystickBase">
-							<div class="joystick-handle" id="joystickHandle"></div>
+					<!-- 虚拟手柄控制层 - 左摇杆（前后） -->
+					<div class="virtual-joystick-container left-joystick" id="leftJoystickContainer">
+						<div class="joystick-base" id="leftJoystickBase">
+							<div class="joystick-handle" id="leftJoystickHandle"></div>
+							<div class="joystick-center"></div>
+						</div>
+					</div>
+
+					<!-- 虚拟手柄控制层 - 右摇杆（左右） -->
+					<div class="virtual-joystick-container right-joystick" id="rightJoystickContainer">
+						<div class="joystick-base" id="rightJoystickBase">
+							<div class="joystick-handle" id="rightJoystickHandle"></div>
 							<div class="joystick-center"></div>
 						</div>
 					</div>
@@ -91,6 +100,61 @@
 
 					<!-- 底部状态面板 -->
 					<div class="status-overlay bottom-overlay">
+						<div class="status-indicators-container">
+							<!-- 控制器状态指示器 -->
+							<div class="controller-status">
+								<div class="status-icon" id="keyboardStatus" title="键盘">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<rect x="2" y="4" width="20" height="16" rx="2"/>
+										<line x1="6" y1="8" x2="6" y2="8"/>
+										<line x1="10" y1="8" x2="10" y2="8"/>
+										<line x1="14" y1="8" x2="14" y2="8"/>
+										<line x1="18" y1="8" x2="18" y2="8"/>
+										<line x1="6" y1="12" x2="6" y2="12"/>
+										<line x1="10" y1="12" x2="10" y2="12"/>
+										<line x1="14" y1="12" x2="14" y2="12"/>
+										<line x1="18" y1="12" x2="18" y2="12"/>
+									</svg>
+								</div>
+								<div class="status-icon" id="xboxStatus" title="手柄">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<circle cx="12" cy="12" r="8"/>
+										<circle cx="12" cy="12" r="3"/>
+										<circle cx="7" cy="8" r="1.5"/>
+										<circle cx="17" cy="8" r="1.5"/>
+										<circle cx="7" cy="16" r="1.5"/>
+										<circle cx="17" cy="16" r="1.5"/>
+									</svg>
+								</div>
+								<div class="status-icon" id="gyroStatus" title="陀螺仪">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<circle cx="12" cy="12" r="8"/>
+										<line x1="12" y1="4" x2="12" y2="8"/>
+										<line x1="12" y1="16" x2="12" y2="20"/>
+										<line x1="4" y1="12" x2="8" y2="12"/>
+										<line x1="16" y1="12" x2="20" y2="12"/>
+										<circle cx="12" cy="12" r="2"/>
+									</svg>
+								</div>
+							</div>
+							<!-- 媒体轨道状态指示器 -->
+							<div class="media-status">
+								<div class="status-icon" id="videoTrackStatus" title="视频轨道">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<rect x="2" y="4" width="20" height="16" rx="2"/>
+										<polygon points="10 8 16 12 10 16 10 8"/>
+									</svg>
+								</div>
+								<div class="status-icon" id="audioTrackStatus" title="音频轨道">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+										<path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+										<line x1="12" y1="19" x2="12" y2="23"/>
+										<line x1="8" y1="23" x2="16" y2="23"/>
+									</svg>
+								</div>
+							</div>
+						</div>
 						<div class="signal-indicator-container">
 							<!-- 4G信号强度指示器 -->
 							<div class="signal-indicator" id="signalIndicator">
@@ -361,10 +425,15 @@
 							}
 
 							// 隐藏虚拟手柄以避免冲突
-							const joystickContainer = document.getElementById('virtualJoystickContainer');
-							if (joystickContainer) {
-								joystickContainer.style.opacity = '0.3';
-								joystickContainer.style.pointerEvents = 'none';
+							const leftJoystickContainer = document.getElementById('leftJoystickContainer');
+							const rightJoystickContainer = document.getElementById('rightJoystickContainer');
+							if (leftJoystickContainer) {
+								leftJoystickContainer.style.opacity = '0.3';
+								leftJoystickContainer.style.pointerEvents = 'none';
+							}
+							if (rightJoystickContainer) {
+								rightJoystickContainer.style.opacity = '0.3';
+								rightJoystickContainer.style.pointerEvents = 'none';
 							}
 
 							console.log('Gyroscope enabled and registered');
@@ -386,10 +455,15 @@
 						}
 
 						// 恢复虚拟手柄
-						const joystickContainer = document.getElementById('virtualJoystickContainer');
-						if (joystickContainer) {
-							joystickContainer.style.opacity = '';
-							joystickContainer.style.pointerEvents = '';
+						const leftJoystickContainer = document.getElementById('leftJoystickContainer');
+						const rightJoystickContainer = document.getElementById('rightJoystickContainer');
+						if (leftJoystickContainer) {
+							leftJoystickContainer.style.opacity = '';
+							leftJoystickContainer.style.pointerEvents = '';
+						}
+						if (rightJoystickContainer) {
+							rightJoystickContainer.style.opacity = '';
+							rightJoystickContainer.style.pointerEvents = '';
 						}
 
 						console.log('Gyroscope disabled');

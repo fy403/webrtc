@@ -2,192 +2,248 @@
 <html lang="zh-CN">
 
 <head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>Signal Control Client</title>
-	<link rel="stylesheet" href="style.css">
-	<script src="webrtc_optimizer.js"></script>
-	<script src="video_rtc.js"></script>
-	<script src="sbus_encoder.js"></script>
-	<script src="control_curves.js"></script>
-	<script src="keyboard_controller.js"></script>
-	<script src="virtual_joystick_controller.js"></script>
-	<script src="xbox_controller.js"></script>
-	<script src="controller_manager.js"></script>
-	<script src="data_rtc.js"></script>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1" name="viewport">
+    <title>Signal Control Client</title>
+    <link href="style.css" rel="stylesheet">
+    <script src="webrtc_optimizer.js"></script>
+    <script src="video_rtc.js"></script>
+    <script src="sbus_encoder.js"></script>
+    <script src="control_curves.js"></script>
+    <script src="keyboard_controller.js"></script>
+    <script src="virtual_joystick_controller.js"></script>
+    <script src="xbox_controller.js"></script>
+    <script src="controller_manager.js"></script>
+    <script src="data_rtc.js"></script>
 </head>
 
 <body>
-	<div class="container">
-		<!-- 视频层 - 最高层 -->
-		<div class="video-layer">
-			<div class="card">
-				<div class="video-with-overlay">
-					<!-- 左侧状态面板 -->
-					<div class="status-overlay left-overlay">
-						<div class="status-group">
-							<div class="status-item-inline">
-								<div class="hint">上行网速</div>
-								<div class="mono" id="txSpeed">0.00 KBit/s</div>
-							</div>
-							<div class="status-item-inline">
-								<div class="hint">下行网速</div>
-								<div class="mono" id="rxSpeed">0.00 KBit/s</div>
-							</div>
-							<div class="status-item-inline">
-								<div class="hint">CPU使用率</div>
-								<div class="mono" id="cpuUsage">0.00%</div>
-							</div>
-						</div>
-					</div>
+<div class="container">
+    <!-- 视频层 - 最高层 -->
+    <div class="video-layer">
+        <div class="card">
+            <div class="video-with-overlay">
+                <!-- 左侧状态面板 -->
+                <div class="status-overlay left-overlay">
+                    <div class="status-group">
+                        <div class="status-item-inline">
+                            <div class="hint">上行网速</div>
+                            <div class="mono" id="txSpeed">0.00 KBit/s</div>
+                        </div>
+                        <div class="status-item-inline">
+                            <div class="hint">下行网速</div>
+                            <div class="mono" id="rxSpeed">0.00 KBit/s</div>
+                        </div>
+                        <div class="status-item-inline">
+                            <div class="hint">CPU使用率</div>
+                            <div class="mono" id="cpuUsage">0.00%</div>
+                        </div>
+                    </div>
+                </div>
 
-					<!-- 右侧状态面板 -->
-					<div class="status-overlay right-overlay">
-						<div class="status-group">
-							<div class="status-item-inline">
-								<div class="hint">4G信号强度</div>
-								<div class="mono" id="signalStrength">-- dBm</div>
-							</div>
-							<div class="status-item-inline">
-								<div class="hint">服务状态</div>
-								<div class="mono" id="serviceStatus">检查中...</div>
-							</div>
-							<div class="status-item-inline">
-								<div class="hint">4G网络状态</div>
-								<div class="mono" id="simStatus">UNKNOWN</div>
-							</div>
-						</div>
-					</div>
+                <!-- 右侧状态面板 -->
+                <div class="status-overlay right-overlay">
+                    <div class="status-group">
+                        <div class="status-item-inline">
+                            <div class="hint">4G信号强度</div>
+                            <div class="mono" id="signalStrength">-- dBm</div>
+                        </div>
+                        <div class="status-item-inline">
+                            <div class="hint">服务状态</div>
+                            <div class="mono" id="serviceStatus">检查中...</div>
+                        </div>
+                        <div class="status-item-inline">
+                            <div class="hint">4G网络状态</div>
+                            <div class="mono" id="simStatus">UNKNOWN</div>
+                        </div>
+                    </div>
+                </div>
 
-					<!-- 速度显示面板 -->
-					<div class="status-overlay speed-overlay">
-						<div class="speed-display">
-							<div class="speed-value" id="speedValue">0</div>
-							<div class="speed-unit">%</div>
-						</div>
-					</div>
+                <!-- 速度显示面板 -->
+                <div class="status-overlay speed-overlay">
+                    <div class="speed-display">
+                        <div class="speed-value" id="speedValue">0</div>
+                        <div class="speed-unit">%</div>
+                    </div>
+                </div>
 
-					<!-- 底部状态面板 -->
-					<div class="status-overlay bottom-overlay">
-						<div class="signal-indicator-container">
-							<!-- 4G信号强度指示器 -->
-							<div class="signal-indicator" id="signalIndicator">
-								<div class="signal-bar"></div>
-								<div class="signal-bar"></div>
-								<div class="signal-bar"></div>
-								<div class="signal-bar"></div>
-								<div class="signal-bar"></div>
-							</div>
-							<div class="signal-info">
-								<span class="signal-text">质量:</span>
-								<span class="signal-quality" id="signalQuality">--</span>
-							</div>
-						</div>
-						<div class="last-update">
-							<div class="hint">最后更新: <span id="lastUpdate">--</span></div>
-						</div>
-						<div class="last-update">
-							<div class="hint">油门最大比例: <span id="throttleLimitIndicator">不限</span></div>
-						</div>
-					</div>
+                <!-- 底部状态面板 -->
+                <div class="status-overlay bottom-overlay">
+                    <div class="status-indicators-container">
+                        <!-- 控制器状态指示器 -->
+                        <div class="controller-status">
+                            <div class="status-icon" id="keyboardStatus" title="键盘">
+                                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <rect height="16" rx="2" width="20" x="2" y="4"/>
+                                    <line x1="6" x2="6" y1="8" y2="8"/>
+                                    <line x1="10" x2="10" y1="8" y2="8"/>
+                                    <line x1="14" x2="14" y1="8" y2="8"/>
+                                    <line x1="18" x2="18" y1="8" y2="8"/>
+                                    <line x1="6" x2="6" y1="12" y2="12"/>
+                                    <line x1="10" x2="10" y1="12" y2="12"/>
+                                    <line x1="14" x2="14" y1="12" y2="12"/>
+                                    <line x1="18" x2="18" y1="12" y2="12"/>
+                                </svg>
+                            </div>
+                            <div class="status-icon" id="xboxStatus" title="手柄">
+                                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <circle cx="12" cy="12" r="8"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                    <circle cx="7" cy="8" r="1.5"/>
+                                    <circle cx="17" cy="8" r="1.5"/>
+                                    <circle cx="7" cy="16" r="1.5"/>
+                                    <circle cx="17" cy="16" r="1.5"/>
+                                </svg>
+                            </div>
+                            <div class="status-icon" id="gyroStatus" title="陀螺仪">
+                                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <circle cx="12" cy="12" r="8"/>
+                                    <line x1="12" x2="12" y1="4" y2="8"/>
+                                    <line x1="12" x2="12" y1="16" y2="20"/>
+                                    <line x1="4" x2="8" y1="12" y2="12"/>
+                                    <line x1="16" x2="20" y1="12" y2="12"/>
+                                    <circle cx="12" cy="12" r="2"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <!-- 媒体轨道状态指示器 -->
+                        <div class="media-status">
+                            <div class="status-icon" id="videoTrackStatus" title="视频轨道">
+                                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <rect height="16" rx="2" width="20" x="2" y="4"/>
+                                    <polygon points="10 8 16 12 10 16 10 8"/>
+                                </svg>
+                            </div>
+                            <div class="status-icon" id="audioTrackStatus" title="音频轨道">
+                                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                                    <line x1="12" x2="12" y1="19" y2="23"/>
+                                    <line x1="8" x2="16" y1="23" y2="23"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="signal-indicator-container">
+                        <!-- 4G信号强度指示器 -->
+                        <div class="signal-indicator" id="signalIndicator">
+                            <div class="signal-bar"></div>
+                            <div class="signal-bar"></div>
+                            <div class="signal-bar"></div>
+                            <div class="signal-bar"></div>
+                            <div class="signal-bar"></div>
+                        </div>
+                        <div class="signal-info">
+                            <span class="signal-text">质量:</span>
+                            <span class="signal-quality" id="signalQuality">--</span>
+                        </div>
+                    </div>
+                    <div class="last-update">
+                        <div class="hint">最后更新: <span id="lastUpdate">--</span></div>
+                    </div>
+                    <div class="last-update">
+                        <div class="hint">油门最大比例: <span id="throttleLimitIndicator">不限</span></div>
+                    </div>
+                </div>
 
-					<div class="video-container">
-						<video id="remoteVideo" autoplay playsinline></video>
-						<div id="noSignalOverlay" class="no-signal-overlay">
-							<div class="no-signal-text">无信号</div>
-						</div>
-					</div>
-				</div>
-			</div>
-		</div>
-		<!-- 控制层 - 下层 -->
-		<div class="control-layer">
-			<div class="card">
-				<div class="control-panel">
-					<div class="connection-info">
-						<div id="connStatus"><span class="status-dot dot-red"></span><span
-								class="mono">DISCONNECTED</span></div>
-						<div class="hint" style="visibility: hidden;">目标: <span class="mono"
-								id="endpointText">ws://fy403.cn:8766</span></div>
-					</div>
+                <div class="video-container">
+                    <video autoplay id="remoteVideo" playsinline></video>
+                    <div class="no-signal-overlay" id="noSignalOverlay">
+                        <div class="no-signal-text">无信号</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- 控制层 - 下层 -->
+    <div class="control-layer">
+        <div class="card">
+            <div class="control-panel">
+                <div class="connection-info">
+                    <div id="connStatus"><span class="status-dot dot-red"></span><span
+                            class="mono">DISCONNECTED</span></div>
+                    <div class="hint" style="visibility: hidden;">目标: <span class="mono"
+                                                                              id="endpointText">ws://fy403.cn:8766</span>
+                    </div>
+                </div>
 
-					<div class="control-buttons">
-						<button id="reconnectBtn" class="btn">重新连接</button>
-						<button id="stopAllBtn" class="btn">STOP ALL (Space)</button>
-						<button id="emgBtn" class="btn">急停 T</button>
-						<!--						<button id="throttleBtn" class="btn">档位调整 F</button>-->
-					</div>
-				</div>
+                <div class="control-buttons">
+                    <button class="btn" id="reconnectBtn">重新连接</button>
+                    <button class="btn" id="stopAllBtn">STOP ALL (Space)</button>
+                    <button class="btn" id="emgBtn">急停 T</button>
+                    <!--						<button id="throttleBtn" class="btn">档位调整 F</button>-->
+                </div>
+            </div>
 
-				<div class="keyboard-controls">
-					<div class="hint">按键映射：</div>
-					<div class="kb">
-						<div></div>
-						<div id="keyW" class="key">W</div>
-						<div></div>
-						<div id="keyA" class="key">A</div>
-						<div id="keyS" class="key">S</div>
-						<div id="keyD" class="key">D</div>
-					</div>
-				</div>
-			</div>
+            <div class="keyboard-controls">
+                <div class="hint">按键映射：</div>
+                <div class="kb">
+                    <div></div>
+                    <div class="key" id="keyW">W</div>
+                    <div></div>
+                    <div class="key" id="keyA">A</div>
+                    <div class="key" id="keyS">S</div>
+                    <div class="key" id="keyD">D</div>
+                </div>
+            </div>
+        </div>
 
-			<div class="card">
-				<div id="debugInfo" class="debug-info">
-					<h3>Debug Information</h3>
-					<div id="videoInfo"></div>
-				</div>
-			</div>
-		</div>
-		<div class="card">
-			<div>
-				<h2>Local ID</h2>
-				<p id="localId"></p>
-			</div>
-			<div id="status">Status: Not connected</div>
-			<div>
-				<h2>Local ID</h2>
-				<p id="dataLocalId"></p>
-			</div>
-			<div id="dataStatus">Status: Not connected</div>
-		</div>
-		<div class="card">
-			<div class="video-controls">
-				<span class="badge">Send offer to:</span>
-				<input id="offerId" class="input mono" placeholder="remote ID" value="cam_dYFh3H3kf" />
-				<button id="offerBtn" class="btn">Send</button>
-			</div>
-			<div class="video-controls">
-				<span class="badge">Send offer to:</span>
-				<input id="dataOfferId" class="input mono" placeholder="remote ID" value="data_Dd8fgkoKo90" />
-				<button id="dataOfferBtn" class="btn">Send</button>
-			</div>
-		</div>
-		<!-- <div class="card">
-			<span class="badge">协议</span>
-			<pre id="proto" class="mono" style="white-space:pre-wrap; margin-top:8px; color:#9fb4ff">
+        <!--			<div class="card">-->
+        <!--				<div id="debugInfo" class="debug-info">-->
+        <!--					<h3>Debug Information</h3>-->
+        <!--					<div id="videoInfo"></div>-->
+        <!--				</div>-->
+        <!--			</div>-->
+    </div>
+    <div class="card">
+        <div>
+            <h2>Local ID</h2>
+            <p id="localId"></p>
+        </div>
+        <div id="status">Status: Not connected</div>
+        <div>
+            <h2>Local ID</h2>
+            <p id="dataLocalId"></p>
+        </div>
+        <div id="dataStatus">Status: Not connected</div>
+    </div>
+    <div class="card">
+        <div class="video-controls">
+            <span class="badge">Send offer to:</span>
+            <input class="input mono" id="offerId" placeholder="remote ID" value="cam_dYFh3H3kf"/>
+            <button class="btn" id="offerBtn">Send</button>
+        </div>
+        <div class="video-controls">
+            <span class="badge">Send offer to:</span>
+            <input class="input mono" id="dataOfferId" placeholder="remote ID" value="data_Dd8fgkoKo90"/>
+            <button class="btn" id="dataOfferBtn">Send</button>
+        </div>
+    </div>
+    <!-- <div class="card">
+        <span class="badge">协议</span>
+        <pre id="proto" class="mono" style="white-space:pre-wrap; margin-top:8px; color:#9fb4ff">
 0:0xAA 1:0x55 2:type 3:key 4:value 5:0 6-7:checksum16(sum of bytes[0..5])
 MSG_KEY=0x01 (key:1=W,2=S,3=A,4=D; value:1=DOWN,0=UP)
 MSG_EMERGENCY_STOP=0x02, MSG_CYCLE_THROTTLE=0x03, MSG_STOP_ALL=0x04, MSG_QUIT=0x05, MSG_PING=0x10
 MSG_SYSTEM_STATUS=0x20 (扩展帧12字节: 3:rx_speed_H,4:rx_speed_L,5:tx_speed_H,6:tx_speed_L,7:cpu_H,8:cpu_L,9:service_status,10:4g_signal)
-			</pre>
-		</div> -->
-	</div>
+        </pre>
+    </div> -->
+</div>
 
-	<script>
-		// 设备检测并重定向逻辑
-		function isMobileDevice() {
-			return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-		}
+<script>
+    // 设备检测并重定向逻辑
+    function isMobileDevice() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    }
 
-		// 页面加载完成后执行检查
-		document.addEventListener('DOMContentLoaded', function () {
-			// 如果当前不是mobile.html页面且检测到是移动设备，则跳转到mobile.html
-			if (!window.location.pathname.includes('mobile.html') && isMobileDevice()) {
-				window.location.href = 'mobile.html';
-			}
-		});
-	</script>
+    // 页面加载完成后执行检查
+    document.addEventListener('DOMContentLoaded', function () {
+        // 如果当前不是mobile.html页面且检测到是移动设备，则跳转到mobile.html
+        if (!window.location.pathname.includes('mobile.html') && isMobileDevice()) {
+            window.location.href = 'mobile.html';
+        }
+    });
+</script>
 </body>
 
 </html>

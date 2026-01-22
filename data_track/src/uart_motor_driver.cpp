@@ -16,15 +16,16 @@ UartMotorDriver::UartMotorDriver(const std::string &port,
                                  int16_t neutral,
                                  int front_back_id,
                                  int left_right_id)
-        : port_(port),
-          baudrate_(baudrate),
-          fd_(-1),
-          error_count_(0),
-          forward_limit_(forward_max),
-          reverse_limit_(reverse_max),
-          neutral_pwm_(neutral),
-          front_back_id_(front_back_id),
-          left_right_id_(left_right_id) {}
+    : port_(port),
+      baudrate_(baudrate),
+      fd_(-1),
+      error_count_(0),
+      forward_limit_(forward_max),
+      reverse_limit_(reverse_max),
+      neutral_pwm_(neutral),
+      front_back_id_(front_back_id),
+      left_right_id_(left_right_id) {
+}
 
 UartMotorDriver::~UartMotorDriver() {
     disconnect();
@@ -143,7 +144,7 @@ bool UartMotorDriver::sendCommand(const std::string &cmd, std::string *response,
         error_count_ = 0; // Reset error count on successful write
     }
 
-    std::cout << "Sent: " << cmd << std::endl;
+    // std::cout << "Sent: " << cmd << std::endl;
 
     // 如果不需要响应，直接返回成功
     if (response == nullptr) {
@@ -156,9 +157,8 @@ bool UartMotorDriver::sendCommand(const std::string &cmd, std::string *response,
     char buffer[256];
 
     while (std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start)
-                   .count() < timeout_ms) {
-
+               std::chrono::steady_clock::now() - start)
+           .count() < timeout_ms) {
         int len = read(fd_, buffer, sizeof(buffer) - 1);
         if (len > 0) {
             buffer[len] = '\0';

@@ -7,15 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Find pkg-config
 find_package(PkgConfig REQUIRED)
 
-# Find libav libraries - SINGLE call with all required components
-#pkg_check_modules(LIBAV REQUIRED
-#        libavformat
-#        libavcodec
-#        libavutil
-#        libswscale
-#        libavdevice
-#)
-
 # Find libdatachannel
 find_library(LIBDATACHANNEL_LIBRARY
         NAMES datachannel
@@ -32,7 +23,6 @@ find_path(LIBDATACHANNEL_INCLUDE_DIR
 )
 
 message(STATUS "Found libdatachannel library: ${LIBDATACHANNEL_LIBRARY}")
-message(STATUS "Found libav libraries: ${LIBAV_LIBRARIES}")
 
 # Add executable
 add_executable(webrtc_publisher
@@ -50,30 +40,20 @@ add_executable(webrtc_publisher
 
 # Include directories
 target_include_directories(webrtc_publisher PRIVATE
-        ${LIBAV_INCLUDE_DIRS}
         ${LIBDATACHANNEL_INCLUDE_DIR}
         include
 )
 
 # Link libraries
 target_link_libraries(webrtc_publisher
-        #        ${LIBAV_LIBRARIES}
         ${LIBDATACHANNEL_LIBRARY}
         ssl
         crypto
 )
 
-# Windows specific libraries
-if (WIN32)
-    target_link_libraries(webrtc_publisher
-            ws2_32
-            crypt32
-    )
-else ()
-    target_link_libraries(webrtc_publisher
-            pthread
-    )
-endif ()
+target_link_libraries(webrtc_publisher
+        pthread
+)
 
 # C++17 is already set globally, but you can also set it per target
 target_compile_features(webrtc_publisher PRIVATE cxx_std_17)

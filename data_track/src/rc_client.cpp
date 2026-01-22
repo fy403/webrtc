@@ -9,18 +9,17 @@
 #include <signal.h>
 #include <iomanip>
 
-// Global variable for signal handling
-extern RCClient *global_client;
+// RCClient is now a local variable in main(), managed by unique_ptr
 
 RCClient::RCClient(const RCClientConfig &config)
-        : has_timeout_(false),
-        // 使用配置类中的 MotorController 配置
-          motor_controller_(new MotorController(config.motor_controller_config)),
-          data_channel_(nullptr),
-        // SystemMonitor 不需要在构造函数中初始化4G模块
-          system_monitor_(),
-          watchdog_running_(true),
-          watchdog_timeout_ms_(config.watchdog_timeout_ms) {
+    : has_timeout_(false),
+      // 使用配置类中的 MotorController 配置
+      motor_controller_(new MotorController(config.motor_controller_config)),
+      data_channel_(nullptr),
+      // SystemMonitor 不需要在构造函数中初始化4G模块
+      system_monitor_(),
+      watchdog_running_(true),
+      watchdog_timeout_ms_(config.watchdog_timeout_ms) {
     last_heartbeat_ = std::chrono::steady_clock::now();
     last_status_time_ = std::chrono::steady_clock::now();
 
@@ -65,10 +64,7 @@ void RCClient::parseFrame(const uint8_t *frame, size_t length) {
 
     last_heartbeat_ = std::chrono::steady_clock::now();
 
-    // Channel 0 -> forward/backward, Channel 1 -> left/right
-    const double forward = MessageHandler::sbusToNormalized(sbus_frame.channels[0]);
-    const double turn = MessageHandler::sbusToNormalized(sbus_frame.channels[1]);
-    motor_controller_->applySbus(forward, turn);
+    motor_controller_->applySbus(sbus_frame);
 
     if (sbus_frame.failsafe) {
         std::cout << "SBUS failsafe detected, triggering emergency stop" << std::endl;
@@ -85,7 +81,7 @@ void RCClient::sendStatusFrame(const std::map<std::string, std::string> &statusD
     if (data_channel_) {
         data_channel_->send(reinterpret_cast<const std::byte *>(frame.data()), frame.size());
     } else {
-        std::cout << "Sending status frame faild: data_channel is down!" << std::endl;
+        // std::cout << "Sending status frame faild: data_channel is down!" << std::endl;
     }
 }
 
@@ -137,13 +133,13 @@ void RCClient::watchdogLoop() {
 
         if (has_timeout_) {
             has_timeout_ = false;
-//            std::cout << "SBUS failsafe detected, triggering emergency stop" << std::endl;
+            //            std::cout << "SBUS failsafe detected, triggering emergency stop" << std::endl;
             motor_controller_->stopAll();
             continue;
         }
 
         if (elapsed > watchdog_timeout_ms_) {
-//            std::cout << "Watchdog超时检测: " << elapsed << "ms未收到控制命令，自动停止电机" << std::endl;
+            //            std::cout << "Watchdog超时检测: " << elapsed << "ms未收到控制命令，自动停止电机" << std::endl;
             motor_controller_->stopAll();
         }
     }

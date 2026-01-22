@@ -7,6 +7,7 @@
 #include "motor_driver.h"
 #include "motor_controller_config.h"
 #include "constants.h"
+#include "message_handler.h"
 
 class MotorController {
 public:
@@ -24,7 +25,7 @@ public:
 
     void emergencyStop();
 
-    void applySbus(double forward, double turn);
+    void applySbus(const MessageHandler::SbusFrame &sbus_frame);
 
     void setFrontBackSpeed(int speed_percent);
 

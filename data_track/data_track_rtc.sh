@@ -14,7 +14,7 @@ TTY_PORT=/dev/ttyUSB0 # 电机驱动板usb端口
 TTY_BAUDRATE=115200 # 电机驱动板串口波特率
 GSM_PORT=/dev/ttyACM0 # 4g模块usb端口
 GSM_BAUDRATE=115200 # 4g模块串口波特率
-MOTOR_DRIVER_TYPE=crsf # 电机驱动类型: uart, crsf
+MOTOR_DRIVER_TYPE=uart # 电机驱动类型: uart, crsf
 
 # Path to font file - adjust according to your system
 FONT_FILE="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"

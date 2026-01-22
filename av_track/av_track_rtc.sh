@@ -59,27 +59,6 @@ test_video_device() {
         fi
     fi
 }
-# Check if host is reachable (IPv4/IPv6)
-check_host() {
-    if ping -${IP_TYPE} -c 3 -W 2 "$TARGET_HOST" > /dev/null 2>&1; then
-        echo "$(date): Host $TARGET_HOST is reachable"
-        return 0
-    else
-        echo "$(date): Host $TARGET_HOST is NOT reachable"
-        return 1
-    fi
-}
-
-# Check if port is open
-check_port() {
-    if nc -${IP_TYPE} -z -w 3 "$TARGET_HOST" "$TARGET_PORT" > /dev/null 2>&1; then
-        echo "$(date): Port $TARGET_PORT on $TARGET_HOST is open"
-        return 0
-    else
-        echo "$(date): Port $TARGET_PORT on $TARGET_HOST is NOT open"
-        return 1
-    fi
-}
 
 run_rtc() {
     echo "$(date): Starting RTC stream..."
@@ -112,28 +91,22 @@ main() {
     echo "$(date): Starting streaming script"
     
     while true; do
-#        if check_host && check_port; then
-            # Test video device before starting stream
-            if test_video_device; then
-                echo "$(date): All checks passed, starting stream..."
-                run_rtc
-                
-                # If RTC exits normally or with error, wait before restart
-                if [ $? -eq 0 ]; then
-                    echo "$(date): Stream completed normally, waiting before restart..."
-                    sleep $CHECK_INTERVAL
-                else
-                    echo "$(date): Stream failed, waiting before retry..."
-                    sleep $CHECK_INTERVAL
-                fi
+        if test_video_device; then
+            echo "$(date): All checks passed, starting stream..."
+            run_rtc
+
+            # If RTC exits normally or with error, wait before restart
+            if [ $? -eq 0 ]; then
+                echo "$(date): Stream completed normally, waiting before restart..."
+                sleep $CHECK_INTERVAL
             else
-                echo "$(date): Video device test failed, waiting before retry..."
+                echo "$(date): Stream failed, waiting before retry..."
                 sleep $CHECK_INTERVAL
             fi
-#        else
-#            echo "$(date): Health checks failed, waiting before retry..."
-#            sleep $CHECK_INTERVAL
-#        fi
+        else
+            echo "$(date): Video device test failed, waiting before retry..."
+            sleep $CHECK_INTERVAL
+        fi
     done
 }
 

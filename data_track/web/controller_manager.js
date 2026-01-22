@@ -5,12 +5,14 @@
       this.onUpdate = onUpdate;
       this.controllers = new Map();
       this.lastSent = { forward: 0, turn: 0 };
+      this.onControllerStatusChange = null;
     }
 
     register(name, controller, priority = 0) {
       this.controllers.set(name, { controller, priority, state: { forward: 0, turn: 0, active: false } });
       controller.onChange = (state) => this._handle(name, state);
       if (controller.start) controller.start();
+      this._notifyStatusChange();
     }
 
     _handle(name, state) {
@@ -40,9 +42,26 @@
         this.lastSent = chosen;
         this.onUpdate?.(chosen);
       }
+
+      this._notifyStatusChange();
+    }
+
+    _notifyStatusChange() {
+      if (this.onControllerStatusChange) {
+        const statuses = {};
+        this.controllers.forEach((item, name) => {
+          statuses[name] = item.state.active;
+        });
+        this.onControllerStatusChange(statuses);
+      }
+    }
+
+    setControllerStatusCallback(callback) {
+      this.onControllerStatusChange = callback;
     }
   }
 
   global.ControllerManager = ControllerManager;
 })(window);
+
 

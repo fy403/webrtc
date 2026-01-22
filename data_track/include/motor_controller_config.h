@@ -33,17 +33,17 @@ public:
 
     // ========== CRSF Motor Driver 配置参数 ==========
     // 舵机配置（用于控制方向/左右转向）
-    uint16_t crsf_servo_min_pulse = 500;      // 舵机最小脉冲宽度（微秒）
-    uint16_t crsf_servo_max_pulse = 2500;     // 舵机最大脉冲宽度（微秒）
-    uint16_t crsf_servo_neutral_pulse = 1500; // 舵机中位脉冲宽度（微秒）
+    uint16_t crsf_servo_min_pulse = 900;      // 舵机最小脉冲宽度（微秒）
+    uint16_t crsf_servo_max_pulse = 2100;     // 舵机最大脉冲宽度（微秒）
+    uint16_t crsf_servo_neutral_pulse = 1510; // 舵机中位脉冲宽度（微秒）
     float crsf_servo_min_angle = 0.0f;        // 舵机最小角度（度）
-    float crsf_servo_max_angle = 180.0f;      // 舵机最大角度（度）
+    float crsf_servo_max_angle = 0.0f;      // 舵机最大角度（度）
     uint8_t crsf_servo_channel = 2;           // CRSF 舵机通道编号（1-16）
 
     // 电调配置（用于控制前后/前进后退）
     uint16_t crsf_esc_min_pulse = 900;        // 电调最小脉冲宽度（微秒）
     uint16_t crsf_esc_max_pulse = 2100;       // 电调最大脉冲宽度（微秒）
-    uint16_t crsf_esc_neutral_pulse = 1520;   // 电调中位脉冲宽度（微秒）
+    uint16_t crsf_esc_neutral_pulse = 1510;   // 电调中位脉冲宽度（微秒）
     bool crsf_esc_reversible = true;          // 电调是否支持倒转
     uint8_t crsf_esc_channel = 1;             // CRSF 电调通道编号（1-16）
 
