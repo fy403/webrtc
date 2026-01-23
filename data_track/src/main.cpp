@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <csignal> // 用于信号处理
 #include <future>
@@ -23,6 +24,13 @@ using std::weak_ptr;
 
 // 全局原子标志位，用于信号处理
 std::atomic<bool> g_shutdown_requested{false};
+
+// WebSocket 重连相关
+std::shared_ptr<std::thread> g_ws_reconnect_thread;
+std::atomic<bool> g_ws_reconnect_running{false};
+std::shared_ptr<rtc::WebSocket> g_current_ws;
+std::string g_client_id;
+Cmdline *g_params = nullptr;
 
 // 信号处理函数
 void signal_handler(int signal) {
@@ -57,11 +65,25 @@ shared_ptr<rtc::PeerConnection> createPeerConnection(
 
 std::string randomId(size_t length);
 
+// 封装函数：创建 ICE 配置
+rtc::Configuration createIceConfig();
+
+// 封装函数：设置 WebSocket 回调和消息处理
+void setupWebSocketCallbacks(std::shared_ptr<rtc::WebSocket> ws,
+                             std::promise<void> &wsPromise,
+                             std::shared_ptr<RCClient> client);
+
+// WebSocket 自动重连
+void startWsReconnect();
+
+void stopWsReconnect();
+
 int main(int argc, char **argv) {
     try {
         setup_signal_handlers(); // 设置信号处理器
 
         Cmdline params(argc, argv);
+        g_params = &params; // 保存参数指针供重连使用
 
         // Use command line parameters or generate random ID
         std::string client_id = params.clientId(); // Use new client_id parameter
@@ -127,93 +149,19 @@ int main(int argc, char **argv) {
             return 0;
         }
 
-        if (params.udpMux()) {
-            std::cout << "ICE UDP mux enabled" << std::endl;
-            config.enableIceUdpMux = true;
-        }
+        // 保存客户端 ID 供重连使用
+        g_client_id = client_id;
 
+        // 创建 WebSocket
         auto ws = std::make_shared<rtc::WebSocket>();
 
         std::promise<void> wsPromise;
         auto wsFuture = wsPromise.get_future();
 
-        ws->onOpen([&wsPromise]() {
-            std::cout << "WebSocket connected, signaling ready" << std::endl;
-            wsPromise.set_value();
-        });
+        // 设置 WebSocket 回调和消息处理（使用封装的函数）
+        setupWebSocketCallbacks(ws, wsPromise, client);
 
-        ws->onError([&wsPromise](std::string s) {
-            std::cout << "WebSocket error" << std::endl;
-            wsPromise.set_exception(std::make_exception_ptr(std::runtime_error(s)));
-        });
-
-        ws->onClosed([client]() {
-            std::cout << "WebSocket closed" << std::endl;
-            client->stopAll();
-            throw std::runtime_error("WebSocket closed");
-        });
-
-        ws->onMessage([&config, client, wws = make_weak_ptr(ws)](auto data) {
-            // 如果收到关闭信号，则忽略新消息
-            if (g_shutdown_requested.load()) {
-                return;
-            }
-
-            // data holds either std::string or rtc::binary
-            if (!std::holds_alternative<std::string>(data))
-                return;
-
-            json message = json::parse(std::get<std::string>(data));
-
-            auto it = message.find("id");
-            if (it == message.end())
-                return;
-
-            auto id = it->get<std::string>();
-
-            it = message.find("type");
-            if (it == message.end())
-                return;
-
-            auto type = it->get<std::string>();
-
-            // Handle peer_close message
-            if (type == "peer_close") {
-                std::cout << "Received peer_close from " << id << ", stopping all and exiting" << std::endl;
-                client->stopAll();
-                throw std::runtime_error("Peer closed connection");
-            }
-
-            shared_ptr<rtc::PeerConnection> pc;
-            if (auto jt = peerConnectionMap.find(id); jt != peerConnectionMap.end()) {
-                if (type == "offer") {
-                    std::cout << "Release old pc" << std::endl;
-                    dataChannelMap[id].reset();
-                    peerConnectionMap[id].reset();
-                    peerConnectionMap.erase(id);
-                    dataChannelMap.erase(id);
-                    std::cout << "Answering to " + id << std::endl;
-                    pc = createPeerConnection(config, wws, id, client);
-                } else {
-                    pc = jt->second;
-                }
-            } else if (type == "offer") {
-                std::cout << "Answering to " + id << std::endl;
-                pc = createPeerConnection(config, wws, id, client);
-            } else {
-                return;
-            }
-
-            if (type == "offer" || type == "answer") {
-                auto sdp = message["description"].get<std::string>();
-                pc->setRemoteDescription(rtc::Description(sdp, type));
-            } else if (type == "candidate") {
-                auto sdp = message["candidate"].get<std::string>();
-                auto mid = message["mid"].get<std::string>();
-                pc->addRemoteCandidate(rtc::Candidate(sdp, mid));
-            }
-        });
-
+        // 连接服务器
         const std::string wsPrefix =
                 params.webSocketServer().find("://") == std::string::npos ? "ws://" : "";
         const std::string url = wsPrefix + params.webSocketServer() + ":" +
@@ -231,6 +179,15 @@ int main(int argc, char **argv) {
             throw std::runtime_error("Shutdown requested before main loop started");
         }
 
+        // 测试线程，10s后手动关闭ws
+        // std::thread testThread([&]() {
+        //     std::this_thread::sleep_for(std::chrono::seconds(10));
+        //     std::cout << "Closing WebSocket connection after 10 seconds" << std::endl;
+        //     ws->close();
+        // });
+        //
+        // testThread.join();
+
         // 主循环 - 处理睡眠和状态更新
         while (!g_shutdown_requested.load()) // 监听关闭信号
         {
@@ -241,6 +198,8 @@ int main(int argc, char **argv) {
         }
 
         std::cout << "Cleaning up..." << std::endl;
+        // 停止 WebSocket 重连线程
+        stopWsReconnect();
         client->stopAll();
         ws->close();
         dataChannelMap.clear();
@@ -340,4 +299,219 @@ std::string randomId(size_t length) {
     std::generate(id.begin(), id.end(),
                   [&]() { return characters.at(uniform(rng)); });
     return id;
+}
+
+// 创建 ICE 配置
+rtc::Configuration createIceConfig() {
+    rtc::Configuration config;
+
+    std::string stunServer = "";
+    if (g_params->noStun()) {
+        std::cout << "No STUN server is configured. Only local hosts and public IP "
+                "addresses supported."
+                << std::endl;
+    } else {
+        if (g_params->stunServer().substr(0, 5).compare("stun:") != 0) {
+            stunServer = "stun:";
+        }
+        stunServer += g_params->stunServer() + ":" + std::to_string(g_params->stunPort());
+        std::cout << "STUN server is " << stunServer << std::endl;
+        config.iceServers.emplace_back(stunServer);
+    }
+
+    // 添加 TURN 服务器配置支持
+    std::string turnServer = g_params->turnServer();
+    if (!turnServer.empty()) {
+        std::string turnUser = g_params->turnUser();
+        std::string turnPass = g_params->turnPass();
+        int turnPort = g_params->turnPort();
+
+        std::cout << "TURN server is " << turnServer << ":" << turnPort
+                << std::endl;
+
+        // TURN 服务器 - 使用带参数的构造函数
+        config.iceServers.push_back(
+            rtc::IceServer(turnServer, // hostname
+                           turnPort, // port
+                           turnUser, // username
+                           turnPass, // password
+                           rtc::IceServer::RelayType::TurnUdp // relay type
+            ));
+    }
+
+    if (g_params->udpMux()) {
+        std::cout << "ICE UDP mux enabled" << std::endl;
+        config.enableIceUdpMux = true;
+    }
+
+    return config;
+}
+
+// 设置 WebSocket 回调和消息处理
+void setupWebSocketCallbacks(std::shared_ptr<rtc::WebSocket> ws,
+                             std::promise<void> &wsPromise,
+                             std::shared_ptr<RCClient> client) {
+    auto config = createIceConfig();
+    auto wws = make_weak_ptr(ws);
+
+    ws->onOpen([client, &wsPromise, ws]() {
+        std::cout << "WebSocket connected, signaling ready" << std::endl;
+        // 替换旧的 WebSocket
+        if (g_current_ws && g_current_ws != ws) {
+            std::cout << "Replacing old WebSocket" << std::endl;
+            g_current_ws->close();
+        }
+        g_current_ws = ws;
+        // WebSocket 连接成功，停止重连
+        stopWsReconnect();
+        wsPromise.set_value();
+    });
+
+    ws->onError([&wsPromise](std::string s) {
+        std::cout << "WebSocket error: " << s << std::endl;
+        wsPromise.set_exception(std::make_exception_ptr(std::runtime_error(s)));
+    });
+
+    ws->onClosed([client]() {
+        std::cout << "WebSocket closed" << std::endl;
+        client->stopAll();
+        // 启动 WebSocket 自动重连
+        startWsReconnect();
+    });
+
+    ws->onMessage([config, client, wws](auto data) {
+        // 如果收到关闭信号，则忽略新消息
+        if (g_shutdown_requested.load()) {
+            return;
+        }
+
+        // data holds either std::string or rtc::binary
+        if (!std::holds_alternative<std::string>(data))
+            return;
+
+        json message = json::parse(std::get<std::string>(data));
+
+        auto it = message.find("id");
+        if (it == message.end())
+            return;
+
+        auto id = it->get<std::string>();
+
+        it = message.find("type");
+        if (it == message.end())
+            return;
+
+        auto type = it->get<std::string>();
+
+        // Handle peer_close message
+        if (type == "peer_close") {
+            std::cout << "Received peer_close from " << id << ", stopping all and exiting" << std::endl;
+            client->stopAll();
+            throw std::runtime_error("Peer closed connection");
+        }
+
+        shared_ptr<rtc::PeerConnection> pc;
+        if (auto jt = peerConnectionMap.find(id); jt != peerConnectionMap.end()) {
+            if (type == "offer") {
+                std::cout << "Release old pc" << std::endl;
+                dataChannelMap[id].reset();
+                peerConnectionMap[id].reset();
+                peerConnectionMap.erase(id);
+                dataChannelMap.erase(id);
+                std::cout << "Answering to " + id << std::endl;
+                pc = createPeerConnection(config, wws, id, client);
+            } else {
+                pc = jt->second;
+            }
+        } else if (type == "offer") {
+            std::cout << "Answering to " + id << std::endl;
+            pc = createPeerConnection(config, wws, id, client);
+        } else {
+            return;
+        }
+
+        if (type == "offer" || type == "answer") {
+            auto sdp = message["description"].get<std::string>();
+            pc->setRemoteDescription(rtc::Description(sdp, type));
+        } else if (type == "candidate") {
+            auto sdp = message["candidate"].get<std::string>();
+            auto mid = message["mid"].get<std::string>();
+            pc->addRemoteCandidate(rtc::Candidate(sdp, mid));
+        }
+    });
+}
+
+// WebSocket 自动重连
+void startWsReconnect() {
+    // 如果已经在重连，不重复启动
+    if (g_ws_reconnect_running.exchange(true)) {
+        std::cout << "WebSocket reconnect already running" << std::endl;
+        return;
+    }
+
+    std::cout << "Starting WebSocket auto-reconnect..." << std::endl;
+
+    // 创建重连线程
+    g_ws_reconnect_thread = std::make_shared<std::thread>([]() {
+        while (g_ws_reconnect_running) {
+            try {
+                // 创建新的 WebSocket
+                auto newWs = std::make_shared<rtc::WebSocket>();
+
+                std::promise<void> wsPromise;
+                auto wsFuture = wsPromise.get_future();
+
+                // 重新创建 RCClient
+                RCClientConfig rcClientConfig(
+                    g_params->usbDevice(),
+                    g_params->motorDriverType(),
+                    g_params->ttyBaudrate(),
+                    g_params->gsmPort(),
+                    g_params->gsmBaudrate()
+                );
+                std::shared_ptr<RCClient> client = std::make_shared<RCClient>(rcClientConfig);
+                client->stopAll();
+
+                // 设置 WebSocket 回调和消息处理（使用封装的函数）
+                setupWebSocketCallbacks(newWs, wsPromise, client);
+
+                // 连接服务器
+                const std::string wsPrefix =
+                        g_params->webSocketServer().find("://") == std::string::npos ? "ws://" : "";
+                const std::string url = wsPrefix + g_params->webSocketServer() + ":" +
+                                        std::to_string(g_params->webSocketPort()) + "/" +
+                                        g_client_id;
+
+                std::cout << "Attempting to reconnect to: " << url << std::endl;
+                newWs->open(url);
+
+                // 等待连接成功
+                if (wsFuture.wait_for(std::chrono::seconds(5)) == std::future_status::ready) {
+                    std::cout << "WebSocket reconnection successful!" << std::endl;
+                    break; // 连接成功，退出重连循环
+                } else {
+                    std::cout << "WebSocket reconnection timeout, retrying in 3 seconds..." << std::endl;
+                }
+            } catch (const std::exception &e) {
+                std::cerr << "WebSocket reconnect error: " << e.what() << std::endl;
+            }
+
+            // 等待 3 秒后重试
+            for (int i = 0; i < 30 && g_ws_reconnect_running; ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        }
+    });
+
+    g_ws_reconnect_thread->detach();
+}
+
+void stopWsReconnect() {
+    g_ws_reconnect_running = false;
+    if (g_ws_reconnect_thread && g_ws_reconnect_thread->joinable()) {
+        std::cout << "Stopping WebSocket reconnect thread..." << std::endl;
+        g_ws_reconnect_thread->join();
+        g_ws_reconnect_thread.reset();
+        std::cout << "WebSocket reconnect thread stopped" << std::endl;
+    }
 }

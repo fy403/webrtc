@@ -73,16 +73,16 @@
 		.status-overlay {
 			position: absolute;
 			z-index: 20;
-			background: rgba(18, 24, 51, 0.7);
+			background: rgba(18, 24, 51, 0.0);
 			border-radius: 8px;
 			padding: 10px;
-			backdrop-filter: blur(4px);
+			/* backdrop-filter: blur(4px); */
 		}
 
 		.left-overlay {
 			top: 15px;
 			left: 5px;
-			width: 120px;
+			width: 180px;
 		}
 
 		.right-overlay {
@@ -358,13 +358,13 @@
 
 		/* Status overlays for mobile fullscreen */
 		.status-overlay {
-			background: rgba(18, 24, 51, 0.5);
+			background: rgba(18, 24, 51, 0.0);
 		}
 
 		.left-overlay {
 			top: 10px;
 			left: 10px;
-			width: 100px;
+			width: 150px;
 		}
 
 		.right-overlay {

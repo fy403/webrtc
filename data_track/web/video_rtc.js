@@ -25,6 +25,8 @@ window.addEventListener('load', () => {
     let localStream;
     const peerConnectionMap = {};
     const dataChannelMap = {};
+    let reconnectInterval = null; // PeerConnection 自动重连定时器
+    let wsReconnectInterval = null; // WebSocket 重连定时器
 
     const offerId = document.getElementById('offerId');
     const offerBtn = document.getElementById('offerBtn');
@@ -159,6 +161,7 @@ window.addEventListener('load', () => {
         .then(async (ws) => {
             console.log('WebSocket connected, signaling ready');
             updateStatus('Signaling connected');
+            stopWsReconnect(); // WebSocket 连接成功，停止重连
 
             // Get local audio stream before enabling connections
             await getLocalStream();
@@ -173,9 +176,8 @@ window.addEventListener('load', () => {
         .catch((err) => {
             console.error(err);
             updateStatus('Signaling connection failed: ' + err.message);
-            if (offerId.value) {
-                offerBtn.click();
-            }
+            // 连接失败时也启动重连
+            startWsReconnect(url);
         });
 
     function updateStatus(message) {
@@ -243,11 +245,16 @@ window.addEventListener('load', () => {
     function openSignaling(url) {
         return new Promise((resolve, reject) => {
             const ws = new WebSocket(url);
-            ws.onopen = () => resolve(ws);
+            ws.onopen = () => {
+                console.log('Signaling WebSocket connected');
+                resolve(ws);
+            };
             ws.onerror = () => reject(new Error('WebSocket error'));
             ws.onclose = () => {
-                console.error('WebSocket disconnected');
+                console.error('Signaling WebSocket disconnected');
                 updateStatus('Signaling disconnected');
+                // 启动 WebSocket 自动重连
+                startWsReconnect(url);
             };
             ws.onmessage = (e) => {
                 if (typeof (e.data) != 'string')
@@ -431,11 +438,14 @@ window.addEventListener('load', () => {
             updateStatus(`ICE: ${pc.iceConnectionState}`);
 
             if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-                updateStatus(`Connected to ${id}`);
+                // updateStatus(`Connected to ${id}`);
+                // stopAutoReconnect(); // 连接成功，停止自动重连
             } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-                updateStatus(`Connection failed with ${id}`);
-                // Show "No Signal" overlay when connection fails
-                toggleNoSignalOverlay(true);
+                // updateStatus(`Connection failed with ${id}`);
+                // // Show "No Signal" overlay when connection fails
+                // toggleNoSignalOverlay(true);
+                // // 启动自动重连
+                // startAutoReconnect(ws, id);
             }
         };
 
@@ -445,6 +455,7 @@ window.addEventListener('load', () => {
 
             if (pc.connectionState === 'connected') {
                 updateStatus(`Connected to ${id}`);
+                stopAutoReconnect(); // 连接成功，停止自动重连
             } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
                 updateStatus(`Connection failed with ${id}`);
                 // Show "No Signal" overlay when connection fails
@@ -456,6 +467,8 @@ window.addEventListener('load', () => {
                 if (dataChannelMap[id]) {
                     delete dataChannelMap[id];
                 }
+                // 启动自动重连
+                startAutoReconnect(ws, id);
             }
         };
 
@@ -650,10 +663,15 @@ window.addEventListener('load', () => {
         dc.onopen = () => {
             console.log(`DataChannel from ${id} open`);
             updateStatus(`Data channel open with ${id}`);
+            stopAutoReconnect(); // 数据通道打开，停止自动重连
         };
         dc.onclose = () => {
             console.log(`DataChannel from ${id} closed`);
             updateStatus(`Data channel closed with ${id}`);
+            // 启动自动重连
+            // if (offerId && offerId.value) {
+            //     startAutoReconnect(offerId.value);
+            // }
         };
         dc.onmessage = (e) => {
             if (typeof (e.data) != 'string')
@@ -669,6 +687,78 @@ window.addEventListener('load', () => {
 
         dataChannelMap[id] = dc;
         return dc;
+    }
+
+    // 自动重连功能：每秒发送 offer 尝试重新连接
+    function startAutoReconnect(ws, id) {
+        // 如果已经在重连，先停止
+        stopAutoReconnect();
+
+        updateStatus(`Auto-reconnecting to ${id}...`);
+
+        reconnectInterval = setInterval(() => {
+            // 检查 signaling 连接是否正常
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                console.log('Signaling connection lost, cannot reconnect');
+                return;
+            }
+
+            // 清理旧的连接
+            if (peerConnectionMap[id]) {
+                peerConnectionMap[id].close();
+                delete peerConnectionMap[id];
+            }
+
+            // 创建新的 PeerConnection 并发送 offer
+            offerPeerConnection(ws, id);
+        }, 1000); // 每秒重试一次
+    }
+
+    function stopAutoReconnect() {
+        if (reconnectInterval) {
+            clearInterval(reconnectInterval);
+            reconnectInterval = null;
+            console.log('Video auto-reconnect stopped');
+        }
+    }
+
+    // WebSocket 自动重连功能
+    function startWsReconnect(url) {
+        // 如果已经在重连，先停止
+        stopWsReconnect();
+
+        updateStatus('Reconnecting to signaling server...');
+        console.log('Starting WebSocket reconnection to:', url);
+
+        wsReconnectInterval = setInterval(() => {
+            console.log('Attempting to reconnect to signaling server...');
+            openSignaling(url)
+                .then(async (ws) => {
+                    console.log('Signaling server reconnected');
+                    stopWsReconnect();
+                    updateStatus('Signaling connected');
+                    offerId.disabled = false;
+                    offerBtn.disabled = false;
+                    offerBtn.onclick = () => offerPeerConnection(ws, offerId.value);
+                    // 如果有远程 ID，自动尝试连接
+                    if (offerId.value) {
+                        setTimeout(() => {
+                            offerPeerConnection(ws, offerId.value);
+                        }, 1000);
+                    }
+                })
+                .catch((err) => {
+                    console.error('Signaling reconnection failed:', err.message);
+                });
+        }, 3000); // 每 3 秒重试一次
+    }
+
+    function stopWsReconnect() {
+        if (wsReconnectInterval) {
+            clearInterval(wsReconnectInterval);
+            wsReconnectInterval = null;
+            console.log('WebSocket auto-reconnect stopped');
+        }
     }
 
     function sendLocalDescription(ws, id, pc, type) {
@@ -928,6 +1018,12 @@ window.addEventListener('load', () => {
 
     // 启动自适应优化
     startAdaptiveOptimization();
+
+    // 页面卸载时停止自动重连
+    window.addEventListener('beforeunload', () => {
+        stopAutoReconnect();
+        stopWsReconnect(); // 页面卸载时停止 WebSocket 重连
+    });
 
     // Helper function to generate a random ID
     function randomId(length) {

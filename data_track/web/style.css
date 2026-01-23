@@ -454,10 +454,10 @@ body.mobile-layout {
 .status-overlay {
     position: absolute;
     z-index: 20;
-    background: rgba(18, 24, 51, 0.7);
+    background: rgba(18, 24, 51, 0.0);
     border-radius: 8px;
     padding: 10px;
-    backdrop-filter: blur(4px);
+    /* backdrop-filter: blur(4px); */
 }
 
 .left-overlay {
@@ -521,11 +521,13 @@ body.mobile-layout {
 .status-item-inline .hint {
     font-size: 11px;
     margin-bottom: 2px;
+    color: #00ff00;
 }
 
 .status-item-inline .mono {
     font-size: 12px;
     font-weight: bold;
+    color: #00ff00;
 }
 
 .signal-indicator-container {

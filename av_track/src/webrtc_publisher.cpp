@@ -4,6 +4,9 @@
 #include <functional>
 #include <future>
 #include <iostream>
+#include <thread>
+#include <atomic>
+#include <mutex>
 
 #include "audio_player.h"
 #include "opus_encoder.h"
@@ -14,6 +17,10 @@
 std::string localId;
 std::unordered_map<std::string, shared_ptr<rtc::PeerConnection>>
     peerConnectionMap;
+
+// 重连状态管理
+std::unordered_map<std::string, std::shared_ptr<std::thread>> reconnectThreads;
+std::mutex reconnectMutex;
 #include <memory>
 
 template <class T> std::weak_ptr<T> make_weak_ptr(std::shared_ptr<T> ptr) {
@@ -256,7 +263,7 @@ createPeerConnection(const rtc::Configuration &config,
   });
   // 通道关闭时，停止音视频捕获
   pc->onStateChange(
-      [video_capturer, audio_capturer](rtc::PeerConnection::State state) {
+      [video_capturer, audio_capturer, id, wws](rtc::PeerConnection::State state) {
         if (state == rtc::PeerConnection::State::Disconnected ||
             state == rtc::PeerConnection::State::Failed ||
             state == rtc::PeerConnection::State::Closed) {
@@ -273,6 +280,16 @@ createPeerConnection(const rtc::Configuration &config,
         }
         if (state == rtc::PeerConnection::State::Connected) {
           std::cout << "PeerConnection connected" << std::endl;
+          // 连接成功时，停止重连线程
+          std::lock_guard<std::mutex> lock(reconnectMutex);
+          if (reconnectThreads.find(id) != reconnectThreads.end()) {
+            auto& thread = reconnectThreads[id];
+            if (thread && thread->joinable()) {
+              std::cout << "Stopping reconnect thread for " << id << std::endl;
+              // 设置线程退出标志（通过关闭 ws 来触发）
+            }
+            reconnectThreads.erase(id);
+          }
         }
       });
   // 记录 PeerConnection
@@ -284,7 +301,7 @@ WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Cmdline params)
     : client_id_(client_id), params_(params) {
   rtc::InitLogger(rtc::LogLevel::Info);
   localId = client_id;
-    size_t queue_size = params.framerate()*4;
+    size_t queue_size = params.framerate()*2;
   // Initialize video capturer
   if (!params.inputDevice().empty()) {
     video_capturer_ = new VideoCapturer(params.inputDevice(), params.debug(),
@@ -325,7 +342,72 @@ WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Cmdline params)
 }
 
 void WebRTCPublisher::start() {
-  // 配置WebRTC
+  // 启动视频捕获
+  if (video_capturer_ != nullptr) {
+    if (!video_capturer_->start()) {
+      throw std::runtime_error("Failed to start video capture");
+    } else {
+      std::cout << "Video capture thread started" << std::endl;
+    }
+  } else {
+    std::cout << "No video device is specified" << std::endl;
+  }
+
+  // 启动音频捕获
+  if (audio_capturer_ != nullptr) {
+    if (!audio_capturer_->start()) {
+      throw std::runtime_error("Failed to start audio capture");
+    } else {
+      std::cout << "Audio capture thread started" << std::endl;
+    }
+  } else {
+    std::cout << "No audio device is specified" << std::endl;
+  }
+
+  // 启动音频播放器
+  if (audio_player_ != nullptr) {
+    audio_player_->start();
+    std::cout << "Audio player started" << std::endl;
+  }
+
+  // 创建 WebSocket
+  ws_ = std::make_shared<rtc::WebSocket>();
+
+  std::promise<void> wsPromise;
+  auto wsFuture = wsPromise.get_future();
+
+  // 设置 WebSocket 回调和消息处理
+  setupWebSocketCallbacks(ws_, wsPromise);
+
+  // 连接服务器
+  std::string webSocketServer = params_.webSocketServer();
+  int webSocketPort = params_.webSocketPort();
+
+  const std::string wsPrefix =
+      webSocketServer.find("://") == std::string::npos ? "ws://" : "";
+  const std::string url = wsPrefix + webSocketServer + ":" +
+                          std::to_string(webSocketPort) + "/" + client_id_;
+
+  std::cout << "WebSocket URL is " << url << std::endl;
+  ws_->open(url);
+
+  std::cout << "Waiting for signaling to be connected..." << std::endl;
+  wsFuture.get();
+
+  std::cout << "Publisher is ready. Client ID: " << client_id_ << std::endl;
+  std::cout << "Viewers can connect using this client ID." << std::endl;
+  // 测试线程，10s后手动关闭ws
+  // std::thread testThread([&]() {
+  //   std::this_thread::sleep_for(std::chrono::seconds(10));
+  //   std::cout << "Closing WebSocket connection after 10 seconds" << std::endl;
+  //   ws_->close();
+  // });
+  //
+  // testThread.join();
+}
+
+// 创建 ICE 配置
+rtc::Configuration WebRTCPublisher::createIceConfig() {
   rtc::Configuration config;
 
   if (!params_.noStun()) {
@@ -373,55 +455,41 @@ void WebRTCPublisher::start() {
     config.enableIceUdpMux = true;
   }
 
-  // 启动视频捕获
-  if (video_capturer_ != nullptr) {
-    if (!video_capturer_->start()) {
-      throw std::runtime_error("Failed to start video capture");
-    } else {
-      std::cout << "Video capture thread started" << std::endl;
-    }
-  } else {
-    std::cout << "No video device is specified" << std::endl;
-  }
+  return config;
+}
 
-  // 启动音频捕获
-  if (audio_capturer_ != nullptr) {
-    if (!audio_capturer_->start()) {
-      throw std::runtime_error("Failed to start audio capture");
-    } else {
-      std::cout << "Audio capture thread started" << std::endl;
-    }
-  } else {
-    std::cout << "No audio device is specified" << std::endl;
-  }
+// 设置 WebSocket 回调和消息处理
+void WebRTCPublisher::setupWebSocketCallbacks(std::shared_ptr<rtc::WebSocket> ws,
+                                          std::promise<void>& wsPromise) {
+  // 获取 ICE 配置
+  auto config = createIceConfig();
+  auto wws = make_weak_ptr(ws);
 
-  // 启动音频播放器
-  if (audio_player_ != nullptr) {
-    audio_player_->start();
-    std::cout << "Audio player started" << std::endl;
-  }
-
-  ws_ = std::make_shared<rtc::WebSocket>();
-
-  std::promise<void> wsPromise;
-  auto wsFuture = wsPromise.get_future();
-
-  ws_->onOpen([&wsPromise]() {
+  ws->onOpen([this, &wsPromise, ws]() {
     std::cout << "WebSocket connected, signaling ready" << std::endl;
+    // 替换旧的 WebSocket
+    if (ws_ && ws_ != ws) {
+      std::cout << "Replacing old WebSocket" << std::endl;
+      ws_->close();
+    }
+    ws_ = ws;
+    // WebSocket 连接成功，停止重连
+    this->stopWsReconnect();
     wsPromise.set_value();
   });
 
-  ws_->onError([&wsPromise](std::string s) {
-    std::cout << "WebSocket error" << std::endl;
+  ws->onError([&wsPromise](std::string s) {
+    std::cout << "WebSocket error: " << s << std::endl;
     wsPromise.set_exception(std::make_exception_ptr(std::runtime_error(s)));
   });
 
-  ws_->onClosed([]() {
+  ws->onClosed([this]() {
     std::cout << "WebSocket closed" << std::endl;
-    exit(5);
+    // 启动 WebSocket 自动重连
+    this->startWsReconnect();
   });
 
-  ws_->onMessage([config, wws = make_weak_ptr(ws_), this](auto data) {
+  ws->onMessage([config, wws, this](auto data) {
     // data holds either std::string or rtc::binary
     if (!std::holds_alternative<std::string>(data))
       return;
@@ -449,7 +517,6 @@ void WebRTCPublisher::start() {
         std::cout << "Answering to " + id << std::endl;
         pc = createPeerConnection(config, wws, id, this->video_capturer_,
                                   this->audio_capturer_, this->audio_player_);
-
       } else {
         pc = jt->second;
       }
@@ -457,7 +524,6 @@ void WebRTCPublisher::start() {
       std::cout << "Answering to " + id << std::endl;
       pc = createPeerConnection(config, wws, id, this->video_capturer_,
                                 this->audio_capturer_, this->audio_player_);
-
     } else {
       return;
     }
@@ -471,26 +537,12 @@ void WebRTCPublisher::start() {
       pc->addRemoteCandidate(rtc::Candidate(sdp, mid));
     }
   });
-
-  std::string webSocketServer = params_.webSocketServer();
-  int webSocketPort = params_.webSocketPort();
-
-  const std::string wsPrefix =
-      webSocketServer.find("://") == std::string::npos ? "ws://" : "";
-  const std::string url = wsPrefix + webSocketServer + ":" +
-                          std::to_string(webSocketPort) + "/" + client_id_;
-
-  std::cout << "WebSocket URL is " << url << std::endl;
-  ws_->open(url);
-
-  std::cout << "Waiting for signaling to be connected..." << std::endl;
-  wsFuture.get();
-
-  std::cout << "Publisher is ready. Client ID: " << client_id_ << std::endl;
-  std::cout << "Viewers can connect using this client ID." << std::endl;
 }
 
 void WebRTCPublisher::stop() {
+  // 停止 WebSocket 重连线程
+  stopWsReconnect();
+
   // 关闭所有PeerConnection以确保回调被清理
   for (auto &pair : peerConnectionMap) {
     if (pair.second) {
@@ -523,5 +575,70 @@ void WebRTCPublisher::stop() {
     audio_player_->stop();
     delete audio_player_;
     audio_player_ = nullptr;
+  }
+}
+
+void WebRTCPublisher::startWsReconnect() {
+  // 如果已经在重连，不重复启动
+  if (wsReconnectRunning_.exchange(true)) {
+    std::cout << "WebSocket reconnect already running" << std::endl;
+    return;
+  }
+
+  std::cout << "Starting WebSocket auto-reconnect..." << std::endl;
+
+  // 创建重连线程
+  wsReconnectThread_ = std::make_shared<std::thread>([this]() {
+    while (wsReconnectRunning_) {
+      try {
+        // 创建新的 WebSocket
+        auto newWs = std::make_shared<rtc::WebSocket>();
+
+        std::promise<void> wsPromise;
+        auto wsFuture = wsPromise.get_future();
+
+        // 设置 WebSocket 回调和消息处理（使用封装的函数）
+        setupWebSocketCallbacks(newWs, wsPromise);
+
+        // 连接服务器
+        std::string webSocketServer = params_.webSocketServer();
+        int webSocketPort = params_.webSocketPort();
+        const std::string wsPrefix =
+            webSocketServer.find("://") == std::string::npos ? "ws://" : "";
+        const std::string url = wsPrefix + webSocketServer + ":" +
+                              std::to_string(webSocketPort) + "/" + client_id_;
+
+        std::cout << "Attempting to reconnect to: " << url << std::endl;
+        newWs->open(url);
+
+        // 等待连接成功
+        if (wsFuture.wait_for(std::chrono::seconds(5)) == std::future_status::ready) {
+          std::cout << "WebSocket reconnection successful!" << std::endl;
+          break; // 连接成功，退出重连循环
+        } else {
+          std::cout << "WebSocket reconnection timeout, retrying in 3 seconds..." << std::endl;
+        }
+
+      } catch (const std::exception &e) {
+        std::cerr << "WebSocket reconnect error: " << e.what() << std::endl;
+      }
+
+      // 等待 3 秒后重试
+      for (int i = 0; i < 30 && wsReconnectRunning_; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+    }
+  });
+
+  wsReconnectThread_->detach();
+}
+
+void WebRTCPublisher::stopWsReconnect() {
+  wsReconnectRunning_ = false;
+  if (wsReconnectThread_ && wsReconnectThread_->joinable()) {
+    std::cout << "Stopping WebSocket reconnect thread..." << std::endl;
+    wsReconnectThread_->join();
+    wsReconnectThread_.reset();
+    std::cout << "WebSocket reconnect thread stopped" << std::endl;
   }
 }

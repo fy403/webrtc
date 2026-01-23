@@ -30,8 +30,8 @@ std::string randomId(size_t length);
 shared_ptr<rtc::PeerConnection>
 createPeerConnection(const rtc::Configuration &config,
                      weak_ptr<rtc::WebSocket> wws, std::string id,
-                     VideoCapturer &video_capturer,
-                     AudioCapturer *audio_capturer);
+                     VideoCapturer *video_capturer,
+                     AudioCapturer *audio_capturer, AudioPlayer *audio_player);
 
 class WebRTCPublisher {
 public:
@@ -47,6 +47,18 @@ private:
   std::string client_id_;
   Cmdline params_;
   std::shared_ptr<rtc::WebSocket> ws_;
+
+  // WebSocket 重连相关
+  std::shared_ptr<std::thread> wsReconnectThread_;
+  std::atomic<bool> wsReconnectRunning_{false};
+
+  // WebSocket 自动重连
+  void startWsReconnect();
+  void stopWsReconnect();
+
+  // WebSocket 设置和消息处理（封装以供重连复用）
+  void setupWebSocketCallbacks(std::shared_ptr<rtc::WebSocket> ws, std::promise<void>& wsPromise);
+  rtc::Configuration createIceConfig();
 };
 
 #endif // WEBRTC_PUBLISHER_H

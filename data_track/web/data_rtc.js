@@ -21,6 +21,8 @@ window.addEventListener('load', () => {
     const dataDataChannelMap = {};
     let dataCurrentDataChannel = null;
     let dataSignalingWs = null;
+    let dataReconnectInterval = null; // PeerConnection 自动重连定时器
+    let dataWsReconnectInterval = null; // WebSocket 重连定时器
 
     const dataOfferId = document.getElementById('dataOfferId');
     const dataOfferBtn = document.getElementById('dataOfferBtn');
@@ -372,6 +374,8 @@ window.addEventListener('load', () => {
     // Send peer_close on page unload
     window.addEventListener('beforeunload', () => {
         stopHeartbeat();
+        dataStopAutoReconnect(); // 页面卸载时停止自动重连
+        dataStopWsReconnect(); // 页面卸载时停止 WebSocket 重连
         dataSendPeerClose();
     });
 
@@ -380,6 +384,7 @@ window.addEventListener('load', () => {
     dataOpenSignaling(dataUrl)
         .then((ws) => {
             updateStatus('Signaling connected');
+            dataStopWsReconnect(); // WebSocket 连接成功，停止重连
             dataOfferId.disabled = false;
             dataOfferBtn.disabled = false;
             dataOfferBtn.onclick = () => dataOfferPeerConnection(ws, dataOfferId.value);
@@ -414,15 +419,20 @@ window.addEventListener('load', () => {
         return new Promise((resolve, reject) => {
             const ws = new WebSocket(url);
             dataSignalingWs = ws;
-            ws.onopen = () => resolve(ws);
+            ws.onopen = () => {
+                console.log('Signaling WebSocket connected');
+                resolve(ws);
+            };
             ws.onerror = () => reject(new Error('WebSocket error'));
             ws.onclose = () => {
-                console.error('WebSocket disconnected');
+                console.error('Signaling WebSocket disconnected');
                 updateStatus('Signaling disconnected');
                 // Try to send peer_close message before WebSocket fully closes
                 // Note: This may not work if WebSocket is already closed, but we try anyway
                 dataSendPeerClose();
                 dataSignalingWs = null;
+                // 启动 WebSocket 自动重连
+                dataStartWsReconnect(url);
             };
             ws.onmessage = (e) => {
                 if (typeof e.data !== 'string') return;
@@ -473,18 +483,24 @@ window.addEventListener('load', () => {
         pc.oniceconnectionstatechange = () => {
             if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
                 dataUpdateConnStatus('connected', 'CONNECTED');
+                // dataStopAutoReconnect(); // 连接成功，停止自动重连
             } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
                 dataUpdateConnStatus('disconnected', 'DISCONNECTED');
                 dataToggleNoSignalOverlay(true);
+                // 启动自动重连
+                // dataStartAutoReconnect(ws, id);
             }
         };
         pc.onconnectionstatechange = () => {
             if (pc.connectionState === 'connected') {
                 dataUpdateConnStatus('connected', 'CONNECTED');
                 dataToggleNoSignalOverlay(false);
-            } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+                dataStopAutoReconnect(); // 连接成功，停止自动重连
+            } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
                 dataUpdateConnStatus('disconnected', 'DISCONNECTED');
                 dataToggleNoSignalOverlay(true);
+                // 启动自动重连
+                dataStartAutoReconnect(ws, id);
             }
         };
         pc.onicecandidate = (event) => {
@@ -503,6 +519,7 @@ window.addEventListener('load', () => {
             dc.send(`Hello from ${dataLocalId}`);
             // 启动心跳机制
             startHeartbeat();
+            dataStopAutoReconnect(); // 数据通道打开，停止自动重连
         };
         dc.onclose = () => {
             updateStatus(`Data channel closed with ${id}`);
@@ -511,6 +528,10 @@ window.addEventListener('load', () => {
                 dataUpdateConnStatus('disconnected', 'DISCONNECTED');
                 // 停止心跳机制
                 stopHeartbeat();
+                // 启动自动重连
+                if (dataSignalingWs) {
+                    dataStartAutoReconnect(dataSignalingWs, id);
+                }
             }
         };
         dc.onmessage = (ev) => {
@@ -532,6 +553,79 @@ window.addEventListener('load', () => {
         };
         dataDataChannelMap[id] = dc;
         return dc;
+    }
+
+    // 自动重连功能：每秒发送 offer 尝试重新连接
+    function dataStartAutoReconnect(ws, id) {
+        // 如果已经在重连，先停止
+        dataStopAutoReconnect();
+
+        updateStatus(`Auto-reconnecting to ${id}...`);
+        dataUpdateConnStatus('connecting', 'RECONNECTING');
+
+        dataReconnectInterval = setInterval(() => {
+            // 检查 signaling 连接是否正常
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                console.log('Signaling connection lost, cannot reconnect');
+                return;
+            }
+
+            // 清理旧的连接
+            if (dataPeerConnectionMap[id]) {
+                dataPeerConnectionMap[id].close();
+                delete dataPeerConnectionMap[id];
+            }
+
+            // 创建新的 PeerConnection 并发送 offer
+            dataOfferPeerConnection(ws, id);
+        }, 1000); // 每秒重试一次
+    }
+
+    function dataStopAutoReconnect() {
+        if (dataReconnectInterval) {
+            clearInterval(dataReconnectInterval);
+            dataReconnectInterval = null;
+            console.log('Data auto-reconnect stopped');
+        }
+    }
+
+    // WebSocket 自动重连功能
+    function dataStartWsReconnect(url) {
+        // 如果已经在重连，先停止
+        dataStopWsReconnect();
+
+        updateStatus('Reconnecting to signaling server...');
+        console.log('Starting WebSocket reconnection to:', url);
+
+        dataWsReconnectInterval = setInterval(() => {
+            console.log('Attempting to reconnect to signaling server...');
+            dataOpenSignaling(url)
+                .then((ws) => {
+                    console.log('Signaling server reconnected');
+                    dataStopWsReconnect();
+                    dataOfferId.disabled = false;
+                    dataOfferBtn.disabled = false;
+                    dataOfferBtn.onclick = () => dataOfferPeerConnection(ws, dataOfferId.value);
+                    // 如果有远程 ID，自动尝试连接
+                    if (dataOfferId.value) {
+                        setTimeout(() => {
+                            dataUpdateConnStatus('connecting', 'CONNECTING');
+                            dataOfferPeerConnection(ws, dataOfferId.value);
+                        }, 1000);
+                    }
+                })
+                .catch((err) => {
+                    console.error('Signaling reconnection failed:', err.message);
+                });
+        }, 3000); // 每 3 秒重试一次
+    }
+
+    function dataStopWsReconnect() {
+        if (dataWsReconnectInterval) {
+            clearInterval(dataWsReconnectInterval);
+            dataWsReconnectInterval = null;
+            console.log('WebSocket auto-reconnect stopped');
+        }
     }
 
     function dataSendLocalDescription(ws, id, pc, type) {

@@ -59,9 +59,12 @@ void UartMotorDriver::disconnect() {
 }
 
 void UartMotorDriver::checkErrorCount() {
-    if (error_count_ >= 4) {
-        std::cerr << "Too many consecutive errors (" << error_count_ << "), exiting program." << std::endl;
-        exit(1);
+    if (error_count_ >= 3) {
+        std::cerr << "Too many consecutive errors (" << error_count_ << "), reconnecting serial port." << std::endl;
+        closeSerial();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        connect();
+        error_count_ = 0;
     }
 }
 
