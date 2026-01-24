@@ -134,8 +134,14 @@ window.addEventListener('load', () => {
         uiSpeed = Math.round(Math.abs(limitedForward) * 100);
         dataUpdateSystemStatusDisplay();
         try {
-            const frame = SBUSEncoder.encode({ch1: limitedForward, ch2: turn || 0});
+            // 所有通道数据数值范围必须使-1.0 ~ +1.0 之间
+            const frame = SBUSEncoder.encode({ch1: limitedForward, ch2: turn || 0,
+                ch3: 0, ch4: 0, ch5: 0, ch6: 0, ch7: 0, ch8: 0,
+                ch9: 0, ch10: 0, ch11: 0, ch12: 0, ch13: 0,
+                ch14: 0, ch15: 0, ch16: 0});
             dataCurrentDataChannel.send(frame);
+            // 更新通道显示
+            dataUpdateChannelDisplay();
         } catch (e) {
             console.error('Failed to send SBUS frame', e);
         }
@@ -245,6 +251,41 @@ window.addEventListener('load', () => {
         if (dataElements.keyA) dataElements.keyA.classList.toggle('active', dataState.A);
         if (dataElements.keyS) dataElements.keyS.classList.toggle('active', dataState.S);
         if (dataElements.keyD) dataElements.keyD.classList.toggle('active', dataState.D);
+    }
+
+    // 更新SBUS通道显示
+    function dataUpdateChannelDisplay() {
+        const values = window.currentChannelValues || [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+        for (let i = 0; i < 16; i++) {
+            const channelNum = i + 1;
+            const value = values[i] || 0;
+            const fillElement = document.getElementById(`channel${channelNum}Fill`);
+            const valueElement = document.getElementById(`channel${channelNum}Value`);
+
+            if (fillElement && valueElement) {
+                // 设置填充样式
+                if (value > 0) {
+                    fillElement.className = 'channel-bar-fill positive';
+                    fillElement.style.height = `${value * 50}%`;
+                    fillElement.style.bottom = '50%';
+                    fillElement.style.top = 'auto';
+                } else if (value < 0) {
+                    fillElement.className = 'channel-bar-fill negative';
+                    fillElement.style.height = `${Math.abs(value) * 50}%`;
+                    fillElement.style.top = '50%';
+                    fillElement.style.bottom = 'auto';
+                } else {
+                    fillElement.className = 'channel-bar-fill';
+                    fillElement.style.height = '2px';
+                    fillElement.style.top = '50%';
+                    fillElement.style.bottom = 'auto';
+                }
+
+                // 更新数值显示
+                valueElement.textContent = value.toFixed(2);
+            }
+        }
     }
 
     function dataUpdateSystemStatusDisplay() {

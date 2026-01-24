@@ -24,10 +24,27 @@
   }
 
   // Encode a full SBUS frame with the first two channels populated.
-  function encode({ ch1 = 0, ch2 = 0 }) {
+  function encode({ ch1 = 0, ch2 = 0, ch3 = 0, ch4 = 0, ch5 = 0, ch6 = 0, ch7 = 0, ch8 = 0, ch9, ch10, ch11, ch12, ch13, ch14, ch15, ch16}) {
     const channels = new Uint16Array(SBUS.CHANNELS);
     channels[0] = normalizedToValue(ch1); // forward/backward
     channels[1] = normalizedToValue(ch2); // left/right
+    channels[2] = normalizedToValue(ch3);
+    channels[3] = normalizedToValue(ch4);
+    channels[4] = normalizedToValue(ch5);
+    channels[5] = normalizedToValue(ch6);
+    channels[6] = normalizedToValue(ch7);
+    channels[7] = normalizedToValue(ch8);
+    channels[8] = normalizedToValue(ch9);
+    channels[9] = normalizedToValue(ch10);
+    channels[10] = normalizedToValue(ch11);
+    channels[11] = normalizedToValue(ch12);
+    channels[12] = normalizedToValue(ch13);
+    channels[13] = normalizedToValue(ch14);
+    channels[14] = normalizedToValue(ch15);
+    channels[15] = normalizedToValue(ch16);
+
+    // 存储当前归一化值用于UI显示
+    global.currentChannelValues = [ch1, ch2, ch3, ch4, ch5, ch6, ch7, ch8, ch9, ch10, ch11, ch12, ch13, ch14, ch15, ch16];
 
     const frame = new Uint8Array(SBUS.FRAME_SIZE);
     frame[0] = SBUS.START;
@@ -50,5 +67,8 @@
 
   global.SBUS = SBUS;
   global.SBUSEncoder = { encode, normalizedToValue, clamp };
+
+  // 全局变量存储当前通道值，用于UI显示
+  global.currentChannelValues = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 })(window);
 

@@ -175,15 +175,122 @@
                 </div>
             </div>
 
-            <div class="keyboard-controls">
-                <div class="hint">按键映射：</div>
-                <div class="kb">
-                    <div></div>
-                    <div class="key" id="keyW">W</div>
-                    <div></div>
-                    <div class="key" id="keyA">A</div>
-                    <div class="key" id="keyS">S</div>
-                    <div class="key" id="keyD">D</div>
+            <div class="channel-display">
+                <div class="hint">SBUS通道实时数值：</div>
+                <div class="channels-container" id="channelsContainer">
+                    <!-- 16个通道柱状图 -->
+                    <div class="channel-bar-wrapper" data-channel="1">
+                        <div class="channel-label">CH1</div>
+                        <div class="channel-bar-bg">
+                            <div class="channel-bar-fill" id="channel1Fill"></div>
+                        </div>
+                        <div class="channel-value" id="channel1Value">0</div>
+                    </div>
+                    <div class="channel-bar-wrapper" data-channel="2">
+                        <div class="channel-label">CH2</div>
+                        <div class="channel-bar-bg">
+                            <div class="channel-bar-fill" id="channel2Fill"></div>
+                        </div>
+                        <div class="channel-value" id="channel2Value">0</div>
+                    </div>
+                    <div class="channel-bar-wrapper" data-channel="3">
+                        <div class="channel-label">CH3</div>
+                        <div class="channel-bar-bg">
+                            <div class="channel-bar-fill" id="channel3Fill"></div>
+                        </div>
+                        <div class="channel-value" id="channel3Value">0</div>
+                    </div>
+                    <div class="channel-bar-wrapper" data-channel="4">
+                        <div class="channel-label">CH4</div>
+                        <div class="channel-bar-bg">
+                            <div class="channel-bar-fill" id="channel4Fill"></div>
+                        </div>
+                        <div class="channel-value" id="channel4Value">0</div>
+                    </div>
+                    <div class="channel-bar-wrapper" data-channel="5">
+                        <div class="channel-label">CH5</div>
+                        <div class="channel-bar-bg">
+                            <div class="channel-bar-fill" id="channel5Fill"></div>
+                        </div>
+                        <div class="channel-value" id="channel5Value">0</div>
+                    </div>
+                    <div class="channel-bar-wrapper" data-channel="6">
+                        <div class="channel-label">CH6</div>
+                        <div class="channel-bar-bg">
+                            <div class="channel-bar-fill" id="channel6Fill"></div>
+                        </div>
+                        <div class="channel-value" id="channel6Value">0</div>
+                    </div>
+                    <div class="channel-bar-wrapper" data-channel="7">
+                        <div class="channel-label">CH7</div>
+                        <div class="channel-bar-bg">
+                            <div class="channel-bar-fill" id="channel7Fill"></div>
+                        </div>
+                        <div class="channel-value" id="channel7Value">0</div>
+                    </div>
+                    <div class="channel-bar-wrapper" data-channel="8">
+                        <div class="channel-label">CH8</div>
+                        <div class="channel-bar-bg">
+                            <div class="channel-bar-fill" id="channel8Fill"></div>
+                        </div>
+                        <div class="channel-value" id="channel8Value">0</div>
+                    </div>
+                    <div class="channel-bar-wrapper" data-channel="9">
+                        <div class="channel-label">CH9</div>
+                        <div class="channel-bar-bg">
+                            <div class="channel-bar-fill" id="channel9Fill"></div>
+                        </div>
+                        <div class="channel-value" id="channel9Value">0</div>
+                    </div>
+                    <div class="channel-bar-wrapper" data-channel="10">
+                        <div class="channel-label">CH10</div>
+                        <div class="channel-bar-bg">
+                            <div class="channel-bar-fill" id="channel10Fill"></div>
+                        </div>
+                        <div class="channel-value" id="channel10Value">0</div>
+                    </div>
+                    <div class="channel-bar-wrapper" data-channel="11">
+                        <div class="channel-label">CH11</div>
+                        <div class="channel-bar-bg">
+                            <div class="channel-bar-fill" id="channel11Fill"></div>
+                        </div>
+                        <div class="channel-value" id="channel11Value">0</div>
+                    </div>
+                    <div class="channel-bar-wrapper" data-channel="12">
+                        <div class="channel-label">CH12</div>
+                        <div class="channel-bar-bg">
+                            <div class="channel-bar-fill" id="channel12Fill"></div>
+                        </div>
+                        <div class="channel-value" id="channel12Value">0</div>
+                    </div>
+                    <div class="channel-bar-wrapper" data-channel="13">
+                        <div class="channel-label">CH13</div>
+                        <div class="channel-bar-bg">
+                            <div class="channel-bar-fill" id="channel13Fill"></div>
+                        </div>
+                        <div class="channel-value" id="channel13Value">0</div>
+                    </div>
+                    <div class="channel-bar-wrapper" data-channel="14">
+                        <div class="channel-label">CH14</div>
+                        <div class="channel-bar-bg">
+                            <div class="channel-bar-fill" id="channel14Fill"></div>
+                        </div>
+                        <div class="channel-value" id="channel14Value">0</div>
+                    </div>
+                    <div class="channel-bar-wrapper" data-channel="15">
+                        <div class="channel-label">CH15</div>
+                        <div class="channel-bar-bg">
+                            <div class="channel-bar-fill" id="channel15Fill"></div>
+                        </div>
+                        <div class="channel-value" id="channel15Value">0</div>
+                    </div>
+                    <div class="channel-bar-wrapper" data-channel="16">
+                        <div class="channel-label">CH16</div>
+                        <div class="channel-bar-bg">
+                            <div class="channel-bar-fill" id="channel16Fill"></div>
+                        </div>
+                        <div class="channel-value" id="channel16Value">0</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -195,39 +302,61 @@
         <!--				</div>-->
         <!--			</div>-->
     </div>
-    <div class="card">
-        <div>
-            <h2>Local ID</h2>
-            <p id="localId"></p>
+    <div class="card connection-info-card">
+        <div class="connection-panel video-connection">
+            <div class="connection-header">
+                <div class="connection-icon">
+                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <rect height="16" rx="2" width="20" x="2" y="4"/>
+                        <polygon points="10 8 16 12 10 16 10 8"/>
+                    </svg>
+                </div>
+                <h3>Video Connection</h3>
+            </div>
+            <div class="connection-info">
+                <div class="info-row">
+                    <span class="label">Local ID:</span>
+                    <span class="value mono" id="localId">--</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Status:</span>
+                    <span class="status-text" id="status">Not connected</span>
+                </div>
+                <div class="info-row connect-control">
+                    <span class="badge">Remote ID:</span>
+                    <input class="input mono input-compact" id="offerId" placeholder="remote ID" value="cam_dYFh3H3kf"/>
+                    <button class="btn btn-compact" id="offerBtn">Connect</button>
+                </div>
+            </div>
         </div>
-        <div id="status">Status: Not connected</div>
-        <div>
-            <h2>Local ID</h2>
-            <p id="dataLocalId"></p>
+
+        <div class="connection-panel data-connection">
+            <div class="connection-header">
+                <div class="connection-icon">
+                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M4 4h16v16H4z"/>
+                        <path d="M8 8h8v8H8z"/>
+                    </svg>
+                </div>
+                <h3>Data Connection</h3>
+            </div>
+            <div class="connection-info">
+                <div class="info-row">
+                    <span class="label">Local ID:</span>
+                    <span class="value mono" id="dataLocalId">--</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Status:</span>
+                    <span class="status-text" id="dataStatus">Not connected</span>
+                </div>
+                <div class="info-row connect-control">
+                    <span class="badge">Remote ID:</span>
+                    <input class="input mono input-compact" id="dataOfferId" placeholder="remote ID" value="data_Dd8fgkoKo90"/>
+                    <button class="btn btn-compact" id="dataOfferBtn">Connect</button>
+                </div>
+            </div>
         </div>
-        <div id="dataStatus">Status: Not connected</div>
     </div>
-    <div class="card">
-        <div class="video-controls">
-            <span class="badge">Send offer to:</span>
-            <input class="input mono" id="offerId" placeholder="remote ID" value="cam_dYFh3H3kf"/>
-            <button class="btn" id="offerBtn">Send</button>
-        </div>
-        <div class="video-controls">
-            <span class="badge">Send offer to:</span>
-            <input class="input mono" id="dataOfferId" placeholder="remote ID" value="data_Dd8fgkoKo90"/>
-            <button class="btn" id="dataOfferBtn">Send</button>
-        </div>
-    </div>
-    <!-- <div class="card">
-        <span class="badge">协议</span>
-        <pre id="proto" class="mono" style="white-space:pre-wrap; margin-top:8px; color:#9fb4ff">
-0:0xAA 1:0x55 2:type 3:key 4:value 5:0 6-7:checksum16(sum of bytes[0..5])
-MSG_KEY=0x01 (key:1=W,2=S,3=A,4=D; value:1=DOWN,0=UP)
-MSG_EMERGENCY_STOP=0x02, MSG_CYCLE_THROTTLE=0x03, MSG_STOP_ALL=0x04, MSG_QUIT=0x05, MSG_PING=0x10
-MSG_SYSTEM_STATUS=0x20 (扩展帧12字节: 3:rx_speed_H,4:rx_speed_L,5:tx_speed_H,6:tx_speed_L,7:cpu_H,8:cpu_L,9:service_status,10:4g_signal)
-        </pre>
-    </div> -->
 </div>
 
 <script>

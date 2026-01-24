@@ -19,8 +19,12 @@ RCClient::RCClient(const RCClientConfig &config)
       // SystemMonitor 不需要在构造函数中初始化4G模块
       system_monitor_(),
       watchdog_running_(true),
-      watchdog_timeout_ms_(config.watchdog_timeout_ms) {
+      watchdog_timeout_ms_(config.watchdog_timeout_ms),
+      watchdog_check_interval_ms_(50),
+      heartbeat_count_(0),
+      total_heartbeat_interval_ms_(0) {
     last_heartbeat_ = std::chrono::steady_clock::now();
+    last_heartbeat_time_ = std::chrono::steady_clock::now();
     last_status_time_ = std::chrono::steady_clock::now();
 
     // 如果配置中指定了4G模块参数，则初始化4G模块
@@ -32,7 +36,7 @@ RCClient::RCClient(const RCClientConfig &config)
 
     // 启动watchdog线程
     watchdog_thread_ = std::thread(&RCClient::watchdogLoop, this);
-    std::cout << "Watchdog保护已启动，超时时间: " << watchdog_timeout_ms_ << "ms" << std::endl;
+    std::cout << "Watchdog保护已启动，初始超时时间: " << watchdog_timeout_ms_ << "ms, 检查间隔: " << watchdog_check_interval_ms_ << "ms" << std::endl;
 }
 
 RCClient::~RCClient() {
@@ -62,9 +66,19 @@ void RCClient::parseFrame(const uint8_t *frame, size_t length) {
         return;
     }
 
-    last_heartbeat_ = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+
+    // 更新watchdog参数（统计心跳间隔并动态调整）
+    updateWatchdogParams();
+
+    last_heartbeat_ = now;
+    last_heartbeat_time_ = now;
 
     motor_controller_->applySbus(sbus_frame);
+
+    // 如果需要使用其他通道，扩展此处。数值范围在-1.0 ~ +1.0之间
+    //  double turn_h = MessageHandler::sbusToNormalized(sbus_frame.channels[2]);
+    //  double turn_v = MessageHandler::sbusToNormalized(sbus_frame.channels[3]);
 
     if (sbus_frame.failsafe) {
         std::cout << "SBUS failsafe detected, triggering emergency stop" << std::endl;
@@ -120,9 +134,38 @@ void RCClient::sendSystemStatus() {
     sendStatusFrame(statusData);
 }
 
+void RCClient::updateWatchdogParams() {
+    auto now = std::chrono::steady_clock::now();
+
+    // 统计心跳间隔
+    if (heartbeat_count_ > 0) {
+        auto interval = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_heartbeat_time_).count();
+        total_heartbeat_interval_ms_ += interval;
+        heartbeat_count_++;
+
+        // 计算平均心跳间隔
+        int64_t avg_interval_ms = total_heartbeat_interval_ms_ / heartbeat_count_;
+
+        // 动态调整检查间隔和超时时间
+        // 检查间隔设置为平均间隔的20%，但不少于10ms，不大于100ms
+        int new_check_interval = std::max(10, std::min(100, static_cast<int>(avg_interval_ms * 0.2)));
+        // 超时时间设置为平均间隔的3倍，但不少于300ms
+        int new_timeout = std::max(300, static_cast<int>(avg_interval_ms * 3));
+
+        if (new_check_interval != watchdog_check_interval_ms_ || new_timeout != watchdog_timeout_ms_) {
+            watchdog_check_interval_ms_ = new_check_interval;
+            watchdog_timeout_ms_ = new_timeout;
+            std::cout << "动态调整: 平均心跳间隔=" << avg_interval_ms << "ms, 检查间隔=" << watchdog_check_interval_ms_
+                      << "ms, 超时时间=" << watchdog_timeout_ms_ << "ms" << std::endl;
+        }
+    } else {
+        heartbeat_count_++;
+    }
+}
+
 void RCClient::watchdogLoop() {
     while (watchdog_running_) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(50)); // 每50ms检查一次
+        std::this_thread::sleep_for(std::chrono::milliseconds(watchdog_check_interval_ms_));
 
         if (!watchdog_running_) {
             break;

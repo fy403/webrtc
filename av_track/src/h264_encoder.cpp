@@ -38,9 +38,9 @@ bool H264Encoder::open_encoder(int width, int height, int fps) {
   encoder_context_->framerate = {fps, 1}; // 帧率
 
   // 关键帧设置（优化）
-  encoder_context_->gop_size = fps; // GOP等于帧率（1秒一个关键帧）
+  // encoder_context_->gop_size = fps; // GOP等于帧率（1秒一个关键帧）
   // 最小关键帧间隔改为半秒，提高随机访问性
-  encoder_context_->keyint_min = fps / 2;
+  // encoder_context_->keyint_min = fps / 2;
 
   // ==================== B帧配置 ====================
   // 完全禁用B帧以减少编码延迟和提高兼容性

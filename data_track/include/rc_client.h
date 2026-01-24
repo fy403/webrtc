@@ -57,9 +57,14 @@ private:
     std::atomic<bool> watchdog_running_;
     std::thread watchdog_thread_;
     int watchdog_timeout_ms_;
+    int watchdog_check_interval_ms_;
+    std::chrono::steady_clock::time_point last_heartbeat_time_;
+    int heartbeat_count_;
+    int64_t total_heartbeat_interval_ms_;
 
     void sendStatusFrame(const std::map<std::string, std::string> &statusData);
     void watchdogLoop();
+    void updateWatchdogParams();
 };
 
 void signalHandler(int signal);
