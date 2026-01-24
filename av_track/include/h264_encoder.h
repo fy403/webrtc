@@ -8,6 +8,7 @@ public:
 
   bool open_encoder(int width, int height, int fps) override;
   void close_encoder() override;
+  void reconfigure(int width, int height, int fps, int bitrate);
 
   AVCodecContext *get_context() const override { return encoder_context_; }
 

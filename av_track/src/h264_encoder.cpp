@@ -92,6 +92,28 @@ void H264Encoder::close_encoder() {
   }
 }
 
+void H264Encoder::reconfigure(int width, int height, int fps, int bitrate) {
+  std::cout << "Reconfiguring H264 encoder: " << width << "x" << height
+            << ", " << fps << "fps, " << bitrate << "bps" << std::endl;
+
+  // 关闭旧编码器
+  close_encoder();
+
+  // 重新打开编码器
+  if (!open_encoder(width, height, fps)) {
+    std::cerr << "Failed to reconfigure H264 encoder" << std::endl;
+    return;
+  }
+
+  // 设置新的码率
+  if (encoder_context_) {
+    encoder_context_->bit_rate = bitrate;
+    encoder_context_->rc_max_rate = bitrate;
+    encoder_context_->rc_buffer_size = bitrate;
+    std::cout << "H264 encoder reconfigured with bitrate: " << bitrate << "bps" << std::endl;
+  }
+}
+
 bool H264Encoder::encode_frame(AVFrame *frame, AVPacket *packet) {
   // Ensure frame has timestamp
   static int64_t pts = 0;

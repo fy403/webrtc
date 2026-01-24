@@ -13,10 +13,13 @@
 #include "rtc/rtc.hpp"
 #include <algorithm>
 #include <random>
+#include <nlohmann/json.hpp>
 
 std::string localId;
 std::unordered_map<std::string, shared_ptr<rtc::PeerConnection>>
     peerConnectionMap;
+    
+std::unordered_map<std::string, std::shared_ptr<rtc::DataChannel>> dataChannelMap;
 
 // 重连状态管理
 std::unordered_map<std::string, std::shared_ptr<std::thread>> reconnectThreads;
@@ -261,6 +264,56 @@ createPeerConnection(const rtc::Configuration &config,
           });
     }
   });
+  // DataChannel 处理
+  pc->onDataChannel([id, &dataChannelMap, video_capturer](std::shared_ptr<rtc::DataChannel> dc) {
+    std::cout << "DataChannel from " << id << " received with label \""
+              << dc->label() << "\"" << std::endl;
+
+    dc->onOpen([id, dc]() {
+      std::cout << "DataChannel from " << id << " open" << std::endl;
+    });
+
+    dc->onClosed([id, &dataChannelMap]() {
+      std::cout << "DataChannel from " << id << " closed" << std::endl;
+      dataChannelMap.erase(id);
+    });
+
+    dc->onMessage([id, video_capturer](auto data) {
+      if (std::holds_alternative<std::string>(data)) {
+        const std::string &str_data = std::get<std::string>(data);
+        try {
+          json msg = json::parse(str_data);
+
+          if (msg.contains("type")) {
+            std::string type = msg["type"];
+
+            if (type == "video_config") {
+              std::cout << "Received video config from " << id << std::endl;
+
+              if (video_capturer) {
+                std::string resolution = msg.value("resolution", "640x480");
+                int fps = msg.value("fps", 30);
+                int bitrate = msg.value("bitrate", 3200000);
+                std::string format = msg.value("format", "yuyv422");
+
+                std::cout << "Video config: " << resolution << ", " << fps
+                          << "fps, " << bitrate << "bps, " << format << std::endl;
+
+                // 调用视频配置重置方法
+                video_capturer->reconfigure(resolution, fps, bitrate, format);
+              }
+            }
+          }
+        } catch (const std::exception &e) {
+          std::cerr << "Failed to parse JSON from " << id << ": " << e.what() << std::endl;
+        }
+      } else if (std::holds_alternative<rtc::binary>(data)) {
+        // TODO: 暂不处理二进制数据
+      }
+    });
+    dataChannelMap.emplace(id, dc);
+  });
+
   // 通道关闭时，停止音视频捕获
   pc->onStateChange(
       [video_capturer, audio_capturer, id, wws](rtc::PeerConnection::State state) {

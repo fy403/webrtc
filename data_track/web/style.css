@@ -1011,3 +1011,130 @@ body.mobile-layout {
         height: 16px;
     }
 }
+
+/* 视频配置面板样式 */
+.video-config-panel {
+    margin-top: 16px;
+    padding: 16px;
+    background: #0f1630;
+    border: 1px solid #2a375f;
+    border-radius: 10px;
+}
+
+.config-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #243056;
+}
+
+.config-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e6eaf2;
+    letter-spacing: 0.5px;
+}
+
+.btn-apply {
+    background: #1c2750;
+    border-color: #4760b5;
+    color: #bed0ff;
+}
+
+.btn-apply:hover {
+    background: #253065;
+    border-color: #5d7bc4;
+}
+
+.config-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.config-row:last-child {
+    margin-bottom: 0;
+}
+
+.config-group {
+    flex: 1;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.config-label {
+    font-size: 12px;
+    color: #93a4d6;
+    font-weight: 500;
+}
+
+.config-select {
+    background: #0a0f24;
+    border: 1px solid #2a375f;
+    color: #c7d2fe;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.config-select:hover {
+    border-color: #3a4f85;
+}
+
+.config-select:focus {
+    outline: none;
+    border-color: #4760b5;
+    box-shadow: 0 0 0 2px rgba(71, 96, 181, 0.2);
+}
+
+.config-select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.config-input {
+    background: #0a0f24;
+    border: 1px solid #2a375f;
+    color: #c7d2fe;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    transition: all 0.2s ease;
+}
+
+.config-input:hover {
+    border-color: #3a4f85;
+}
+
+.config-input:focus {
+    outline: none;
+    border-color: #4760b5;
+    box-shadow: 0 0 0 2px rgba(71, 96, 181, 0.2);
+}
+
+.config-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.config-input::placeholder {
+    color: #5a6a94;
+}
+
+@media (max-width: 768px) {
+    .config-row {
+        flex-direction: column;
+    }
+
+    .config-group {
+        min-width: 100%;
+    }
+}
+

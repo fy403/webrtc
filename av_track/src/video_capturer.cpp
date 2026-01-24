@@ -10,6 +10,7 @@
 #include <iostream>
 #include <random>
 #include <sstream>
+#include <typeinfo>
 extern "C" {
 #include <libavdevice/avdevice.h>
 #include <libavutil/avutil.h>
@@ -179,6 +180,144 @@ void VideoCapturer::stop() {
     avformat_close_input(&format_context_);
     format_context_ = nullptr;
   }
+}
+
+void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitrate, const std::string &format) {
+  std::cout << "Reconfiguring video capturer..." << std::endl;
+
+  // 暂停采集
+  pause_capture();
+
+  // 清空队列
+  decode_queue_.clear();
+  encode_queue_.clear();
+  send_queue_.clear();
+
+  // 关闭旧编码器
+  encoder_->close_encoder();
+
+  // 清理旧资源
+  if (sws_context_) {
+    sws_freeContext(sws_context_);
+    sws_context_ = nullptr;
+  }
+
+  if (codec_context_) {
+    avcodec_free_context(&codec_context_);
+    codec_context_ = nullptr;
+  }
+
+  if (format_context_) {
+    avformat_close_input(&format_context_);
+    format_context_ = nullptr;
+  }
+
+  // 清空帧池
+  clear_frame_pool();
+
+  // 更新参数
+  resolution_ = resolution;
+  framerate_ = fps;
+  video_format_ = format;
+
+  // 重新打开输入设备
+  AVInputFormat *input_format = av_find_input_format("v4l2");
+  if (!input_format) {
+    std::cerr << "Cannot find V4L2 input format" << std::endl;
+    return;
+  }
+
+  std::string device_path = device_;
+
+  // 解析分辨率
+  int width = 640, height = 480;
+  sscanf(resolution_.c_str(), "%dx%d", &width, &height);
+  if (width < height) {
+    resolution_ = std::to_string(height) + "x" + std::to_string(width);
+  }
+
+  AVDictionary *options = nullptr;
+  av_dict_set(&options, "video_size", resolution_.c_str(), 0);
+  av_dict_set(&options, "framerate", std::to_string(framerate_).c_str(), 0);
+  av_dict_set(&options, "input_format", video_format_.c_str(), 0);
+
+  std::cout << "Using video input format: " << video_format_ << std::endl;
+
+  int ret = avformat_open_input(&format_context_, device_path.c_str(),
+                                input_format, &options);
+  if (ret < 0) {
+    std::cerr << "Cannot open video device: " << av_error_string(ret) << std::endl;
+    return;
+  }
+
+  ret = avformat_find_stream_info(format_context_, nullptr);
+  if (ret < 0) {
+    std::cerr << "Cannot find stream info: " << av_error_string(ret) << std::endl;
+    return;
+  }
+
+  video_stream_index_ = -1;
+  for (unsigned int i = 0; i < format_context_->nb_streams; i++) {
+    if (format_context_->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+      video_stream_index_ = i;
+      break;
+    }
+  }
+
+  if (video_stream_index_ == -1) {
+    std::cerr << "Cannot find video stream" << std::endl;
+    return;
+  }
+
+  AVCodecParameters *codec_params = format_context_->streams[video_stream_index_]->codecpar;
+  const AVCodec *codec = avcodec_find_decoder(codec_params->codec_id);
+  if (!codec) {
+    std::cerr << "Cannot find decoder" << std::endl;
+    return;
+  }
+
+  codec_context_ = avcodec_alloc_context3(codec);
+  avcodec_parameters_to_context(codec_context_, codec_params);
+
+  ret = avcodec_open2(codec_context_, codec, nullptr);
+  if (ret < 0) {
+    std::cerr << "Cannot open codec: " << av_error_string(ret) << std::endl;
+    return;
+  }
+
+  codec_context_->thread_count = 2;
+
+  // 使用新参数配置编码器
+  if (!encoder_->open_encoder(width, height, fps)) {
+    std::cerr << "Failed to reconfigure encoder" << std::endl;
+    return;
+  }
+
+  // 重新配置编码器码率
+  if (auto *h264_encoder = dynamic_cast<H264Encoder*>(encoder_.get())) {
+    h264_encoder->reconfigure(width, height, fps, bitrate);
+  }
+
+  AVCodecContext *encoder_context = encoder_->get_context();
+  encoder_out_width_ = encoder_context->width;
+  encoder_out_height_ = encoder_context->height;
+  encoder_out_pix_fmt_ = encoder_context->pix_fmt;
+
+  // 重新创建 SwsContext
+  sws_context_ = sws_getContext(
+      codec_context_->width, codec_context_->height, codec_context_->pix_fmt,
+      encoder_out_width_, encoder_out_height_, encoder_out_pix_fmt_,
+      SWS_BILINEAR, nullptr, nullptr, nullptr);
+
+  if (!sws_context_) {
+    std::cerr << "Cannot recreate SwsContext after reconfigure" << std::endl;
+    return;
+  }
+
+  // 恢复采集
+  resume_capture();
+
+  std::cout << "Video capturer reconfigured successfully" << std::endl;
 }
 
 void VideoCapturer::capture_loop() {

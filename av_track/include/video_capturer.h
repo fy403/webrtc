@@ -31,6 +31,7 @@ public:
   ~VideoCapturer();
   bool start() override;
   void stop() override;
+  void reconfigure(const std::string &resolution, int fps, int bitrate, const std::string &format);
 
 private:
   void capture_loop() override;
