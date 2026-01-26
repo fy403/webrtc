@@ -6,9 +6,8 @@ public:
   H264Encoder(bool debug_enabled = false);
   ~H264Encoder();
 
-  bool open_encoder(int width, int height, int fps) override;
+  bool open_encoder(int width, int height, int fps, int64_t bit_rate) override;
   void close_encoder() override;
-  void reconfigure(int width, int height, int fps, int bitrate);
 
   AVCodecContext *get_context() const override { return encoder_context_; }
 

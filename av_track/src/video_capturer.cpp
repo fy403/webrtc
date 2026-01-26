@@ -120,7 +120,7 @@ bool VideoCapturer::start() {
               << std::endl;
 
     // Initialize encoder
-  if (!encoder_->open_encoder(width, height, framerate_)) {
+  if (!encoder_->open_encoder(width, height, framerate_, 0)) {
     std::cerr << "Cannot open H.264 encoder" << std::endl;
     return false;
   }
@@ -288,17 +288,16 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
   codec_context_->thread_count = 2;
 
   // 使用新参数配置编码器
-  if (!encoder_->open_encoder(width, height, fps)) {
+  if (!encoder_->open_encoder(width, height, fps, bitrate)) {
     std::cerr << "Failed to reconfigure encoder" << std::endl;
     return;
   }
 
-  // 重新配置编码器码率
-  if (auto *h264_encoder = dynamic_cast<H264Encoder*>(encoder_.get())) {
-    h264_encoder->reconfigure(width, height, fps, bitrate);
-  }
-
   AVCodecContext *encoder_context = encoder_->get_context();
+  if (!encoder_context) {
+    std::cerr << "Encoder context is null after reconfiguration" << std::endl;
+    return;
+  }
   encoder_out_width_ = encoder_context->width;
   encoder_out_height_ = encoder_context->height;
   encoder_out_pix_fmt_ = encoder_context->pix_fmt;

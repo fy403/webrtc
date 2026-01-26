@@ -17,9 +17,8 @@ H264Encoder::H264Encoder(bool debug_enabled)
 
 H264Encoder::~H264Encoder() { close_encoder(); }
 
-bool H264Encoder::open_encoder(int width, int height, int fps) {
+bool H264Encoder::open_encoder(int width, int height, int fps, int64_t bit_rate) {
   // 使用 libx264 软件编码
-
   codec_ = avcodec_find_encoder_by_name("libx264");
   if (!codec_) {
     codec_ = avcodec_find_encoder(AV_CODEC_ID_H264);
@@ -48,9 +47,11 @@ bool H264Encoder::open_encoder(int width, int height, int fps) {
   encoder_context_->has_b_frames = 0; // 标记流中无B帧
 
   // 码率控制：VBR运行较大波动
-//  encoder_context_->bit_rate = 1200000;
-//  encoder_context_->rc_max_rate = 1200000;
-//  encoder_context_->rc_buffer_size = 1200000;
+    if (bit_rate>0) {
+        encoder_context_->bit_rate = bit_rate;
+        encoder_context_->rc_max_rate = bit_rate;
+        encoder_context_->rc_buffer_size = bit_rate;
+    }
 
   // 软编码配置
   encoder_context_->pix_fmt = AV_PIX_FMT_YUV420P; // 像素格式：YUV420平面格式
@@ -89,28 +90,6 @@ void H264Encoder::close_encoder() {
   if (encoder_context_) {
     avcodec_free_context(&encoder_context_);
     encoder_context_ = nullptr;
-  }
-}
-
-void H264Encoder::reconfigure(int width, int height, int fps, int bitrate) {
-  std::cout << "Reconfiguring H264 encoder: " << width << "x" << height
-            << ", " << fps << "fps, " << bitrate << "bps" << std::endl;
-
-  // 关闭旧编码器
-  close_encoder();
-
-  // 重新打开编码器
-  if (!open_encoder(width, height, fps)) {
-    std::cerr << "Failed to reconfigure H264 encoder" << std::endl;
-    return;
-  }
-
-  // 设置新的码率
-  if (encoder_context_) {
-    encoder_context_->bit_rate = bitrate;
-    encoder_context_->rc_max_rate = bitrate;
-    encoder_context_->rc_buffer_size = bitrate;
-    std::cout << "H264 encoder reconfigured with bitrate: " << bitrate << "bps" << std::endl;
   }
 }
 

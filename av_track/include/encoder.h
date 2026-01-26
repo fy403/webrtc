@@ -15,7 +15,7 @@ public:
   virtual ~Encoder() = default;
 
   // 视频编码器接口
-  virtual bool open_encoder(int width, int height, int fps) {
+  virtual bool open_encoder(int width, int height, int fps, int64_t bit_rate) {
     // 默认实现，对于视频编码器
     return false;
   }

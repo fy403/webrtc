@@ -116,7 +116,9 @@ TURN服务器可以自己搭建[搭建私有TURN服务器](turn_server/README.md
 ```shell
 sudo apt-get update
 sudo apt-get install -y libavdevice-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev
+sudo apt-get install -y x264 libx264-dev
 sudo apt-get install -y ffmpeg
+# 建议安装ffmpeg 4.4.2 版本，如果报错。很可能是版本不兼容，建议手动编译安装ffmpeg==4.4.2
 ```
 2.安装其他依赖
 
@@ -559,12 +561,13 @@ MOTOR_DRIVER_TYPE=crsf # 电机驱动类型: uart, crsf
 
 - [x] 控制端语音推送
 - [x] 被控端扬声器播放
+- [ ] 无线充电
+- [ ] GNSS定位+带惯导
+- [ ] GPU加速/视频编码芯片支持
+- [ ] X265编码（2K分辨率支持）
 - [ ] 编码器电机支持
-- [ ] GPU加速
-- [ ] X265编码
-- [ ] 支持ROS系统
-- [ ] 三维重建
 - [ ] AI模型接入
+- [ ] 三维重建
 - [ ] 自主导航
 
 ## QQ群交流
