@@ -48,91 +48,101 @@ window.addEventListener('load', () => {
     const applyVideoConfig = document.getElementById('applyVideoConfig');
 
     // 处理自定义输入的启用/禁用
-    resolutionSelect.addEventListener('change', () => {
-        resolutionCustom.disabled = resolutionSelect.value !== 'custom';
-        if (resolutionSelect.value !== 'custom') {
-            resolutionCustom.value = '';
-        }
-    });
+    if (resolutionSelect) {
+        resolutionSelect.addEventListener('change', () => {
+            resolutionCustom.disabled = resolutionSelect.value !== 'custom';
+            if (resolutionSelect.value !== 'custom') {
+                resolutionCustom.value = '';
+            }
+        });
+    }
 
-    fpsSelect.addEventListener('change', () => {
-        fpsCustom.disabled = fpsSelect.value !== 'custom';
-        if (fpsSelect.value !== 'custom') {
-            fpsCustom.value = '';
-        }
-    });
+    if (fpsSelect) {
+        fpsSelect.addEventListener('change', () => {
+            fpsCustom.disabled = fpsSelect.value !== 'custom';
+            if (fpsSelect.value !== 'custom') {
+                fpsCustom.value = '';
+            }
+        });
+    }
 
-    bitrateSelect.addEventListener('change', () => {
-        bitrateCustom.disabled = bitrateSelect.value !== 'custom';
-        if (bitrateSelect.value !== 'custom') {
-            bitrateCustom.value = '';
-        }
-    });
+    if (bitrateSelect) {
+        bitrateSelect.addEventListener('change', () => {
+            bitrateCustom.disabled = bitrateSelect.value !== 'custom';
+            if (bitrateSelect.value !== 'custom') {
+                bitrateCustom.value = '';
+            }
+        });
+    }
 
-    formatSelect.addEventListener('change', () => {
-        formatCustom.disabled = formatSelect.value !== 'custom';
-        if (formatSelect.value !== 'custom') {
-            formatCustom.value = '';
-        }
-    });
+    if (formatSelect) {
+        formatSelect.addEventListener('change', () => {
+            formatCustom.disabled = formatSelect.value !== 'custom';
+            if (formatSelect.value !== 'custom') {
+                formatCustom.value = '';
+            }
+        });
+    }
 
     // 发送视频配置
-    applyVideoConfig.addEventListener('click', () => {
-        // 获取当前活跃的 DataChannel
-        const activeIds = Object.keys(dataChannelMap);
-        if (activeIds.length === 0) {
-            updateStatus('No data channel connected');
-            return;
-        }
+    if (applyVideoConfig) {
+        applyVideoConfig.addEventListener('click', () => {
+            // 获取当前活跃的 DataChannel
+            const activeIds = Object.keys(dataChannelMap);
+            if (activeIds.length === 0) {
+                updateStatus('No data channel connected');
+                return;
+            }
 
-        const dc = dataChannelMap[activeIds[0]];
-        if (!dc || dc.readyState !== 'open') {
-            updateStatus('Data channel not ready');
-            return;
-        }
+            const dc = dataChannelMap[activeIds[0]];
+            if (!dc || dc.readyState !== 'open') {
+                updateStatus('Data channel not ready');
+                return;
+            }
 
-        // 获取配置值
-        let resolution = resolutionSelect.value === 'custom' ? resolutionCustom.value : resolutionSelect.value;
-        let fps = fpsSelect.value === 'custom' ? parseInt(fpsCustom.value) : parseInt(fpsSelect.value);
-        let bitrate = bitrateSelect.value === 'custom' ? parseInt(bitrateCustom.value) : parseInt(bitrateSelect.value);
-        let format = formatSelect.value === 'custom' ? formatCustom.value : formatSelect.value;
+            // 获取配置值
+            let resolution = resolutionSelect.value === 'custom' ? resolutionCustom.value : resolutionSelect.value;
+            let fps = fpsSelect.value === 'custom' ? parseInt(fpsCustom.value) : parseInt(fpsSelect.value);
+            let bitrate = bitrateSelect.value === 'custom' ? parseInt(bitrateCustom.value) : parseInt(bitrateSelect.value);
+            let format = formatSelect.value === 'custom' ? formatCustom.value : formatSelect.value;
 
-        // 验证自定义值
-        if (!resolution || !resolution.match(/^\d+x\d+$/)) {
-            updateStatus('Invalid resolution format (use WxH)');
-            return;
-        }
-        if (isNaN(fps) || fps < 1 || fps > 120) {
-            updateStatus('Invalid FPS (1-120)');
-            return;
-        }
-        if (isNaN(bitrate) || bitrate < 100000) {
-            updateStatus('Invalid bitrate (min 100000)');
-            return;
-        }
-        if (!format || format.length === 0) {
-            updateStatus('Invalid video format');
-            return;
-        }
+            // 验证自定义值
+            if (!resolution || !resolution.match(/^\d+x\d+$/)) {
+                updateStatus('Invalid resolution format (use WxH)');
+                return;
+            }
+            if (isNaN(fps) || fps < 1 || fps > 120) {
+                updateStatus('Invalid FPS (1-120)');
+                return;
+            }
+            if (isNaN(bitrate) || bitrate < 100000) {
+                updateStatus('Invalid bitrate (min 100000)');
+                return;
+            }
+            if (!format || format.length === 0) {
+                updateStatus('Invalid video format');
+                return;
+            }
 
-        // 发送配置消息
-        const configMsg = {
-            type: 'video_config',
-            resolution: resolution,
-            fps: fps,
-            bitrate: bitrate,
-            format: format
-        };
+            // 发送配置消息
+            const configMsg = {
+                type: 'video_config',
+                resolution: resolution,
+                fps: fps,
+                bitrate: bitrate,
+                format: format
+            };
 
-        try {
-            dc.send(JSON.stringify(configMsg));
-            updateStatus(`Video config sent: ${resolution}, ${fps}fps, ${bitrate}bps, ${format}`);
-            console.log('Sent video config:', configMsg);
-        } catch (e) {
-            updateStatus('Failed to send video config: ' + e.message);
-            console.error('Error sending video config:', e);
-        }
-    });
+            try {
+                dc.send(JSON.stringify(configMsg));
+                updateStatus(`Video config sent: ${resolution}, ${fps}fps, ${bitrate}bps, ${format}`);
+                console.log('Sent video config:', configMsg);
+            } catch (e) {
+                updateStatus('Failed to send video config: ' + e.message);
+                console.error('Error sending video config:', e);
+            }
+        });
+    }
 
     // Track status elements
     const videoTrackStatus = document.getElementById('videoTrackStatus');
