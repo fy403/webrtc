@@ -16,13 +16,21 @@
 **项目主要面向RC遥控车改造，希望在遥控车基础上开发低延时、点对点、可远程控制、可捕获画面和声音的遥控车。采用的技术方案是通过RTP将采集的音视频或者是监控数据传输到控制端；将控制信号也通过RTP传输到被控遥控车，遥控车通过解析协议，转换为命令控制遥控车。技术方案尽可能减少服务器的参与，流量直接点对点传输。**
 
 ## 演示效果
+-----------
 
+屏幕OSD信息；数据通道实时数据变化；连接状态情况；实时视频参数调整。
+
+<img src="README.assets\image-20260128185224269.png" alt="image-20260128185224269" style="zoom: 54%;" />
+
+<img src="README.assets\image-20260128185304740.png" alt="image-20260128185304740" style="zoom: 50%;" />
+
+<img src="README.assets\image-20260128185324642.png" alt="image-20260128185324642" style="zoom:50%;" />
+
+------
 <iframe src="//player.bilibili.com/player.html?isOutside=true&aid=115489808323280&bvid=BV1VA1kBnEAx&cid=33681311377&page=1&high_quality=1&danmaku=0" allowfullscreen="allowfullscreen" width="100%" height="500" scrolling="no" frameborder="0" sandbox="allow-top-navigation allow-same-origin allow-forms allow-scripts"></iframe>
 
 [B站视频](https://www.bilibili.com/video/BV1VA1kBnEAx?share_source=copy_web)
-
-------
-
+-------
 
 
 ## 项目Q&A
