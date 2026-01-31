@@ -39,8 +39,6 @@ int main(int argc, char *argv[]) {
       std::cout << "Using specified client ID: " << client_id << std::endl;
     }
 
-    localId = client_id;
-
     WebRTCPublisher publisher(client_id, params);
 
     std::cout << "Starting WebRTC publisher..." << std::endl;

@@ -15,21 +15,11 @@
 #include <random>
 #include <nlohmann/json.hpp>
 
-std::string localId;
-std::unordered_map<std::string, shared_ptr<rtc::PeerConnection>>
-    peerConnectionMap;
-    
-std::unordered_map<std::string, std::shared_ptr<rtc::DataChannel>> dataChannelMap;
-
-// 重连状态管理
-std::unordered_map<std::string, std::shared_ptr<std::thread>> reconnectThreads;
-std::mutex reconnectMutex;
-#include <memory>
-
-template <class T> std::weak_ptr<T> make_weak_ptr(std::shared_ptr<T> ptr) {
-  return std::weak_ptr<T>(ptr);
+template <class T> weak_ptr<T> make_weak_ptr(shared_ptr<T> ptr) {
+  return weak_ptr<T>(ptr);
 }
 
+// Helper function to generate a random ID
 std::string randomId(size_t length) {
   using std::chrono::high_resolution_clock;
   static thread_local std::mt19937 rng(static_cast<unsigned int>(
@@ -42,12 +32,12 @@ std::string randomId(size_t length) {
                 [&]() { return characters.at(uniform(rng)); });
   return id;
 }
-// Create and setup a PeerConnection
-shared_ptr<rtc::PeerConnection>
-createPeerConnection(const rtc::Configuration &config,
-                     weak_ptr<rtc::WebSocket> wws, std::string id,
-                     VideoCapturer *video_capturer,
-                     AudioCapturer *audio_capturer, AudioPlayer *audio_player) {
+
+// 创建并设置 PeerConnection
+shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
+    const rtc::Configuration &config,
+    weak_ptr<rtc::WebSocket> wws,
+    const std::string &id) {
   auto pc = std::make_shared<rtc::PeerConnection>(config);
 
   pc->onGatheringStateChange([](rtc::PeerConnection::GatheringState state) {
@@ -81,7 +71,7 @@ createPeerConnection(const rtc::Configuration &config,
   shared_ptr<rtc::Track> video_track = nullptr;
   shared_ptr<rtc::Track> audio_track = nullptr;
 
-  if (video_capturer != nullptr && video_capturer->is_running()) {
+  if (video_capturer_ != nullptr && video_capturer_->is_running()) {
     // Create video track and add to connection
     rtc::Description::Video media("video",
                                   rtc::Description::Direction::SendOnly);
@@ -119,14 +109,14 @@ createPeerConnection(const rtc::Configuration &config,
     // 设置轨道的媒体处理器
     video_track->setMediaHandler(packetizer);
 
-    video_track->onOpen([id, video_track, video_capturer]() {
+    video_track->onOpen([id, video_track, this]() {
       std::cout << "Video track to " << id << " is now open" << std::endl;
       // Keep track of start time for timestamp calculation
       uint64_t start_time =
           std::chrono::duration_cast<std::chrono::microseconds>(
               std::chrono::steady_clock::now().time_since_epoch())
               .count();
-      video_capturer->set_track_callback(
+      video_capturer_->set_track_callback(
           [video_track, start_time](const std::byte *data, size_t size) {
             if (video_track && video_track->isOpen()) {
               try {
@@ -148,20 +138,20 @@ createPeerConnection(const rtc::Configuration &config,
               std::cout << "Video track is not open" << std::endl;
             }
           });
-      video_capturer->resume_capture();
+      video_capturer_->resume_capture();
     });
 
-    video_track->onClosed([id, video_capturer]() {
+    video_track->onClosed([id, this]() {
       std::cout << "Video Track to " << id << " closed" << std::endl;
       // 检查capturer是否仍然有效
-      if (video_capturer) {
-        video_capturer->pause_capture();
-        video_capturer->set_track_callback(nullptr);
+      if (video_capturer_) {
+        video_capturer_->pause_capture();
+        video_capturer_->set_track_callback(nullptr);
       }
     });
   }
 
-  if (audio_capturer != nullptr && audio_capturer->is_running()) {
+  if (audio_capturer_ != nullptr && audio_capturer_->is_running()) {
     rtc::Description::Audio audio_media("audio",
                                         rtc::Description::Direction::SendRecv);
     audio_media.addOpusCodec(111); // Add Opus codec with payload type 111
@@ -195,14 +185,14 @@ createPeerConnection(const rtc::Configuration &config,
     // 设置轨道的媒体处理器
     audio_track->setMediaHandler(audio_packetizer);
 
-    audio_track->onOpen([id, audio_track, audio_capturer]() {
+    audio_track->onOpen([id, audio_track, this]() {
       std::cout << "Audio track to " << id << " is now open" << std::endl;
       // Keep track of start time for timestamp calculation
       uint64_t start_time =
           std::chrono::duration_cast<std::chrono::microseconds>(
               std::chrono::steady_clock::now().time_since_epoch())
               .count();
-      audio_capturer->set_track_callback(
+      audio_capturer_->set_track_callback(
           [audio_track, start_time](const std::byte *data, size_t size) {
             if (audio_track && audio_track->isOpen()) {
               try {
@@ -224,22 +214,22 @@ createPeerConnection(const rtc::Configuration &config,
               std::cout << "Audio track is not open" << std::endl;
             }
           });
-      audio_capturer->resume_capture();
+      audio_capturer_->resume_capture();
     });
 
-    audio_track->onClosed([id, audio_capturer]() {
+    audio_track->onClosed([id, this]() {
       std::cout << "Audio Track to " << id << " closed" << std::endl;
       // 检查capturer是否仍然有效
-      if (audio_capturer) {
-        audio_capturer->pause_capture();
-        audio_capturer->set_track_callback(nullptr);
+      if (audio_capturer_) {
+        audio_capturer_->pause_capture();
+        audio_capturer_->set_track_callback(nullptr);
       }
     });
   }
 
   // 修复音频接收逻辑
   std::shared_ptr<rtc::Track> audioReceiver = nullptr;
-  pc->onTrack([audio_player, audioReceiver](
+  pc->onTrack([this, audioReceiver](
                   const std::shared_ptr<rtc::Track> &track) mutable {
     if (track->description().type() == "audio") {
       audioReceiver = track;
@@ -257,15 +247,15 @@ createPeerConnection(const rtc::Configuration &config,
                   << std::endl;
       });
       audioReceiver->onFrame(
-          [audio_player](const rtc::binary &data, const rtc::FrameInfo &info) {
-            if (audio_player != nullptr) {
-              audio_player->receiveAudioData(data, info);
+          [this](const rtc::binary &data, const rtc::FrameInfo &info) {
+            if (audio_player_ != nullptr) {
+              audio_player_->receiveAudioData(data, info);
             }
           });
     }
   });
   // DataChannel 处理
-  pc->onDataChannel([id, &dataChannelMap, video_capturer](std::shared_ptr<rtc::DataChannel> dc) {
+  pc->onDataChannel([id, this](std::shared_ptr<rtc::DataChannel> dc) {
     std::cout << "DataChannel from " << id << " received with label \""
               << dc->label() << "\"" << std::endl;
 
@@ -273,12 +263,12 @@ createPeerConnection(const rtc::Configuration &config,
       std::cout << "DataChannel from " << id << " open" << std::endl;
     });
 
-    dc->onClosed([id, &dataChannelMap]() {
+    dc->onClosed([id, this]() {
       std::cout << "DataChannel from " << id << " closed" << std::endl;
-      dataChannelMap.erase(id);
+      dataChannelMap_.erase(id);
     });
 
-    dc->onMessage([id, video_capturer](auto data) {
+    dc->onMessage([id, this](auto data) {
       if (std::holds_alternative<std::string>(data)) {
         const std::string &str_data = std::get<std::string>(data);
         try {
@@ -290,7 +280,7 @@ createPeerConnection(const rtc::Configuration &config,
             if (type == "video_config") {
               std::cout << "Received video config from " << id << std::endl;
 
-              if (video_capturer) {
+              if (video_capturer_) {
                 std::string resolution = msg.value("resolution", "640x480");
                 int fps = msg.value("fps", 30);
                 int bitrate = msg.value("bitrate", 3200000);
@@ -300,7 +290,7 @@ createPeerConnection(const rtc::Configuration &config,
                           << "fps, " << bitrate << "bps, " << format << std::endl;
 
                 // 调用视频配置重置方法
-                video_capturer->reconfigure(resolution, fps, bitrate, format);
+                video_capturer_->reconfigure(resolution, fps, bitrate, format);
               }
             }
           }
@@ -311,50 +301,50 @@ createPeerConnection(const rtc::Configuration &config,
         // TODO: 暂不处理二进制数据
       }
     });
-    dataChannelMap.emplace(id, dc);
+    dataChannelMap_.emplace(id, dc);
   });
 
   // 通道关闭时，停止音视频捕获
   pc->onStateChange(
-      [video_capturer, audio_capturer, id, wws](rtc::PeerConnection::State state) {
+      [id, wws, this](rtc::PeerConnection::State state) {
         if (state == rtc::PeerConnection::State::Disconnected ||
             state == rtc::PeerConnection::State::Failed ||
             state == rtc::PeerConnection::State::Closed) {
           std::cout << "PeerConnection closed, stopping captures!" << std::endl;
           // 检查capturer是否仍然有效
-          if (video_capturer && video_capturer->is_running()) {
-            video_capturer->set_track_callback(nullptr);
-            video_capturer->pause_capture();
+          if (video_capturer_ && video_capturer_->is_running()) {
+            video_capturer_->set_track_callback(nullptr);
+            video_capturer_->pause_capture();
           }
-          if (audio_capturer && audio_capturer->is_running()) {
-            audio_capturer->set_track_callback(nullptr);
-            audio_capturer->pause_capture();
+          if (audio_capturer_ && audio_capturer_->is_running()) {
+            audio_capturer_->set_track_callback(nullptr);
+            audio_capturer_->pause_capture();
           }
         }
         if (state == rtc::PeerConnection::State::Connected) {
           std::cout << "PeerConnection connected" << std::endl;
           // 连接成功时，停止重连线程
-          std::lock_guard<std::mutex> lock(reconnectMutex);
-          if (reconnectThreads.find(id) != reconnectThreads.end()) {
-            auto& thread = reconnectThreads[id];
+          std::lock_guard<std::mutex> lock(reconnectMutex_);
+          if (reconnectThreads_.find(id) != reconnectThreads_.end()) {
+            auto& thread = reconnectThreads_[id];
             if (thread && thread->joinable()) {
               std::cout << "Stopping reconnect thread for " << id << std::endl;
               // 设置线程退出标志（通过关闭 ws 来触发）
             }
-            reconnectThreads.erase(id);
+            reconnectThreads_.erase(id);
           }
         }
       });
   // 记录 PeerConnection
-  peerConnectionMap.emplace(id, pc);
+  peerConnectionMap_.emplace(id, pc);
   return pc;
 }
 
 WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Cmdline params)
     : client_id_(client_id), params_(params) {
   rtc::InitLogger(rtc::LogLevel::Info);
-  localId = client_id;
-    size_t queue_size = params.framerate()*2;
+  localId_ = client_id;
+  size_t queue_size = params.framerate()*2;
   // Initialize video capturer
   if (!params.inputDevice().empty()) {
     video_capturer_ = new VideoCapturer(params.inputDevice(), params.debug(),
@@ -392,6 +382,11 @@ WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Cmdline params)
   }
 
   std::cout << "WebRTCPublisher init..." << std::endl;
+}
+
+// 析构函数
+WebRTCPublisher::~WebRTCPublisher() {
+  stop();
 }
 
 void WebRTCPublisher::start() {
@@ -562,21 +557,19 @@ void WebRTCPublisher::setupWebSocketCallbacks(std::shared_ptr<rtc::WebSocket> ws
     auto type = it->get<std::string>();
 
     shared_ptr<rtc::PeerConnection> pc;
-    if (auto jt = peerConnectionMap.find(id); jt != peerConnectionMap.end()) {
+    if (auto jt = peerConnectionMap_.find(id); jt != peerConnectionMap_.end()) {
       if (type == "offer") {
         std::cout << "Release old pc" << std::endl;
-        peerConnectionMap[id]->close();
-        peerConnectionMap.erase(id);
+        peerConnectionMap_[id]->close();
+        peerConnectionMap_.erase(id);
         std::cout << "Answering to " + id << std::endl;
-        pc = createPeerConnection(config, wws, id, this->video_capturer_,
-                                  this->audio_capturer_, this->audio_player_);
+        pc = createPeerConnection(config, wws, id);
       } else {
         pc = jt->second;
       }
     } else if (type == "offer") {
       std::cout << "Answering to " + id << std::endl;
-      pc = createPeerConnection(config, wws, id, this->video_capturer_,
-                                this->audio_capturer_, this->audio_player_);
+      pc = createPeerConnection(config, wws, id);
     } else {
       return;
     }
@@ -597,12 +590,12 @@ void WebRTCPublisher::stop() {
   stopWsReconnect();
 
   // 关闭所有PeerConnection以确保回调被清理
-  for (auto &pair : peerConnectionMap) {
+  for (auto &pair : peerConnectionMap_) {
     if (pair.second) {
       pair.second->close();
     }
   }
-  peerConnectionMap.clear();
+  peerConnectionMap_.clear();
 
   if (ws_) {
     ws_->close();
