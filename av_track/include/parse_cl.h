@@ -50,6 +50,7 @@ private:
   int _c;                     // Audio channels
   std::string _f;             // Audio input_format
   std::string _videoFormat;   // Video input format
+  std::string _videoCodec;    // Video codec (h264 or h265)
   bool _h;
   std::string _client_id;  // 新添加的client_id参数
   bool _debug;             // 新添加的debug参数
@@ -99,6 +100,9 @@ public:
   std::string videoFormat() const {
     return _videoFormat;
   } // Video input format getter
+  std::string videoCodec() const {
+    return _videoCodec;
+  } // Video codec getter (h264 or h265)
   bool h() const { return _h; }
   std::string clientId() const {
     return _client_id;

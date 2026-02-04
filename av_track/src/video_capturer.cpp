@@ -2,6 +2,7 @@
 #include "debug_utils.h"
 #include "encoder.h"
 #include "h264_encoder.h"
+#include "h265_encoder.h"
 #include <algorithm>
 #include <chrono>
 #include <cstring>
@@ -36,7 +37,9 @@ VideoCapturer::VideoCapturer(const std::string &device, bool debug_enabled,
       device_(device), resolution_(resolution), framerate_(framerate),
       video_format_(video_format) {
   avdevice_register_all();
-  encoder_ = std::make_unique<H264Encoder>(debug_enabled);
+
+  // 检测是否为UDP输入流
+  is_udp_stream_ = (device_.substr(0, 6) == "udp://");
 }
 
 VideoCapturer::~VideoCapturer() { stop(); }
@@ -45,37 +48,57 @@ VideoCapturer::~VideoCapturer() { stop(); }
 // void VideoCapturer::set_track_callback(TrackCallback callback)
 
 bool VideoCapturer::start() {
-  AVInputFormat *input_format = av_find_input_format("v4l2");
-  if (!input_format) {
-    std::cerr << "Cannot find V4L2 input input_format" << std::endl;
-    return false;
-  }
+  AVInputFormat *input_format = nullptr;
   std::string device_path = device_;
 
-  // Parse resolution
-  int width = 640, height = 480; // Default values
-  sscanf(resolution_.c_str(), "%dx%d", &width, &height);
-  std::cout << "Resolution: " << width << "x" << height << std::endl;
-  if (width < height) {
-    resolution_ = std::to_string(height) + "x" + std::to_string(width);
+  if (is_udp_stream_) {
+    // UDP流模式：直接接收H.264编码的视频流
+    std::cout << "UDP stream mode detected: " << device_ << std::endl;
+
+    AVDictionary *options = nullptr;
+    av_dict_set(&options, "buffer_size", "1024000", 0);  // 增大接收缓冲区
+    av_dict_set(&options, "max_delay", "0", 0);          // 最小延迟
+    av_dict_set(&options, "reorder_queue_size", "0", 0); // 禁用重排序队列
+
+    int ret = avformat_open_input(&format_context_, device_path.c_str(),
+                                  nullptr, &options);
+    if (ret < 0) {
+      std::cerr << "Cannot open UDP stream: " << av_error_string(ret) << std::endl;
+      return false;
+    }
+  } else {
+    // 普通摄像头模式
+    input_format = av_find_input_format("v4l2");
+    if (!input_format) {
+      std::cerr << "Cannot find V4L2 input input_format" << std::endl;
+      return false;
+    }
+
+    // Parse resolution
+    int width = 640, height = 480; // Default values
+    sscanf(resolution_.c_str(), "%dx%d", &width, &height);
+    std::cout << "Resolution: " << width << "x" << height << std::endl;
+    if (width < height) {
+      resolution_ = std::to_string(height) + "x" + std::to_string(width);
+    }
+
+    AVDictionary *options = nullptr;
+    av_dict_set(&options, "video_size", resolution_.c_str(), 0);
+    av_dict_set(&options, "framerate", std::to_string(framerate_).c_str(), 0);
+    av_dict_set(&options, "input_format", video_format_.c_str(),
+                0); // 使用视频输入格式参数
+    // 移除 pixel_format 设置，让 ffmpeg 自动检测
+    std::cout << "Using video input format: " << video_format_ << std::endl;
+    int ret = avformat_open_input(&format_context_, device_path.c_str(),
+                                  input_format, &options);
+    if (ret < 0) {
+      std::cerr << "Cannot open video device: " << av_error_string(ret)
+                << std::endl;
+      return false;
+    }
   }
 
-  AVDictionary *options = nullptr;
-  av_dict_set(&options, "video_size", resolution_.c_str(), 0);
-  av_dict_set(&options, "framerate", std::to_string(framerate_).c_str(), 0);
-  av_dict_set(&options, "input_format", video_format_.c_str(),
-              0); // 使用视频输入格式参数
-  // 移除 pixel_format 设置，让 ffmpeg 自动检测
-  std::cout << "Using video input format: " << video_format_ << std::endl;
-  int ret = avformat_open_input(&format_context_, device_path.c_str(),
-                                input_format, &options);
-  if (ret < 0) {
-    std::cerr << "Cannot open video device: " << av_error_string(ret)
-              << std::endl;
-    return false;
-  }
-
-  ret = avformat_find_stream_info(format_context_, nullptr);
+  int ret = avformat_find_stream_info(format_context_, nullptr);
   if (ret < 0) {
     std::cerr << "Cannot find stream info: " << av_error_string(ret)
               << std::endl;
@@ -96,65 +119,126 @@ bool VideoCapturer::start() {
     return false;
   }
 
-  AVCodecParameters *codec_params =
-      format_context_->streams[video_stream_index_]->codecpar;
-  const AVCodec *codec = avcodec_find_decoder(codec_params->codec_id);
-  if (!codec) {
-    std::cerr << "Cannot find decoder" << std::endl;
-    return false;
-  }
+  if (is_udp_stream_) {
+    // UDP流模式：验证视频编码是否为H.264或H.265
+    AVCodecParameters *codec_params =
+        format_context_->streams[video_stream_index_]->codecpar;
 
-  codec_context_ = avcodec_alloc_context3(codec);
-  avcodec_parameters_to_context(codec_context_, codec_params);
+    if (video_codec_ == "h264") {
+      if (codec_params->codec_id != AV_CODEC_ID_H264) {
+        std::cerr << "UDP stream codec is not H.264 (codec_id: " << codec_params->codec_id << ")" << std::endl;
+        std::cerr << "Requested codec: h264" << std::endl;
+        return false;
+      }
+      std::cout << "UDP stream is H.264 encoded, ready for direct forwarding" << std::endl;
+    } else if (video_codec_ == "h265") {
+      if (codec_params->codec_id != AV_CODEC_ID_H265) {
+        std::cerr << "UDP stream codec is not H.265 (codec_id: " << codec_params->codec_id << ")" << std::endl;
+        std::cerr << "Requested codec: h265" << std::endl;
+        return false;
+      }
+      std::cout << "UDP stream is H.265 encoded, ready for direct forwarding" << std::endl;
+    } else {
+      std::cerr << "Unknown video codec: " << video_codec_ << std::endl;
+      return false;
+    }
+  } else {
+    // 普通摄像头模式：需要解码和编码
+    AVCodecParameters *codec_params =
+        format_context_->streams[video_stream_index_]->codecpar;
+    const AVCodec *codec = avcodec_find_decoder(codec_params->codec_id);
+    if (!codec) {
+      std::cerr << "Cannot find decoder" << std::endl;
+      return false;
+    }
 
-  ret = avcodec_open2(codec_context_, codec, nullptr);
-  if (ret < 0) {
-    std::cerr << "Cannot open codec: " << av_error_string(ret) << std::endl;
-    return false;
-  }
+    codec_context_ = avcodec_alloc_context3(codec);
+    avcodec_parameters_to_context(codec_context_, codec_params);
 
-  // 设置4个线程用于解码
-  codec_context_->thread_count = 2;
+    ret = avcodec_open2(codec_context_, codec, nullptr);
+    if (ret < 0) {
+      std::cerr << "Cannot open codec: " << av_error_string(ret) << std::endl;
+      return false;
+    }
+
+    // 设置4个线程用于解码
+    codec_context_->thread_count = 2;
 
     std::cout << "Capturer Decoder Using " << codec_context_->thread_count << " threads"
               << std::endl;
 
-    // Initialize encoder
-  if (!encoder_->open_encoder(width, height, framerate_, 0)) {
-    std::cerr << "Cannot open H.264 encoder" << std::endl;
-    return false;
-  }
-  AVCodecContext *encoder_context = encoder_->get_context();
-  encoder_out_width_ = encoder_context->width;
-  encoder_out_height_ = encoder_context->height;
-  encoder_out_pix_fmt_ = encoder_context->pix_fmt;
-  sws_context_ = sws_getContext(
-      codec_context_->width, codec_context_->height, codec_context_->pix_fmt,
-      encoder_out_width_, encoder_out_height_, encoder_out_pix_fmt_,
-      SWS_BILINEAR, nullptr, nullptr, nullptr);
+    // Parse resolution
+    int width = 640, height = 480;
+    sscanf(resolution_.c_str(), "%dx%d", &width, &height);
 
-  if (!sws_context_) {
-    std::cerr << "Cannot create SwsContext" << std::endl;
-    return false;
+    // 根据视频编码器类型创建编码器
+    if (video_codec_ == "h264") {
+      encoder_ = std::make_unique<H264Encoder>(debug_enabled_);
+      std::cout << "Using H.264 encoder" << std::endl;
+    } else if (video_codec_ == "h265") {
+      encoder_ = std::make_unique<H265Encoder>(debug_enabled_);
+      std::cout << "Using H.265 encoder" << std::endl;
+    } else {
+      std::cerr << "Unknown video codec: " << video_codec_ << ", falling back to H.264" << std::endl;
+      encoder_ = std::make_unique<H264Encoder>(debug_enabled_);
+      video_codec_ = "h264";
+    }
+
+    // Initialize encoder
+    if (!encoder_->open_encoder(width, height, framerate_, 0)) {
+      std::cerr << "Cannot open " << video_codec_ << " encoder" << std::endl;
+      return false;
+    }
+    AVCodecContext *encoder_context = encoder_->get_context();
+    encoder_out_width_ = encoder_context->width;
+    encoder_out_height_ = encoder_context->height;
+    encoder_out_pix_fmt_ = encoder_context->pix_fmt;
+    sws_context_ = sws_getContext(
+        codec_context_->width, codec_context_->height, codec_context_->pix_fmt,
+        encoder_out_width_, encoder_out_height_, encoder_out_pix_fmt_,
+        SWS_BILINEAR, nullptr, nullptr, nullptr);
+
+    if (!sws_context_) {
+      std::cerr << "Cannot create SwsContext" << std::endl;
+      return false;
+    }
   }
 
   is_running_ = true;
   // 等待 track_callback_ 设置后再启动采集线程
   capture_thread_ = std::thread(&VideoCapturer::capture_loop, this);
-  decode_thread_ = std::thread(&VideoCapturer::decode_loop, this);
-  encode_thread_ = std::thread(&VideoCapturer::encode_loop, this);
-  send_thread_ = std::thread(&VideoCapturer::send_loop, this);
 
-  // 如果CPU数量大于等于4，则绑定线程到不同的CPU
-  int cpu_count = get_cpu_count();
-  if (cpu_count >= 4) {
-    std::cout << "Detected " << cpu_count << " CPUs, binding threads to different CPUs" << std::endl;
-    bind_thread_to_cpu(capture_thread_, 0); // 采集线程绑定到CPU 0
-//    bind_thread_to_cpu(decode_thread_, 3);  // 解码线程绑定到CPU 3
-//    bind_thread_to_cpu(encode_thread_, 1);  // 编码线程绑定到CPU 1
-    bind_thread_to_cpu(send_thread_, 2);    // 发送线程绑定到CPU 2
+  if (is_udp_stream_) {
+    // UDP流模式：只启动采集和发送线程
+    std::cout << "UDP stream mode: Starting capture and send threads only" << std::endl;
+    send_thread_ = std::thread(&VideoCapturer::send_loop, this);
+
+    // 如果CPU数量大于等于2，则绑定线程到不同的CPU
+    int cpu_count = get_cpu_count();
+    if (cpu_count >= 2) {
+      std::cout << "Detected " << cpu_count << " CPUs, binding threads to different CPUs" << std::endl;
+      bind_thread_to_cpu(capture_thread_, 0); // 采集线程绑定到CPU 0
+      bind_thread_to_cpu(send_thread_, 1);    // 发送线程绑定到CPU 1
+    } else {
+      std::cout << "CPU count: " << cpu_count << ", skipping CPU binding" << std::endl;
+    }
   } else {
-    std::cout << "CPU count: " << cpu_count << ", skipping CPU binding" << std::endl;
+    // 普通摄像头模式：启动所有线程
+    decode_thread_ = std::thread(&VideoCapturer::decode_loop, this);
+    encode_thread_ = std::thread(&VideoCapturer::encode_loop, this);
+    send_thread_ = std::thread(&VideoCapturer::send_loop, this);
+
+    // 如果CPU数量大于等于4，则绑定线程到不同的CPU
+    int cpu_count = get_cpu_count();
+    if (cpu_count >= 4) {
+      std::cout << "Detected " << cpu_count << " CPUs, binding threads to different CPUs" << std::endl;
+      bind_thread_to_cpu(capture_thread_, 0); // 采集线程绑定到CPU 0
+      //    bind_thread_to_cpu(decode_thread_, 3);  // 解码线程绑定到CPU 3
+      //    bind_thread_to_cpu(encode_thread_, 1);  // 编码线程绑定到CPU 1
+      bind_thread_to_cpu(send_thread_, 2);    // 发送线程绑定到CPU 2
+    } else {
+      std::cout << "CPU count: " << cpu_count << ", skipping CPU binding" << std::endl;
+    }
   }
 
   std::cout << "Video capture started successfully" << std::endl;
@@ -180,6 +264,11 @@ void VideoCapturer::stop() {
     avformat_close_input(&format_context_);
     format_context_ = nullptr;
   }
+}
+
+void VideoCapturer::set_video_codec(const std::string &codec) {
+  video_codec_ = codec;
+  std::cout << "Video codec set to: " << video_codec_ << std::endl;
 }
 
 void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitrate, const std::string &format) {
@@ -322,94 +411,148 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
 void VideoCapturer::capture_loop() {
   AVPacket *packet = av_packet_alloc();
 
-  // 计算实际采集/编码 FPS，避免只使用 num 导致不准确
-  int encoder_out_fps = 0;
-  if (encoder_->get_context()->framerate.den != 0) {
-    encoder_out_fps = encoder_->get_context()->framerate.num /
-                      encoder_->get_context()->framerate.den;
-  }
-  AVRational avg_rate =
-      format_context_->streams[video_stream_index_]->avg_frame_rate;
-  int capture_in_fps = 0;
-  if (avg_rate.den != 0) {
-    capture_in_fps = avg_rate.num / avg_rate.den;
-  }
+  if (is_udp_stream_) {
+    // UDP流模式：直接转发H.264数据包到发送队列
+    std::cout << "UDP capture loop started in direct forwarding mode" << std::endl;
 
-  if (encoder_out_fps <= 0) {
-    encoder_out_fps = framerate_;
-  }
-  if (capture_in_fps <= 0) {
-    capture_in_fps = encoder_out_fps;
-  }
-
-  int frame_drop_factor = 1; // 默认值，可以根据需要调整
-  if (encoder_out_fps < capture_in_fps) {
-    frame_drop_factor =
-        std::max(1, static_cast<int>(std::round(static_cast<double>(capture_in_fps) /
-                                                static_cast<double>(encoder_out_fps))));
-  }
-  int frame_counter = 0;
-  std::cout << "Capture FPS: " << capture_in_fps
-            << ", Encode FPS: " << encoder_out_fps
-            << ", Frame Drop Factor: " << frame_drop_factor << std::endl;
-
-  // 等待 track_callback_ 被设置
-  {
-    std::unique_lock<std::mutex> lock(callback_mutex_);
-    callback_cv_.wait(lock, [this] { return track_callback_ || !is_running_; });
-  }
-
-  if (!is_running_) {
-    av_packet_free(&packet);
-    return;
-  }
-
-  while (is_running_) {
-    // 检查是否暂停
-    if (is_paused_) {
-      // 等待 track_callback_ 被设置或恢复采集
+    // 等待 track_callback_ 被设置
+    {
       std::unique_lock<std::mutex> lock(callback_mutex_);
-      callback_cv_.wait(lock, [this] { return !is_paused_ || !is_running_; });
-      continue;
+      callback_cv_.wait(lock, [this] { return track_callback_ || !is_running_; });
     }
 
-    int ret = av_read_frame(format_context_, packet);
-    if (ret < 0) {
-      if (ret != AVERROR(EAGAIN)) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-      }
-      continue;
+    if (!is_running_) {
+      av_packet_free(&packet);
+      return;
     }
 
-    if (packet->stream_index == video_stream_index_) {
-      // 帧率控制逻辑：根据frame_drop_factor决定是否丢弃帧
-      frame_counter++;
-      if (frame_drop_factor > 1 && (frame_counter % frame_drop_factor) != 1) {
-        // 跳过这一帧（不进行解码）
-        av_packet_unref(packet);
+    while (is_running_) {
+      // 检查是否暂停
+      if (is_paused_) {
+        std::unique_lock<std::mutex> lock(callback_mutex_);
+        callback_cv_.wait(lock, [this] { return !is_paused_ || !is_running_; });
         continue;
       }
 
-      // 将数据包放入解码队列
-      AVPacket *clone_packet = av_packet_alloc();
-      av_packet_ref(clone_packet, packet);
-      
-      // 使用非阻塞方式推入队列
-      if (!decode_queue_.try_push(clone_packet)) {
-        if (debug_enabled_) {
-          std::cout << "Video Decode queue full, dropping packet" << std::endl;
-          std::cout << "Video Decode queue Len: " << decode_queue_.size()
-                    << ", Capacity: " << decode_queue_.capacity()
-                    << std::endl;
+      int ret = av_read_frame(format_context_, packet);
+      if (ret < 0) {
+        if (ret != AVERROR(EAGAIN)) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
-        av_packet_free(&clone_packet);
-        decode_queue_.clear();
-        encode_queue_.clear();
-        send_queue_.clear();
+        continue;
       }
+
+      if (packet->stream_index == video_stream_index_) {
+        // 直接将H.264数据包放入发送队列
+        AVPacket *clone_packet = av_packet_alloc();
+        av_packet_ref(clone_packet, packet);
+
+        if (!send_queue_.try_push(clone_packet)) {
+          if (debug_enabled_) {
+            std::cout << "UDP stream: Send queue full, dropping packet" << std::endl;
+            std::cout << "Send queue Len: " << send_queue_.size()
+                      << ", Capacity: " << send_queue_.capacity() << std::endl;
+          }
+          av_packet_free(&clone_packet);
+          send_queue_.clear();
+        }
+      }
+
+      av_packet_unref(packet);
+    }
+  } else {
+    // 普通摄像头模式：需要解码和编码
+    std::cout << "Camera capture loop started" << std::endl;
+
+    // 计算实际采集/编码 FPS，避免只使用 num 导致不准确
+    int encoder_out_fps = 0;
+    if (encoder_->get_context()->framerate.den != 0) {
+      encoder_out_fps = encoder_->get_context()->framerate.num /
+                        encoder_->get_context()->framerate.den;
+    }
+    AVRational avg_rate =
+        format_context_->streams[video_stream_index_]->avg_frame_rate;
+    int capture_in_fps = 0;
+    if (avg_rate.den != 0) {
+      capture_in_fps = avg_rate.num / avg_rate.den;
     }
 
-    av_packet_unref(packet);
+    if (encoder_out_fps <= 0) {
+      encoder_out_fps = framerate_;
+    }
+    if (capture_in_fps <= 0) {
+      capture_in_fps = encoder_out_fps;
+    }
+
+    int frame_drop_factor = 1; // 默认值，可以根据需要调整
+    if (encoder_out_fps < capture_in_fps) {
+      frame_drop_factor =
+          std::max(1, static_cast<int>(std::round(static_cast<double>(capture_in_fps) /
+                                                  static_cast<double>(encoder_out_fps))));
+    }
+    int frame_counter = 0;
+    std::cout << "Capture FPS: " << capture_in_fps
+              << ", Encode FPS: " << encoder_out_fps
+              << ", Frame Drop Factor: " << frame_drop_factor << std::endl;
+
+    // 等待 track_callback_ 被设置
+    {
+      std::unique_lock<std::mutex> lock(callback_mutex_);
+      callback_cv_.wait(lock, [this] { return track_callback_ || !is_running_; });
+    }
+
+    if (!is_running_) {
+      av_packet_free(&packet);
+      return;
+    }
+
+    while (is_running_) {
+      // 检查是否暂停
+      if (is_paused_) {
+        // 等待 track_callback_ 被设置或恢复采集
+        std::unique_lock<std::mutex> lock(callback_mutex_);
+        callback_cv_.wait(lock, [this] { return !is_paused_ || !is_running_; });
+        continue;
+      }
+
+      int ret = av_read_frame(format_context_, packet);
+      if (ret < 0) {
+        if (ret != AVERROR(EAGAIN)) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        continue;
+      }
+
+      if (packet->stream_index == video_stream_index_) {
+        // 帧率控制逻辑：根据frame_drop_factor决定是否丢弃帧
+        frame_counter++;
+        if (frame_drop_factor > 1 && (frame_counter % frame_drop_factor) != 1) {
+          // 跳过这一帧（不进行解码）
+          av_packet_unref(packet);
+          continue;
+        }
+
+        // 将数据包放入解码队列
+        AVPacket *clone_packet = av_packet_alloc();
+        av_packet_ref(clone_packet, packet);
+
+        // 使用非阻塞方式推入队列
+        if (!decode_queue_.try_push(clone_packet)) {
+          if (debug_enabled_) {
+            std::cout << "Video Decode queue full, dropping packet" << std::endl;
+            std::cout << "Video Decode queue Len: " << decode_queue_.size()
+                      << ", Capacity: " << decode_queue_.capacity()
+                      << std::endl;
+          }
+          av_packet_free(&clone_packet);
+          decode_queue_.clear();
+          encode_queue_.clear();
+          send_queue_.clear();
+        }
+      }
+
+      av_packet_unref(packet);
+    }
   }
 
   av_packet_free(&packet);

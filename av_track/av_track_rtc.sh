@@ -2,6 +2,10 @@
 TARGET_HOST="fy403.cn" # 信令服务器地址
 TARGET_PORT=8000 # 信令服务器端口
 IP_TYPE=4 # ipv4 or ipv6
+# 视频设备配置：
+# 普通摄像头：/dev/video1 或 /dev/video0
+# UDP流：udp://ip:port (例如: udp://192.168.1.100:5004)
+# 注意：UDP流模式目前只支持H.264, H.265编码的视频流
 VIDEO_DEVICE="/dev/video1" # 首选摄像头设备
 VIDEO_DEVICE_BAK="/dev/video0" # 备选摄像头设备
 #AUDIO_DEVICE="hw:CARD=Audio,DEV=0" # 音频设备
@@ -22,6 +26,7 @@ RESOLUTION="640x480" # 画面分辨率
 #RESOLUTION="1280x720" # 画面分辨率
 INPUT_FORMAT="yuyv422" # mjpeg, yuyv422
 FPS=30 # 画面帧率
+VIDEO_CODEC="h264" # 视频编码器: h264 或 h265
 #ADUIO_PLAYER_DEVICE="USB2.0 Device, USB Audio" # 音频播放设备
 #ADUIO_PLAYER_SAMPLE_RATE=48000 # 音频采样率
 #AUDIO_PLAYER_CHANNELS=2 # 音频通道数
@@ -32,9 +37,25 @@ FONT_FILE="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 # Test if VIDEO_DEVICE works with ffmpeg, if not use VIDEO_DEVICE_BAK
 test_video_device() {
+    # 检查是否为UDP流模式
+    if [[ "$VIDEO_DEVICE" == udp://* ]]; then
+        echo "$(date): UDP stream mode detected: $VIDEO_DEVICE"
+        echo "$(date): Testing UDP stream connection..."
+        return 0
+        # 尝试测试UDP流连接（超时5秒）
+        # if timeout 5 ffmpeg -i "$VIDEO_DEVICE" -t 1 -f null - 2>/dev/null; then
+        #     echo "$(date): UDP stream $VIDEO_DEVICE is accessible"
+        #     return 0
+        # else
+        #     echo "$(date): UDP stream $VIDEO_DEVICE is not accessible or timed out"
+        #     return 1
+        # fi
+    fi
+
+    # 普通摄像头模式
     # Automatically detect the first USB camera device
     FIRST_USB_DEVICE=$(v4l2-ctl --list-devices 2>/dev/null | awk '/USB Cam:/,/^$/{if(/\/dev\/video/) {print $1; exit}}')
-    
+
     if [ -n "$FIRST_USB_DEVICE" ]; then
         echo "$(date): Detected first USB camera device: $FIRST_USB_DEVICE"
         VIDEO_DEVICE="$FIRST_USB_DEVICE"
@@ -62,7 +83,7 @@ test_video_device() {
 
 run_rtc() {
     echo "$(date): Starting RTC stream..."
-    
+
     ./build/webrtc_publisher \
     -s $STUN_SERVER -t $STUN_SERVER_PORT \
     -u $TURN_SERVER -p $TURN_SERVER_PORT -U $USER \
@@ -70,6 +91,7 @@ run_rtc() {
     -w $TARGET_HOST -x $TARGET_PORT \
     -R $RESOLUTION -F $FPS \
     -V $INPUT_FORMAT \
+    -E $VIDEO_CODEC \
     -c $CLIENT_ID -i $VIDEO_DEVICE
 #    -a $AUDIO_DEVICE \
 #    -r $SAMPLE_RATE \

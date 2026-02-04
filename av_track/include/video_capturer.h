@@ -32,6 +32,8 @@ public:
   bool start() override;
   void stop() override;
   void reconfigure(const std::string &resolution, int fps, int bitrate, const std::string &format);
+  void set_video_codec(const std::string &codec); // 设置视频编码器类型 (h264 or h265)
+  std::string get_video_codec() const { return video_codec_; } // 获取当前视频编码器类型
 
 private:
   void capture_loop() override;
@@ -44,10 +46,12 @@ private:
   void release_scaled_frame(AVFrame *frame);
   void clear_frame_pool();
 
+  bool is_udp_stream_ = false;  // 是否为UDP流模式
   std::string device_;
   std::string resolution_;
   int framerate_;
   std::string video_format_;
+  std::string video_codec_ = "h264"; // 视频编码器类型: h264 or h265
   AVFormatContext *format_context_ = nullptr;
   AVCodecContext *codec_context_ = nullptr;
   SwsContext *sws_context_ = nullptr;

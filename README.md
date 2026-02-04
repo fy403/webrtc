@@ -134,6 +134,8 @@ sudo apt-get install -y ffmpeg
 sudo apt install -y g++ make dos2unix
 sudo apt install -y libsdl2-dev
 sudo apt install -y libssl-dev
+sudo apt-get install -y nlohmann-json3-dev
+# 手动编译cmake-3.28.3版本
 wget https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3.tar.gz
 tar -xzvf cmake-3.28.3.tar.gz
 cd cmake-3.28.3
@@ -141,7 +143,7 @@ cd cmake-3.28.3
 make -j 3
 sudo make install
 ln -sf /usr/local/bin/cmake /usr/bin/cmake
-sudo apt-get install -y nlohmann-json3-dev
+# 手动编译libdatachannel
 git clone https://github.com/paullouisageneau/libdatachannel.git
 cd libdatachannel
 git submodule update --init --recursive

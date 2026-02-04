@@ -63,6 +63,8 @@ Cmdline::Cmdline(int argc,
        'f'}, // Audio input_format option
       {"videoFormat", required_argument, NULL,
        'V'}, // Video input format option
+      {"videoCodec", required_argument, NULL,
+       'E'}, // Video codec option (h264 or h265)
       {"client_id", required_argument, NULL, 'c'},
       {"debug", no_argument, NULL, 'd'},
       {"resolution", required_argument, NULL, 'R'},
@@ -98,6 +100,7 @@ Cmdline::Cmdline(int argc,
   _c = 1;                 // Default channels
   _f = "alsa";            // Default audio input_format
   _videoFormat = "mjpeg"; // Default video input format
+  _videoCodec = "h264";   // Default video codec
   _h = false;
   _client_id = "";         // client_id
   _debug = false;          // debug
@@ -111,7 +114,7 @@ Cmdline::Cmdline(int argc,
 
   optind = 0;
   while ((c = getopt_long(argc, argv,
-                          "a:S:s:t:w:x:u:p:U:R:P:C:i:c:r:f:F:V:O:H:v:denmh",
+                          "a:S:s:t:w:x:u:p:U:R:P:C:i:c:r:f:F:V:E:O:H:v:denmh",
                           long_options, &optind)) != -1) {
     switch (c) {
     case 'n':
@@ -220,6 +223,10 @@ Cmdline::Cmdline(int argc,
 
     case 'V':
       _videoFormat = optarg;
+      break;
+
+    case 'E': // Video codec selection
+      _videoCodec = optarg;
       break;
 
     case 'c':
@@ -333,6 +340,8 @@ libdatachannel client implementing WebRTC Data Channels with WebSocket signaling
           Audio input_format.\n\
    [ -V ] [ --videoFormat ] (type=STRING, default=mjpeg)\n\
           Video input format.\n\
+   [ -E ] [ --videoCodec ] (type=STRING, default=h264)\n\
+          Video codec (h264 or h265).\n\
    [ -c ] [ --client_id ] (type=STRING)\n\
           Client identifier.\n\
    [ -d ] [ --debug ] (type=FLAG)\n\

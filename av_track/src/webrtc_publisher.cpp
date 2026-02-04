@@ -72,13 +72,29 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
   shared_ptr<rtc::Track> audio_track = nullptr;
 
   if (video_capturer_ != nullptr && video_capturer_->is_running()) {
+    // 获取当前视频编码器类型
+    std::string video_codec = video_capturer_->get_video_codec();
+    std::cout << "Using video codec: " << video_codec << std::endl;
+
     // Create video track and add to connection
     rtc::Description::Video media("video",
                                   rtc::Description::Direction::SendOnly);
-    media.addH264Codec(96); // Add H.264 codec with payload type 96
-    // 设置 H.264 参数（可选）
-    // media.addH264Codec(96,
-    // "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f");
+
+    // 根据编码器类型添加相应的codec
+    uint8_t payload_type;
+    if (video_codec == "h265") {
+      media.addH265Codec(97); // Add H.265 codec with payload type 97
+      // 设置 H.265 参数（可选）
+      media.addH265Codec(97, "level-id-id=93;profile-id=1");
+      payload_type = 97;
+    } else {
+      media.addH264Codec(96); // Add H.264 codec with payload type 96
+      // 设置 H.264 参数（可选）
+      // media.addH264Codec(96,
+      // "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f");
+      payload_type = 96;
+    }
+
     uint32_t video_ssrc = dis(gen);
     std::string cname = "video_" + std::to_string(video_ssrc);
     std::string msid = "stream_" + id;
@@ -87,16 +103,27 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
 
     video_track = pc->addTrack(media);
 
-    // 设置 H.264 RTP 媒体处理器
+    // 设置 RTP 媒体处理器
     auto rtpConfig = std::make_shared<rtc::RtpPacketizationConfig>(
         video_ssrc, cname,
-        96, // H.264 payload type
-        rtc::H264RtpPacketizer::ClockRate);
+        payload_type,
+        rtc::H264RtpPacketizer::ClockRate); // H.265使用相同的时钟频率
 
-    // 创建 H.264 RTP 打包器
-    auto packetizer = std::make_shared<rtc::H264RtpPacketizer>(
-        rtc::NalUnit::Separator::StartSequence, // 使用长起始序列
-        rtpConfig);
+    // 根据编码器类型创建相应的RTP打包器
+    std::shared_ptr<rtc::MediaHandler> packetizer;
+    if (video_codec == "h265") {
+      // 创建 H.265 RTP 打包器
+      packetizer = std::make_shared<rtc::H265RtpPacketizer>(
+          rtc::NalUnit::Separator::StartSequence, // 使用长起始序列
+          rtpConfig);
+      std::cout << "Created H.265 RTP packetizer" << std::endl;
+    } else {
+      // 创建 H.264 RTP 打包器
+      packetizer = std::make_shared<rtc::H264RtpPacketizer>(
+          rtc::NalUnit::Separator::StartSequence, // 使用长起始序列
+          rtpConfig);
+      std::cout << "Created H.264 RTP packetizer" << std::endl;
+    }
 
     // 添加 RTCP SR (Sender Report) 报告器
     auto srReporter = std::make_shared<rtc::RtcpSrReporter>(rtpConfig);
@@ -351,6 +378,8 @@ WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Cmdline params)
                                         params.resolution(), params.framerate(),
                                         params.videoFormat(), queue_size,
                                         queue_size, queue_size);
+    // 设置视频编码器类型
+    video_capturer_->set_video_codec(params.videoCodec());
   } else {
     video_capturer_ = nullptr;
   }
