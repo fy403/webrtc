@@ -38,8 +38,10 @@ VideoCapturer::VideoCapturer(const std::string &device, bool debug_enabled,
       video_format_(video_format) {
   avdevice_register_all();
 
-  // 检测是否为UDP输入流
-  is_udp_stream_ = (device_.substr(0, 6) == "udp://");
+  // 检测是否为网络流输入（UDP/RTSP/SDP）
+  is_udp_stream_ = (device_.substr(0, 6) == "udp://" ||
+                    device_.substr(0, 7) == "rtsp://" ||
+                    device_.find(".sdp") != std::string::npos);
 }
 
 VideoCapturer::~VideoCapturer() { stop(); }
@@ -52,18 +54,47 @@ bool VideoCapturer::start() {
   std::string device_path = device_;
 
   if (is_udp_stream_) {
-    // UDP流模式：直接接收H.264编码的视频流
-    std::cout << "UDP stream mode detected: " << device_ << std::endl;
+    // 网络流模式（UDP/RTSP/SDP）：直接接收H.264编码的视频流
+    bool is_rtsp = (device_.substr(0, 7) == "rtsp://");
+    bool is_sdp = (device_.find(".sdp") != std::string::npos);
+
+    if (is_rtsp) {
+      std::cout << "RTSP stream mode detected: " << device_ << std::endl;
+    } else if (is_sdp) {
+      std::cout << "SDP file mode detected: " << device_ << std::endl;
+    } else {
+      std::cout << "UDP stream mode detected: " << device_ << std::endl;
+    }
 
     AVDictionary *options = nullptr;
-    av_dict_set(&options, "buffer_size", "1024000", 0);  // 增大接收缓冲区
-    av_dict_set(&options, "max_delay", "0", 0);          // 最小延迟
-    av_dict_set(&options, "reorder_queue_size", "0", 0); // 禁用重排序队列
+    // 设置协议白名单
+    av_dict_set(&options, "protocol_whitelist", "file,crypto,data,rtp,rtsp,udp,tcp", 0);
+
+    if (is_rtsp) {
+      // RTSP 特定配置
+      av_dict_set(&options, "max_delay", "500000", 0);      // 0.5秒延迟
+      av_dict_set(&options, "reorder_queue_size", "0", 0); // 禁用重排序队列
+      av_dict_set(&options, "buffer_size", "1024000", 0);  // 1MB接收缓冲区
+      av_dict_set(&options, "rtsp_transport", "tcp", 0);   // 使用TCP传输（更稳定）
+      av_dict_set(&options, "stimeout", "5000000", 0);     // 5秒超时
+    } else if (is_sdp) {
+      // SDP 文件特定配置
+      av_dict_set(&options, "max_delay", "500000", 0);      // 0.5秒延迟
+      av_dict_set(&options, "probesize", "10000000", 0);   // 探测10MB数据
+      av_dict_set(&options, "analyzeduration", "10000000", 0); // 分析10秒
+      av_dict_set(&options, "fflags", "+genpts+discardcorrupt", 0);
+    } else {
+      // UDP 特定配置
+      av_dict_set(&options, "max_delay", "500000", 0);      // 0.5秒延迟
+      av_dict_set(&options, "reorder_queue_size", "0", 0); // 禁用重排序队列
+      av_dict_set(&options, "buffer_size", "1024000", 0);  // 1MB接收缓冲区
+    }
 
     int ret = avformat_open_input(&format_context_, device_path.c_str(),
                                   nullptr, &options);
     if (ret < 0) {
-      std::cerr << "Cannot open UDP stream: " << av_error_string(ret) << std::endl;
+      std::cerr << "Cannot open network stream: " << av_error_string(ret) << std::endl;
+      std::cerr << "Stream URL: " << device_path << std::endl;
       return false;
     }
   } else {
@@ -102,6 +133,9 @@ bool VideoCapturer::start() {
   if (ret < 0) {
     std::cerr << "Cannot find stream info: " << av_error_string(ret)
               << std::endl;
+    if (is_udp_stream_) {
+      std::cerr << "Network stream may not be transmitting or connection failed" << std::endl;
+    }
     return false;
   }
 
@@ -209,8 +243,17 @@ bool VideoCapturer::start() {
   capture_thread_ = std::thread(&VideoCapturer::capture_loop, this);
 
   if (is_udp_stream_) {
-    // UDP流模式：只启动采集和发送线程
-    std::cout << "UDP stream mode: Starting capture and send threads only" << std::endl;
+    // 网络流模式（UDP/RTSP/SDP）：只启动采集和发送线程
+    bool is_rtsp = (device_.substr(0, 7) == "rtsp://");
+    bool is_sdp = (device_.find(".sdp") != std::string::npos);
+
+    if (is_rtsp) {
+      std::cout << "RTSP stream mode: Starting capture and send threads only" << std::endl;
+    } else if (is_sdp) {
+      std::cout << "SDP file mode: Starting capture and send threads only" << std::endl;
+    } else {
+      std::cout << "UDP stream mode: Starting capture and send threads only" << std::endl;
+    }
     send_thread_ = std::thread(&VideoCapturer::send_loop, this);
 
     // 如果CPU数量大于等于2，则绑定线程到不同的CPU
@@ -412,8 +455,17 @@ void VideoCapturer::capture_loop() {
   AVPacket *packet = av_packet_alloc();
 
   if (is_udp_stream_) {
-    // UDP流模式：直接转发H.264数据包到发送队列
-    std::cout << "UDP capture loop started in direct forwarding mode" << std::endl;
+    // 网络流模式（UDP/RTSP/SDP）：直接转发H.264数据包到发送队列
+    bool is_rtsp = (device_.substr(0, 7) == "rtsp://");
+    bool is_sdp = (device_.find(".sdp") != std::string::npos);
+
+    if (is_rtsp) {
+      std::cout << "RTSP capture loop started in direct forwarding mode" << std::endl;
+    } else if (is_sdp) {
+      std::cout << "SDP file capture loop started in direct forwarding mode" << std::endl;
+    } else {
+      std::cout << "UDP capture loop started in direct forwarding mode" << std::endl;
+    }
 
     // 等待 track_callback_ 被设置
     {

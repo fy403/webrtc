@@ -125,8 +125,10 @@ TURN服务器可以自己搭建[搭建私有TURN服务器](turn_server/README.md
 sudo apt-get update
 sudo apt-get install -y libavdevice-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev
 sudo apt-get install -y x264 libx264-dev
+sudo apt-get install -y x265 libx265-dev
 sudo apt-get install -y ffmpeg
 # 建议安装ffmpeg 4.4.2 版本，如果报错。很可能是版本不兼容，建议手动编译安装ffmpeg==4.4.2
+# 如果报错不是很多，可以提交给ai agent。让它给你适配一下。
 ```
 2.安装其他依赖
 
