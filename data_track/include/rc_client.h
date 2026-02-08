@@ -7,9 +7,9 @@
 #include <thread>
 #include <map>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include "motor_controller.h"
 #include "system_monitor.h"
-#include "message_handler.h"
 #include "constants.h"
 #include "rtc/rtc.hpp"
 #include "rc_client_config.h"
@@ -49,9 +49,6 @@ private:
     // System monitor
     SystemMonitor system_monitor_;
     std::chrono::steady_clock::time_point last_status_time_;
-
-    // Message handler (仅用于状态帧创建)
-    MessageHandler message_handler_;
 
     // Watchdog for failsafe protection
     std::atomic<bool> watchdog_running_;

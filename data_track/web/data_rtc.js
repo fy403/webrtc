@@ -346,28 +346,14 @@ window.addEventListener('load', () => {
 
     function dataParseSystemStatusFrame(data) {
         try {
-            if (data[0] !== 0xAA || data[1] !== 0x55) return null;
-            if (data[2] !== MSG_SYSTEM_STATUS) return null;
-
-            const dataLength = (data[3] << 8) | data[4];
-            if (dataLength > data.length - 7) return null;
-
+            // Convert data array to string directly (raw JSON)
             let dataStr = '';
-            for (let i = 5; i < 5 + dataLength; i++) {
+            for (let i = 0; i < data.length; i++) {
                 dataStr += String.fromCharCode(data[i]);
             }
 
-            const lines = dataStr.split('\r\n');
-            const statusData = {};
-            for (const line of lines) {
-                if (!line.trim()) continue;
-                const separatorIndex = line.indexOf(':');
-                if (separatorIndex !== -1) {
-                    const key = line.substring(0, separatorIndex).trim();
-                    const value = line.substring(separatorIndex + 1).trim();
-                    if (key && value !== undefined) statusData[key] = value;
-                }
-            }
+            // Parse JSON directly
+            const statusData = JSON.parse(dataStr);
             return statusData;
         } catch (error) {
             console.error('解析系统状态帧时出错:', error);

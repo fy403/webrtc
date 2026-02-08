@@ -8,6 +8,9 @@
 #include <netdb.h>
 #include <signal.h>
 #include <iomanip>
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
 
 // RCClient is now a local variable in main(), managed by unique_ptr
 
@@ -81,12 +84,18 @@ void RCClient::parseFrame(const uint8_t *frame, size_t length) {
 }
 
 void RCClient::sendStatusFrame(const std::map<std::string, std::string> &statusData) {
-    std::vector<uint8_t> frame;
-    message_handler_.createStatusFrame(statusData, frame);
+    // Convert to JSON
+    json j;
+    for (const auto &pair : statusData) {
+        j[pair.first] = pair.second;
+    }
+
+    // Convert JSON to string and send directly
+    std::string jsonStr = j.dump();
 
     // Send data through RTC data channel if available
     if (data_channel_) {
-        data_channel_->send(reinterpret_cast<const std::byte *>(frame.data()), frame.size());
+        data_channel_->send(reinterpret_cast<const std::byte *>(jsonStr.data()), jsonStr.size());
     } else {
         // std::cout << "Sending status frame faild: data_channel is down!" << std::endl;
     }
