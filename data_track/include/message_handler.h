@@ -11,22 +11,10 @@
 class MessageHandler
 {
 public:
-    struct SbusFrame
-    {
-        std::array<uint16_t, SBUS_CHANNELS> channels{};
-        bool frame_lost = false;
-        bool failsafe = false;
-        bool valid = false;
-    };
-
     MessageHandler();
     ~MessageHandler();
 
-    // SBUS handling
-    bool parseSbusFrame(const uint8_t *frame, size_t length, SbusFrame &out_frame) const;
-    static double sbusToNormalized(uint16_t value);
-
-    // Status frame creation (kept independent of SBUS control)
+    // Status frame creation (独立于控制协议)
     void createStatusFrame(const std::map<std::string, std::string> &statusData,
                            std::vector<uint8_t> &frame);
 

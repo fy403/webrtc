@@ -1,6 +1,7 @@
 #include "motor_controller.h"
 #include "uart_motor_driver.h"
 #include "crsf_motor_driver.h"
+#include "rc_protocol_v2.h"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -89,10 +90,10 @@ void MotorController::emergencyStop() {
     std::cout << "紧急停止执行" << std::endl;
 }
 
-void MotorController::applySbus(const MessageHandler::SbusFrame &sbus_frame) {
+void MotorController::applyControl(const RCProtocolV2::ControlFrame &control_frame) {
     // Channel 0 -> forward/backward, Channel 1 -> left/right
-    double forward = MessageHandler::sbusToNormalized(sbus_frame.channels[0]);
-    double turn = MessageHandler::sbusToNormalized(sbus_frame.channels[1]);
+    double forward = control_frame.channels[0];
+    double turn = control_frame.channels[1];
 
     constexpr double DEADZONE = 0.02;
     auto clamp_unit = [](double v) { return std::max(-1.0, std::min(1.0, v)); };

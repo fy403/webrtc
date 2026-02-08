@@ -60,9 +60,11 @@ std::shared_ptr<rtc::DataChannel> RCClient::getDataChannel() {
 }
 
 void RCClient::parseFrame(const uint8_t *frame, size_t length) {
-    MessageHandler::SbusFrame sbus_frame;
-    if (!message_handler_.parseSbusFrame(frame, length, sbus_frame)) {
-        std::cerr << "Invalid SBUS frame received" << std::endl;
+    // 解析 RC Protocol v2
+    RCProtocolV2::ControlFrame control_frame;
+
+    if (!RCProtocolV2::parseControlFrame(frame, length, control_frame)) {
+        std::cerr << "Invalid RC v2 frame received" << std::endl;
         return;
     }
 
@@ -74,17 +76,8 @@ void RCClient::parseFrame(const uint8_t *frame, size_t length) {
     last_heartbeat_ = now;
     last_heartbeat_time_ = now;
 
-    motor_controller_->applySbus(sbus_frame);
-
-    // 如果需要使用其他通道，扩展此处。数值范围在-1.0 ~ +1.0之间
-    //  double turn_h = MessageHandler::sbusToNormalized(sbus_frame.channels[2]);
-    //  double turn_v = MessageHandler::sbusToNormalized(sbus_frame.channels[3]);
-
-    if (sbus_frame.failsafe) {
-        std::cout << "SBUS failsafe detected, triggering emergency stop" << std::endl;
-        motor_controller_->emergencyStop();
-        has_timeout_ = true;
-    }
+    // 直接传递控制帧给电机控制器
+    motor_controller_->applyControl(control_frame);
 }
 
 void RCClient::sendStatusFrame(const std::map<std::string, std::string> &statusData) {
@@ -176,7 +169,6 @@ void RCClient::watchdogLoop() {
 
         if (has_timeout_) {
             has_timeout_ = false;
-            //            std::cout << "SBUS failsafe detected, triggering emergency stop" << std::endl;
             motor_controller_->stopAll();
             continue;
         }

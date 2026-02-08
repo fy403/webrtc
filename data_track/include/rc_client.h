@@ -50,7 +50,7 @@ private:
     SystemMonitor system_monitor_;
     std::chrono::steady_clock::time_point last_status_time_;
 
-    // Message handler
+    // Message handler (仅用于状态帧创建)
     MessageHandler message_handler_;
 
     // Watchdog for failsafe protection

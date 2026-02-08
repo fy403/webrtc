@@ -143,8 +143,8 @@ window.addEventListener('load', () => {
         uiSpeed = Math.round(Math.abs(limitedForward) * 100);
         dataUpdateSystemStatusDisplay();
         try {
-            // 所有通道数据数值范围必须使-1.0 ~ +1.0 之间
-            const frame = SBUSEncoder.encode({ch1: limitedForward, ch2: turn || 0,
+            // 使用新协议 RCProtocol v2，直接传输-1.0~1.0浮点数
+            const frame = RCProtocol.encode({ch1: limitedForward, ch2: turn || 0,
                 ch3: 0, ch4: 0, ch5: 0, ch6: 0, ch7: 0, ch8: 0,
                 ch9: 0, ch10: 0, ch11: 0, ch12: 0, ch13: 0,
                 ch14: 0, ch15: 0, ch16: 0});
@@ -152,7 +152,7 @@ window.addEventListener('load', () => {
             // 更新通道显示
             dataUpdateChannelDisplay();
         } catch (e) {
-            console.error('Failed to send SBUS frame', e);
+            console.error('Failed to send RC frame', e);
         }
     }
 
