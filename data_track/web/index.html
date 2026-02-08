@@ -9,6 +9,7 @@
     <!-- TensorFlow.js (本地模式: 优先加载本地文件) -->
     <script src="tf.min.js"></script>
     <script src="coco-ssd.min.js"></script>
+    <script src="config.js"></script>
     <script src="webrtc_optimizer.js"></script>
     <script src="video_rtc.js"></script>
     <script src="sbus_encoder.js"></script>
@@ -177,6 +178,7 @@
                         <button class="btn" id="stopAllBtn">STOP ALL (Space)</button>
                         <button class="btn" id="emgBtn">急停 T</button>
                         <button class="btn" id="yoloToggleBtn">YOLO检测</button>
+                        <button class="btn" id="configBtn" title="配置">⚙️</button>
                         <!--						<button id="throttleBtn" class="btn">档位调整 F</button>-->
                     </div>
                 </div>
@@ -331,7 +333,7 @@
                     <div class="info-row connect-control">
                         <span class="badge">Remote ID:</span>
                         <input class="input mono input-compact" id="offerId" placeholder="remote ID"
-                            value="cam_dYFh3H3kf" />
+                            value="" />
                         <button class="btn btn-compact" id="offerBtn">Connect</button>
                     </div>
                 </div>
@@ -359,7 +361,7 @@
                     <div class="info-row connect-control">
                         <span class="badge">Remote ID:</span>
                         <input class="input mono input-compact" id="dataOfferId" placeholder="remote ID"
-                            value="data_Dd8fgkoKo90" />
+                            value="" />
                         <button class="btn btn-compact" id="dataOfferBtn">Connect</button>
                     </div>
                 </div>
@@ -437,6 +439,14 @@
             // 如果当前不是mobile.html页面且检测到是移动设备，则跳转到mobile.html
             if (!window.location.pathname.includes('mobile.html') && isMobileDevice()) {
                 window.location.href = 'mobile.html';
+            }
+
+            // 初始化配置按钮
+            const configBtn = document.getElementById('configBtn');
+            if (configBtn) {
+                configBtn.addEventListener('click', function() {
+                    window.open('config.html', 'config', 'width=900,height=700,scrollbars=yes,resizable=yes');
+                });
             }
         });
     </script>

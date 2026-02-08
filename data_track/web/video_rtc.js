@@ -1,11 +1,14 @@
 window.addEventListener('load', () => {
 
+    // 从配置管理器加载视频配置
+    const videoConfig = ConfigManager.getVideoConfig();
+
     const localId = randomId(4);
-    const url = `ws://fy403.cn:8000/${localId}`;
+    const url = `${videoConfig.signalingUrl}/${localId}`;
 
     // ========== 优化配置：低延迟 WebRTC ==========
     const config = {
-        iceServers: [{
+        iceServers: videoConfig.iceServers || [{
                 urls: ['stun:stun.l.google.com:19302']
             },
             {
@@ -15,10 +18,10 @@ window.addEventListener('load', () => {
             },
         ],
         // 低延迟优化配置
-        bundlePolicy: 'max-bundle',
-        rtcpMuxPolicy: 'require',
+        bundlePolicy: videoConfig.bundlePolicy || 'max-bundle',
+        rtcpMuxPolicy: videoConfig.rtcpMuxPolicy || 'require',
         // 启用低延迟模式（实验性API，如果支持）
-        encodedInsertableStreams: false, // 某些浏览器可能不支持
+        encodedInsertableStreams: videoConfig.encodedInsertableStreams || false, // 某些浏览器可能不支持
     };
 
     // Add localStream variable to store the audio stream
@@ -36,6 +39,11 @@ window.addEventListener('load', () => {
     const statusDiv = document.getElementById('status');
     const detectionCanvas = document.getElementById('detectionCanvas');
     _localId.textContent = localId;
+
+    // 从配置加载远程ID
+    if (offerId && videoConfig.remoteId) {
+        offerId.value = videoConfig.remoteId;
+    }
 
     // 视频配置元素
     const resolutionSelect = document.getElementById('resolutionSelect');

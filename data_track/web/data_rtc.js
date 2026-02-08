@@ -2,10 +2,14 @@ window.addEventListener('load', () => {
     // Only keep status frame id from legacy protocol; control uses SBUS.
     const MSG_SYSTEM_STATUS = 0x20;
 
+    // 从配置管理器加载数据配置
+    const dataConfig = ConfigManager.getDataConfig();
+
     const dataLocalId = dataRandomId(5);
-    const dataUrl = `ws://fy403.cn:8000/${dataLocalId}`;
-    const dataConfig = {
-        iceServers: [{
+    const dataUrl = `${dataConfig.signalingUrl}/${dataLocalId}`;
+
+    const rtcConfig = {
+        iceServers: dataConfig.iceServers || [{
             urls: ['stun:stun.l.google.com:19302']
         },
             {
@@ -29,6 +33,11 @@ window.addEventListener('load', () => {
     const dataLocalIdElement = document.getElementById('dataLocalId');
     const dataStatusDiv = document.getElementById('dataStatus');
     dataLocalIdElement.textContent = dataLocalId;
+
+    // 从配置加载远程ID
+    if (dataOfferId && dataConfig.remoteId) {
+        dataOfferId.value = dataConfig.remoteId;
+    }
 
     // UI state
     const dataState = {W: false, A: false, S: false, D: false};
@@ -520,7 +529,7 @@ window.addEventListener('load', () => {
     }
 
     function dataCreatePeerConnection(ws, id) {
-        const pc = new RTCPeerConnection(dataConfig);
+        const pc = new RTCPeerConnection(rtcConfig);
         pc.oniceconnectionstatechange = () => {
             if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
                 dataUpdateConnStatus('connected', 'CONNECTED');

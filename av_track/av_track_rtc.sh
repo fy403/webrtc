@@ -8,7 +8,7 @@ IP_TYPE=4 # ipv4 or ipv6
 # UDP流：udp://ip:port (例如: udp://192.168.0.110:5600)
 # SDP文件：stream.sdp (必须使用 .sdp 文件格式)
 # 注意：网络流模式（RTSP/UDP/SDP）目前只支持H.264, H.265编码的视频流
-VIDEO_DEVICE="rtsp://root:123456@192.168.0.110:554" # RTSP流（网络摄像头）
+VIDEO_DEVICE="/dev/video1" # RTSP流（网络摄像头）
 #AUDIO_DEVICE="hw:CARD=Audio,DEV=0" # 音频设备
 #SAMPLE_RATE=48000 # 音频采样率
 #CHANNELS=1 # 音频通道数

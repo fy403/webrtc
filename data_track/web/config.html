@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC 配置</title>
+    <link href="style.css" rel="stylesheet">
+    <style>
+        .config-page {
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #1e1e2e;
+            min-height: 100vh;
+        }
+
+        .config-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #333;
+        }
+
+        .config-title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #e0e0e0;
+        }
+
+        .config-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .config-section {
+            background: #2a2a3e;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #e0e0e0;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #b0b0b0;
+            font-size: 14px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            background: #1e1e2e;
+            border: 1px solid #3a3a4e;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #6366f1;
+        }
+
+        .ice-server-item {
+            background: #1e1e2e;
+            border: 1px solid #3a3a4e;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .ice-server-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .ice-server-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #b0b0b0;
+        }
+
+        .btn-icon {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            color: #b0b0b0;
+            transition: color 0.3s;
+        }
+
+        .btn-icon:hover {
+            color: #ef4444;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #6366f1;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5558e8;
+        }
+
+        .btn-secondary {
+            background: #4a4a5e;
+            color: #e0e0e0;
+        }
+
+        .btn-secondary:hover {
+            background: #5a5a6e;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .form-select {
+            width: 100%;
+            padding: 10px 12px;
+            background: #1e1e2e;
+            border: 1px solid #3a3a4e;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .btn-add {
+            width: 100%;
+            padding: 10px;
+            background: #2a2a3e;
+            border: 2px dashed #4a4a5e;
+            border-radius: 6px;
+            color: #b0b0b0;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-add:hover {
+            background: #3a3a4e;
+            border-color: #6366f1;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #6a6a7e;
+            margin-top: 5px;
+        }
+
+        .message {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .message.success {
+            background: #064e3b;
+            color: #10b981;
+            border: 1px solid #10b981;
+        }
+
+        .message.error {
+            background: #7f1d1d;
+            color: #ef4444;
+            border: 1px solid #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="config-page">
+        <div class="config-header">
+            <div class="config-title">⚙️ WebRTC 配置</div>
+            <div class="config-actions">
+                <button class="btn btn-secondary" onclick="ConfigManager.resetConfig(); location.reload()">重置为默认</button>
+                <button class="btn btn-success" onclick="saveAndApply()">保存并应用</button>
+                <button class="btn btn-primary" onclick="applyOnly()">仅应用</button>
+                <button class="btn btn-danger" onclick="window.close()">关闭</button>
+            </div>
+        </div>
+
+        <div class="message" id="message"></div>
+
+        <!-- 视频连接配置 -->
+        <div class="config-section">
+            <div class="section-title">
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <rect height="16" rx="2" width="20" x="2" y="4" />
+                    <polygon points="10 8 16 12 10 16 10 8" />
+                </svg>
+                视频连接配置
+            </div>
+            <div class="config-grid">
+                <div class="form-group">
+                    <label class="form-label">Signaling 服务器地址</label>
+                    <input type="text" class="form-input" id="videoSignalingUrl" placeholder="ws://example.com:8000">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">远程设备 ID</label>
+                    <input type="text" class="form-input" id="videoRemoteId" placeholder="cam_XXXXX">
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <label class="form-label">ICE 服务器配置</label>
+                <div id="videoIceServers"></div>
+                <button class="btn-add" onclick="addVideoIceServer()">+ 添加 ICE 服务器</button>
+            </div>
+
+            <div class="config-grid" style="margin-top: 20px;">
+                <div class="form-group">
+                    <label class="form-label">Bundle Policy</label>
+                    <select class="form-select" id="videoBundlePolicy">
+                        <option value="max-bundle">max-bundle</option>
+                        <option value="balanced">balanced</option>
+                        <option value="max-compat">max-compat</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">RTCP Mux Policy</label>
+                    <select class="form-select" id="videoRtcpMuxPolicy">
+                        <option value="require">require</option>
+                        <option value="negotiate">negotiate</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Encoded Insertable Streams</label>
+                    <select class="form-select" id="videoEncodedInsertableStreams">
+                        <option value="false">禁用</option>
+                        <option value="true">启用</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- 数据连接配置 -->
+        <div class="config-section">
+            <div class="section-title">
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M4 4h16v16H4z" />
+                    <path d="M8 8h8v8H8z" />
+                </svg>
+                数据连接配置
+            </div>
+            <div class="config-grid">
+                <div class="form-group">
+                    <label class="form-label">Signaling 服务器地址</label>
+                    <input type="text" class="form-input" id="dataSignalingUrl" placeholder="ws://example.com:8000">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">远程设备 ID</label>
+                    <input type="text" class="form-input" id="dataRemoteId" placeholder="data_XXXXX">
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <label class="form-label">ICE 服务器配置</label>
+                <div id="dataIceServers"></div>
+                <button class="btn-add" onclick="addDataIceServer()">+ 添加 ICE 服务器</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        // 加载配置到表单
+        function loadConfigToForm() {
+            const config = ConfigManager.currentConfig;
+
+            // 视频配置
+            document.getElementById('videoSignalingUrl').value = config.video.signalingUrl || '';
+            document.getElementById('videoRemoteId').value = config.video.remoteId || '';
+            document.getElementById('videoBundlePolicy').value = config.video.bundlePolicy || 'max-bundle';
+            document.getElementById('videoRtcpMuxPolicy').value = config.video.rtcpMuxPolicy || 'require';
+            document.getElementById('videoEncodedInsertableStreams').value = config.video.encodedInsertableStreams ? 'true' : 'false';
+
+            // 视频 ICE 服务器
+            const videoIceContainer = document.getElementById('videoIceServers');
+            videoIceContainer.innerHTML = '';
+            if (config.video.iceServers && config.video.iceServers.length > 0) {
+                config.video.iceServers.forEach((server, index) => {
+                    addIceServerElement(videoIceContainer, server, 'video', index);
+                });
+            }
+
+            // 数据配置
+            document.getElementById('dataSignalingUrl').value = config.data.signalingUrl || '';
+            document.getElementById('dataRemoteId').value = config.data.remoteId || '';
+
+            // 数据 ICE 服务器
+            const dataIceContainer = document.getElementById('dataIceServers');
+            dataIceContainer.innerHTML = '';
+            if (config.data.iceServers && config.data.iceServers.length > 0) {
+                config.data.iceServers.forEach((server, index) => {
+                    addIceServerElement(dataIceContainer, server, 'data', index);
+                });
+            }
+        }
+
+        // 添加 ICE 服务器元素
+        function addIceServerElement(container, server, type, index) {
+            const div = document.createElement('div');
+            div.className = 'ice-server-item';
+            div.dataset.index = index;
+            div.dataset.type = type;
+
+            const urls = server.urls || [];
+            const urlValue = Array.isArray(urls) ? urls.join(', ') : urls;
+
+            div.innerHTML = `
+                <div class="ice-server-header">
+                    <span class="ice-server-title">ICE 服务器 #${index + 1}</span>
+                    <button class="btn-icon" onclick="removeIceServer('${type}', ${index})">
+                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="18" height="18">
+                            <line x1="18" x2="6" y1="6" y2="18"></line>
+                            <line x1="6" x2="18" y1="6" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">URLs (多个用逗号分隔)</label>
+                    <input type="text" class="form-input" value="${urlValue}" placeholder="stun:stun.example.com:19302, turn:turn.example.com:3478?transport=udp">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">用户名 (TURN)</label>
+                    <input type="text" class="form-input" value="${server.username || ''}" placeholder="username">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">密码 (TURN)</label>
+                    <input type="password" class="form-input" value="${server.credential || ''}" placeholder="credential">
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        // 添加视频 ICE 服务器
+        function addVideoIceServer() {
+            const container = document.getElementById('videoIceServers');
+            const index = container.children.length;
+            addIceServerElement(container, { urls: [] }, 'video', index);
+        }
+
+        // 添加数据 ICE 服务器
+        function addDataIceServer() {
+            const container = document.getElementById('dataIceServers');
+            const index = container.children.length;
+            addIceServerElement(container, { urls: [] }, 'data', index);
+        }
+
+        // 删除 ICE 服务器
+        function removeIceServer(type, index) {
+            const container = document.getElementById(`${type}IceServers`);
+            const item = container.querySelector(`[data-index="${index}"]`);
+            if (item) {
+                item.remove();
+                // 更新索引
+                const items = container.querySelectorAll('.ice-server-item');
+                items.forEach((item, i) => {
+                    item.dataset.index = i;
+                    const title = item.querySelector('.ice-server-title');
+                    if (title) title.textContent = `ICE 服务器 #${i + 1}`;
+                });
+            }
+        }
+
+        // 从表单获取 ICE 服务器配置
+        function getIceServersFromForm(type) {
+            const container = document.getElementById(`${type}IceServers`);
+            const items = container.querySelectorAll('.ice-server-item');
+            const iceServers = [];
+
+            items.forEach(item => {
+                const urlsInput = item.querySelector('.form-input');
+                const usernameInput = item.querySelectorAll('.form-input')[1];
+                const credentialInput = item.querySelectorAll('.form-input')[2];
+
+                const urlsValue = urlsInput.value.trim();
+                if (urlsValue) {
+                    const urls = urlsValue.split(',').map(url => url.trim()).filter(url => url);
+                    const server = { urls };
+                    if (usernameInput.value.trim()) server.username = usernameInput.value.trim();
+                    if (credentialInput.value.trim()) server.credential = credentialInput.value.trim();
+                    iceServers.push(server);
+                }
+            });
+
+            return iceServers;
+        }
+
+        // 保存并应用配置
+        function saveAndApply() {
+            try {
+                // 收集视频配置
+                const videoConfig = {
+                    signalingUrl: document.getElementById('videoSignalingUrl').value.trim(),
+                    remoteId: document.getElementById('videoRemoteId').value.trim(),
+                    iceServers: getIceServersFromForm('video'),
+                    bundlePolicy: document.getElementById('videoBundlePolicy').value,
+                    rtcpMuxPolicy: document.getElementById('videoRtcpMuxPolicy').value,
+                    encodedInsertableStreams: document.getElementById('videoEncodedInsertableStreams').value === 'true'
+                };
+
+                // 收集数据配置
+                const dataConfig = {
+                    signalingUrl: document.getElementById('dataSignalingUrl').value.trim(),
+                    remoteId: document.getElementById('dataRemoteId').value.trim(),
+                    iceServers: getIceServersFromForm('data')
+                };
+
+                // 更新配置
+                ConfigManager.updateVideoConfig(videoConfig);
+                ConfigManager.updateDataConfig(dataConfig);
+
+                showMessage('配置已保存，页面将刷新以应用新配置', 'success');
+
+                // 刷新主页面
+                setTimeout(() => {
+                    if (window.opener) {
+                        window.opener.location.reload();
+                    }
+                    window.close();
+                }, 1000);
+            } catch (e) {
+                console.error('保存配置失败:', e);
+                showMessage('保存配置失败: ' + e.message, 'error');
+            }
+        }
+
+        // 仅应用配置（不保存）
+        function applyOnly() {
+            try {
+                const videoConfig = {
+                    signalingUrl: document.getElementById('videoSignalingUrl').value.trim(),
+                    remoteId: document.getElementById('videoRemoteId').value.trim(),
+                    iceServers: getIceServersFromForm('video'),
+                    bundlePolicy: document.getElementById('videoBundlePolicy').value,
+                    rtcpMuxPolicy: document.getElementById('videoRtcpMuxPolicy').value,
+                    encodedInsertableStreams: document.getElementById('videoEncodedInsertableStreams').value === 'true'
+                };
+
+                const dataConfig = {
+                    signalingUrl: document.getElementById('dataSignalingUrl').value.trim(),
+                    remoteId: document.getElementById('dataRemoteId').value.trim(),
+                    iceServers: getIceServersFromForm('data')
+                };
+
+                ConfigManager.updateVideoConfig(videoConfig);
+                ConfigManager.updateDataConfig(dataConfig);
+
+                showMessage('配置已应用', 'success');
+
+                setTimeout(() => {
+                    if (window.opener) {
+                        window.opener.location.reload();
+                    }
+                    window.close();
+                }, 500);
+            } catch (e) {
+                console.error('应用配置失败:', e);
+                showMessage('应用配置失败: ' + e.message, 'error');
+            }
+        }
+
+        // 显示消息
+        function showMessage(text, type) {
+            const message = document.getElementById('message');
+            message.textContent = text;
+            message.className = 'message ' + type;
+            message.style.display = 'block';
+            setTimeout(() => {
+                message.style.display = 'none';
+            }, 3000);
+        }
+
+        // 页面加载时加载配置
+        window.addEventListener('load', loadConfigToForm);
+    </script>
+</body>
+</html>
