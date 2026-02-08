@@ -6,9 +6,7 @@
     <meta content="width=device-width, initial-scale=1" name="viewport">
     <title>Signal Control Client</title>
     <link href="style.css" rel="stylesheet">
-    <!-- TensorFlow.js (本地模式: 优先加载本地文件) -->
-    <script src="tf.min.js"></script>
-    <script src="coco-ssd.min.js"></script>
+
     <script src="config.js"></script>
     <script src="rc_protocol_v2.js"></script>
     <script src="webrtc_optimizer.js"></script>
@@ -19,7 +17,6 @@
     <script src="xbox_controller.js"></script>
     <script src="controller_manager.js"></script>
     <script src="data_rtc.js"></script>
-    <script src="yolo_detector.js"></script>
 </head>
 
 <body>
@@ -153,7 +150,7 @@
 
                     <div class="video-container">
                         <video autoplay id="remoteVideo" playsinline></video>
-                        <canvas id="detectionCanvas"></canvas>
+
                         <div class="no-signal-overlay" id="noSignalOverlay">
                             <div class="no-signal-text">无信号</div>
                         </div>
@@ -177,7 +174,6 @@
                         <button class="btn" id="reconnectBtn">重新连接</button>
                         <button class="btn" id="stopAllBtn">STOP ALL (Space)</button>
                         <button class="btn" id="emgBtn">急停 T</button>
-                        <button class="btn" id="yoloToggleBtn">YOLO检测</button>
                         <button class="btn" id="configBtn" title="配置">⚙️</button>
                         <!--						<button id="throttleBtn" class="btn">档位调整 F</button>-->
                     </div>

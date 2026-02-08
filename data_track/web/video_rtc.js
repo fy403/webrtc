@@ -37,7 +37,6 @@ window.addEventListener('load', () => {
     const _localId = document.getElementById('localId');
     const remoteVideo = document.getElementById('remoteVideo');
     const statusDiv = document.getElementById('status');
-    const detectionCanvas = document.getElementById('detectionCanvas');
     _localId.textContent = localId;
 
     // 从配置加载远程ID
@@ -200,90 +199,6 @@ window.addEventListener('load', () => {
 
     // 初始化性能优化器
     PerformanceOptimizer.init();
-
-    // ========== YOLO检测模块 ==========
-    let yoloDetector = null;
-    let yoloEnabled = false;
-    let yoloModelLoaded = false;
-
-    // 初始化YOLO检测器
-    async function initYOLODetector() {
-        if (!detectionCanvas) {
-            console.error('检测画布未找到');
-            return;
-        }
-
-        if (!yoloDetector) {
-            yoloDetector = new YOLODetector(remoteVideo, detectionCanvas);
-            
-            // 设置检测回调(可选)
-            yoloDetector.onDetectionCallback((predictions) => {
-                console.log(`检测到 ${predictions.length} 个目标`);
-            });
-
-            // 加载模型
-            try {
-                updateStatus('正在加载YOLO模型...');
-                await yoloDetector.loadModel();
-                yoloModelLoaded = true;
-                updateStatus('YOLO模型加载完成');
-                console.log('YOLO模型加载成功');
-            } catch (error) {
-                console.error('YOLO模型加载失败:', error);
-                updateStatus('YOLO模型加载失败');
-                yoloModelLoaded = false;
-            }
-        }
-    }
-
-    // YOLO检测开关
-    function toggleYOLODetection() {
-        if (!yoloModelLoaded) {
-            updateStatus('YOLO模型未加载,请等待...');
-            return;
-        }
-
-        if (yoloEnabled) {
-            yoloDetector.stopDetection();
-            yoloEnabled = false;
-            updateStatus('YOLO检测已停止');
-            const btn = document.getElementById('yoloToggleBtn');
-            if (btn) {
-                btn.classList.remove('btn-active');
-                btn.textContent = 'YOLO检测';
-            }
-        } else {
-            yoloDetector.startDetection();
-            yoloEnabled = true;
-            updateStatus('YOLO检测已启动');
-            const btn = document.getElementById('yoloToggleBtn');
-            if (btn) {
-                btn.classList.add('btn-active');
-                btn.textContent = 'YOLO检测: 开';
-            }
-        }
-    }
-
-    // 绑定YOLO检测按钮
-    const yoloToggleBtn = document.getElementById('yoloToggleBtn');
-    if (yoloToggleBtn) {
-        yoloToggleBtn.onclick = async () => {
-            if (!yoloModelLoaded) {
-                yoloToggleBtn.disabled = true;
-                yoloToggleBtn.textContent = '加载中...';
-                await initYOLODetector();
-                yoloToggleBtn.disabled = false;
-            }
-            toggleYOLODetection();
-        };
-    }
-
-    // 监听窗口大小变化,调整检测画布
-    window.addEventListener('resize', () => {
-        if (yoloDetector) {
-            yoloDetector.resizeCanvas();
-        }
-    });
 
     // Initialize with "No Signal" overlay visible
     toggleNoSignalOverlay(true);
@@ -873,19 +788,6 @@ window.addEventListener('load', () => {
             remoteVideo.onloadeddata = () => {
                 console.log('Media data loaded');
                 playMedia();
-
-                // 视频数据加载后,预先加载YOLO模型(如果尚未加载)
-                if (!yoloModelLoaded && !yoloDetector) {
-                    // 延迟加载,避免影响视频播放
-                    setTimeout(() => {
-                        initYOLODetector().catch(err => {
-                            console.error('YOLO模型预加载失败:', err);
-                        });
-                    }, 2000);
-                } else if (yoloDetector && yoloEnabled) {
-                    // 如果检测已启用,调整画布大小
-                    yoloDetector.resizeCanvas();
-                }
             };
 
             remoteVideo.onpause = () => {
