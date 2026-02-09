@@ -129,6 +129,7 @@ sudo apt-get install -y x265 libx265-dev
 sudo apt-get install -y ffmpeg
 # 建议安装ffmpeg 4.4.2 版本，如果报错。很可能是版本不兼容，建议手动编译安装ffmpeg==4.4.2
 # 如果报错不是很多，可以提交给ai agent。让它给你适配一下。
+# 使用`git submodule update --init --recursive`可以下载依赖的github仓库（放在了deps目录下），直接在源码目录下使用`make`编译。（自行网络学习）
 ```
 2.安装其他依赖
 
@@ -367,49 +368,10 @@ GSM_BAUDRATE=115200 # 4g模块串口波特率
 ```
 
 #### 3.3 前端操作
-编辑html替换信令服务器地址和STUN/TURN服务器地址
+index.html界面的齿轮图标：替换信令服务器地址和STUN/TURN服务器地址。配置参数全部持久化到cookie中。
+<img src="README.assets\image-20260209839412322.png" alt="image-20260209839412322" style="zoom:80%;" />
 
-前往：[data_rtc.js](data_track/web/data_rtc.js)
-
-```js
-    const dataUrl = `ws://fy403.cn:8000/${dataLocalId}`;
-    const dataConfig = {
-        iceServers: [{
-            urls: ['stun:stun.l.google.com:19302']
-        },
-            {
-                urls: ['turn:tx.fy403.cn:3478?transport=udp'],
-                username: 'fy403',
-                credential: 'qwertyuiop'
-            },
-        ],
-    };
-```
-前往：[video_rtc.js](data_track/web/video_rtc.js)
-```js
-    const url = `ws://fy403.cn:8000/${localId}`;
-
-    // ========== 优化配置：低延迟 WebRTC ==========
-    const config = {
-        iceServers: [{
-            urls: ['stun:stun.l.google.com:19302']
-        },
-            {
-                urls: ['turn:tx.fy403.cn:3478?transport=udp'],
-                username: 'fy403',
-                credential: 'qwertyuiop'
-            },
-        ],
-        // 低延迟优化配置
-        bundlePolicy: 'max-bundle',
-        rtcpMuxPolicy: 'require',
-        // 启用低延迟模式（实验性API，如果支持）
-        encodedInsertableStreams: false, // 某些浏览器可能不支持
-    };
-```
-
-浏览器打开[index.html](data_track/web/index.html)等待画面和信号连接正常后：通过`wsad`操作，`空格`急停。按`q`重启开发板的信号服务。如果自定义了client_id，则需要修改此处。修改后点击Send可以重新建立P2P连接。
-<img src="README.assets\image-20251030141913114.png" alt="image-20251030141913114" style="zoom:80%;" />
+浏览器打开[index.html](data_track/web/index.html)等待画面和信号连接正常后：通过`wsad`操作，`空格`急停。按`q`重启开发板的信号服务。如果自定义了client_id，则需要修改配置页。修改后点击Connect可以重新建立P2P连接。
 
 或者在项目根目录(webrtc)下执行下列脚本快速设置所有存在的client_id。
 ```shell
@@ -501,7 +463,7 @@ WebRTC的连接建立分为以下几个阶段：
 <img src="README.assets\image-20251029212435996.png" alt="image-20251029212435996" style="zoom:53%;" />
 
 尽量选择带GPU的开发板子，并且还需要获取板子安装驱动的文档。这样音视频编解码速度快，也能缓解CPU的压力。
-代码里面是不带GPU加速，仍然是软编码(效果还可以)。板子是4H1G，正常工作CPU利用率平均30%，内存占用300MB，音视频码率800kbps，视频延迟110ms左右。
+代码里面是不带硬件加速，仍然是软编码(效果还可以)。板子是4H1G，正常工作CPU利用率平均20%，内存占用300MB，音视频码率800kbps，视频延迟110ms左右。视频INPUT_FORMAT="yuyv422"最好不是mjpeg，因为要解码速度会很慢。
 <img src="README.assets\image-20251030135634832.png" alt="image-20251030135634832" style="zoom:80%;" />
 
 #### **电机控制板**
@@ -560,10 +522,10 @@ MOTOR_DRIVER_TYPE=crsf # 电机驱动类型: uart, crsf
 只要保障开发板能够上网就行。
 
 #### **摄像头模块**
-方法1：USB摄像头
+方法1：USB摄像头（最高带宽480Mbps，无法传输高分辨率、高刷新率的YUV编码数据）
 摄像头可以用第一种单目的【优点：柔软，小型化，已安装，缺点：过热，容易烧毁，排线易断（目前基本没看见带保修的，慎重选择！！！）】，第二种是带保修一年，一样的价格，虽然大一些；但用料好，值得入手。
 
-方法2：MIPI CSI 摄像头
+方法2：MIPI CSI 摄像头（`最推荐`，功率低，带宽大，低延时场景首选)
 建议选择这种，一般来说。这种接口的开发板自带硬件编解码。注意一定要确定开发板带有CSI接口，并且购买的摄像头是否兼容这个开发板。
 
 #### **声音模块**
@@ -573,10 +535,10 @@ MOTOR_DRIVER_TYPE=crsf # 电机驱动类型: uart, crsf
 
 - [x] 控制端语音推送
 - [x] 被控端扬声器播放
+- [x] X265编码
 - [ ] 无线充电
 - [ ] GNSS定位+带惯导
-- [ ] GPU加速/视频编码芯片支持
-- [ ] X265编码（2K分辨率支持）
+- [ ] 视频编码芯片支持
 - [ ] 编码器电机支持
 - [ ] AI模型接入
 - [ ] 三维重建
