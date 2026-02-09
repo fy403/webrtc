@@ -19,46 +19,6 @@ MOTOR_DRIVER_TYPE=uart # 电机驱动类型: uart, crsf
 # Path to font file - adjust according to your system
 FONT_FILE="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
-# Check if tty port exists, if not, use the first available usb interface
-check_tty_port() {
-    if [ ! -c "$TTY_PORT" ]; then
-        echo "$(date): TTY port $TTY_PORT does not exist"
-        # Find the first available USB tty device
-        local first_usb=$(ls /dev/ttyUSB* 2>/dev/null | head -n 1)
-        if [ -n "$first_usb" ] && [ -c "$first_usb" ]; then
-            echo "$(date): Using first available USB TTY port: $first_usb"
-            TTY_PORT="$first_usb"
-        else
-            echo "$(date): No USB TTY ports available"
-        fi
-    else
-        echo "$(date): TTY port $TTY_PORT exists"
-    fi
-}
-
-
-# Check if host is reachable (IPv4/IPv6)
-check_host() {
-    if ping -${IP_TYPE} -c 3 -W 2 "$TARGET_HOST" > /dev/null 2>&1; then
-        echo "$(date): Host $TARGET_HOST is reachable"
-        return 0
-    else
-        echo "$(date): Host $TARGET_HOST is NOT reachable"
-        return 1
-    fi
-}
-
-# Check if port is open
-check_port() {
-    if nc -${IP_TYPE} -z -w 3 "$TARGET_HOST" "$TARGET_PORT" > /dev/null 2>&1; then
-        echo "$(date): Port $TARGET_PORT on $TARGET_HOST is open"
-        return 0
-    else
-        echo "$(date): Port $TARGET_PORT on $TARGET_HOST is NOT open"
-        return 1
-    fi
-}
-
 run_rtc() {
     echo "$(date): Starting RTC stream..."
     
@@ -82,25 +42,16 @@ main() {
     echo "$(date): Starting streaming script"
     
     while true; do
-        # Check and update TTY port if needed
-        check_tty_port
+        echo "$(date): All checks passed, starting stream..."
+        run_rtc
         
-#        if check_host && check_port; then
-            echo "$(date): All checks passed, starting stream..."
-            run_rtc
-            
-            # If RTC exits normally or with error, wait before restart
-            if [ $? -eq 0 ]; then
-                echo "$(date): Stream completed normally, waiting before restart..."
-                sleep $CHECK_INTERVAL
-            else
-                echo "$(date): Stream failed, waiting before retry..."
-                sleep $CHECK_INTERVAL
-            fi
-#        else
-#            echo "$(date): Health checks failed, waiting before retry..."
-#            sleep $CHECK_INTERVAL
-#        fi
+        if [ $? -eq 0 ]; then
+            echo "$(date): Stream completed normally, waiting before restart..."
+            sleep $CHECK_INTERVAL
+        else
+            echo "$(date): Stream failed, waiting before retry..."
+            sleep $CHECK_INTERVAL
+        fi
     done
 }
 
