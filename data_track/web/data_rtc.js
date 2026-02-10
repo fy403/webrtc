@@ -165,7 +165,7 @@ window.addEventListener('load', () => {
                 // 定期发送当前状态作为心跳，即使没有变化也发送
                 dataSendSbus(lastSentState.forward, lastSentState.turn);
             }
-        }, 100);
+        }, 300);
     }
 
     function stopHeartbeat() {

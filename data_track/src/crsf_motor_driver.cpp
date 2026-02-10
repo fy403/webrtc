@@ -207,7 +207,6 @@ void CRSFMotorDriver::setServoAngle(float angle) {
 
 void CRSFMotorDriver::setMotorPercent(int motor_id, int percent) {
     // CRSF驱动中，motor_id 1 表示电调（前后），motor_id 2 表示舵机（左右）
-    // 但为了兼容接口，我们按照语义处理
     if (motor_id == 1 || motor_id == esc_config_->channel) {
         setFrontBackPercent(percent);
     } else if (motor_id == 2 || motor_id == servo_config_->channel) {

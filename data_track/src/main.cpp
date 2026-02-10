@@ -258,14 +258,25 @@ shared_ptr<rtc::PeerConnection> createPeerConnection(
 
         dc->onOpen([id, dc, client]() {
             std::cout << "DataChannel from " << id << " open" << std::endl;
-            client->setDataChannel(dc);
+            // 支持多端连接：添加DataChannel而不是设置单个
+            client->addDataChannel(id, dc);
         });
 
         dc->onClosed([id, client]() {
             std::cout << "DataChannel from " << id << " closed" << std::endl;
-            client->stopAll();
-            client->setDataChannel(nullptr);
+            // 多端场景下：只移除特定的DataChannel，不停止所有服务
+            client->removeDataChannel(id);
             dataChannelMap.erase(id);
+
+            // 检查是否还有其他活跃的DataChannel
+            if (client->getDataChannelCount() > 0) {
+                std::cout << "Still has " << client->getDataChannelCount() <<
+                        " active data channels, not stopping all services" << std::endl;
+            } else {
+                // 没有其他DataChannel时，停止所有服务
+                std::cout << "No active data channels, stopping all services" << std::endl;
+                client->stopAll();
+            }
         });
 
         dc->onMessage([id, client](auto data) {
@@ -273,6 +284,7 @@ shared_ptr<rtc::PeerConnection> createPeerConnection(
             if (std::holds_alternative<rtc::binary>(data)) {
                 const rtc::binary &bin_data = std::get<rtc::binary>(data);
                 client->parseFrame(
+                    id,
                     reinterpret_cast<const uint8_t *>(bin_data.data()),
                     bin_data.size());
             } else {
@@ -405,15 +417,28 @@ void setupWebSocketCallbacks(std::shared_ptr<rtc::WebSocket> ws,
 
         // Handle peer_close message
         if (type == "peer_close") {
-            std::cout << "Received peer_close from " << id << ", stopping all and exiting" << std::endl;
-            client->stopAll();
-            throw std::runtime_error("Peer closed connection");
+            std::cout << "Received peer_close from " << id << std::endl;
+            // 多端场景下：移除特定的DataChannel
+            client->removeDataChannel(id);
+
+            // 检查是否还有其他活跃的DataChannel
+            if (client->getDataChannelCount() > 0) {
+                std::cout << "Still has " << client->getDataChannelCount() << " active data channels, continuing..." <<
+                        std::endl;
+                return; // 不退出，继续运行
+            } else {
+                std::cout << "No active data channels, stopping all services" << std::endl;
+                client->stopAll();
+                throw std::runtime_error("Peer closed connection and no active data channels remaining");
+            }
         }
 
         shared_ptr<rtc::PeerConnection> pc;
         if (auto jt = peerConnectionMap.find(id); jt != peerConnectionMap.end()) {
             if (type == "offer") {
-                std::cout << "Release old pc" << std::endl;
+                std::cout << "Release old pc and dc for peer: " << id << std::endl;
+                // 多端场景下：移除特定的DataChannel
+                client->removeDataChannel(id);
                 dataChannelMap[id].reset();
                 peerConnectionMap[id].reset();
                 peerConnectionMap.erase(id);

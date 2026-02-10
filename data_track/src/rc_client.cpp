@@ -18,16 +18,10 @@ RCClient::RCClient(const RCClientConfig &config)
     : has_timeout_(false),
       // 使用配置类中的 MotorController 配置
       motor_controller_(new MotorController(config.motor_controller_config)),
-      data_channel_(nullptr),
       // SystemMonitor 不需要在构造函数中初始化4G模块
       system_monitor_(),
-      watchdog_running_(true),
-      watchdog_timeout_ms_(config.watchdog_timeout_ms),
-      watchdog_check_interval_ms_(50),
-      heartbeat_count_(0),
-      total_heartbeat_interval_ms_(0) {
-    last_heartbeat_ = std::chrono::steady_clock::now();
-    last_heartbeat_time_ = std::chrono::steady_clock::now();
+      health_check_running_(true),
+      default_watchdog_timeout_ms_(config.watchdog_timeout_ms) {
     last_status_time_ = std::chrono::steady_clock::now();
 
     // 如果配置中指定了4G模块参数，则初始化4G模块
@@ -37,16 +31,16 @@ RCClient::RCClient(const RCClientConfig &config)
         }
     }
 
-    // 启动watchdog线程
-    watchdog_thread_ = std::thread(&RCClient::watchdogLoop, this);
-    std::cout << "Watchdog保护已启动，初始超时时间: " << watchdog_timeout_ms_ << "ms, 检查间隔: " << watchdog_check_interval_ms_ << "ms" << std::endl;
+    // 启动DataChannel健康检查线程
+    health_check_thread_ = std::thread(&RCClient::healthCheckLoop, this);
+    std::cout << "DataChannel健康检查已启动，检查间隔: " << HEALTH_CHECK_INTERVAL_MS << "ms" << std::endl;
 }
 
 RCClient::~RCClient() {
-    // 停止watchdog线程
-    watchdog_running_ = false;
-    if (watchdog_thread_.joinable()) {
-        watchdog_thread_.join();
+    // 停止健康检查线程
+    health_check_running_ = false;
+    if (health_check_thread_.joinable()) {
+        health_check_thread_.join();
     }
 
     if (motor_controller_) {
@@ -54,50 +48,89 @@ RCClient::~RCClient() {
     }
 }
 
-void RCClient::setDataChannel(std::shared_ptr<rtc::DataChannel> dc) {
-    data_channel_ = dc;
-}
 
-std::shared_ptr<rtc::DataChannel> RCClient::getDataChannel() {
-    return data_channel_;
-}
-
-void RCClient::parseFrame(const uint8_t *frame, size_t length) {
-    // 解析 RC Protocol v2
-    RCProtocolV2::ControlFrame control_frame;
-
-    if (!RCProtocolV2::parseControlFrame(frame, length, control_frame)) {
-        std::cerr << "Invalid RC v2 frame received" << std::endl;
+void RCClient::addDataChannel(const std::string &peer_id, std::shared_ptr<rtc::DataChannel> dc) {
+    if (!dc || peer_id.empty()) {
         return;
     }
 
-    auto now = std::chrono::steady_clock::now();
+    std::lock_guard<std::mutex> lock(data_channels_mutex_);
+    data_channels_[peer_id] = dc;
 
-    // 更新watchdog参数（统计心跳间隔并动态调整）
-    updateWatchdogParams();
+    // 初始化健康检查状态
+    {
+        std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
+        DataChannelHealth health;
+        health.last_heartbeat = std::chrono::steady_clock::now();
+        health.is_alive = true;
+        health.missed_heartbeat_count.store(0);
+        channel_health_[peer_id].last_heartbeat = health.last_heartbeat;
+        channel_health_[peer_id].is_alive = health.is_alive;
+        channel_health_[peer_id].missed_heartbeat_count.store(health.missed_heartbeat_count.load());
+    }
 
-    last_heartbeat_ = now;
-    last_heartbeat_time_ = now;
+    std::cout << "DataChannel added for peer: " << peer_id
+            << ", total channels: " << data_channels_.size() << std::endl;
+}
 
-    // 直接传递控制帧给电机控制器
-    motor_controller_->applyControl(control_frame);
+void RCClient::removeDataChannel(const std::string &peer_id) {
+    std::lock_guard<std::mutex> lock(data_channels_mutex_);
+    auto it = data_channels_.find(peer_id);
+    if (it != data_channels_.end()) {
+        data_channels_.erase(it);
+        std::cout << "DataChannel removed for peer: " << peer_id
+                << ", remaining channels: " << data_channels_.size() << std::endl;
+    }
+
+    // 移除健康检查状态
+    {
+        std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
+        channel_health_.erase(peer_id);
+    }
+}
+
+size_t RCClient::getDataChannelCount() const {
+    std::lock_guard<std::mutex> lock(data_channels_mutex_);
+    return data_channels_.size();
 }
 
 void RCClient::sendStatusFrame(const std::map<std::string, std::string> &statusData) {
     // Convert to JSON
     json j;
-    for (const auto &pair : statusData) {
+    for (const auto &pair: statusData) {
         j[pair.first] = pair.second;
     }
 
     // Convert JSON to string and send directly
     std::string jsonStr = j.dump();
 
-    // Send data through RTC data channel if available
-    if (data_channel_) {
-        data_channel_->send(reinterpret_cast<const std::byte *>(jsonStr.data()), jsonStr.size());
-    } else {
-        // std::cout << "Sending status frame faild: data_channel is down!" << std::endl;
+    // 收集失效的DataChannel peer_id
+    std::vector<std::string> failed_peers;
+
+    // 线程安全地遍历所有DataChannel并发送数据
+    {
+        std::lock_guard<std::mutex> lock(data_channels_mutex_);
+        for (const auto &peer_channel: data_channels_) {
+            const std::string &peer_id = peer_channel.first;
+            const auto &dc = peer_channel.second;
+
+            if (dc && dc->isOpen()) {
+                try {
+                    dc->send(reinterpret_cast<const std::byte *>(jsonStr.data()), jsonStr.size());
+                } catch (const std::exception &e) {
+                    std::cerr << "Failed to send status to peer " << peer_id << ": " << e.what() << std::endl;
+                    failed_peers.push_back(peer_id);
+                }
+            } else {
+                failed_peers.push_back(peer_id);
+            }
+        }
+    }
+
+    // 移除失效的DataChannel
+    for (const auto &peer_id: failed_peers) {
+        std::cerr << "Removing failed DataChannel: " << peer_id << std::endl;
+        removeDataChannel(peer_id);
     }
 }
 
@@ -136,55 +169,88 @@ void RCClient::sendSystemStatus() {
     sendStatusFrame(statusData);
 }
 
-void RCClient::updateWatchdogParams() {
-    auto now = std::chrono::steady_clock::now();
 
-    // 统计心跳间隔
-    if (heartbeat_count_ > 0) {
-        auto interval = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_heartbeat_time_).count();
-        total_heartbeat_interval_ms_ += interval;
-        heartbeat_count_++;
+void RCClient::parseFrame(const std::string &peer_id, const uint8_t *frame, size_t length) {
+    // 多端场景下：使用互斥锁保护parseFrame，防止并发调用导致电机控制冲突
+    std::lock_guard<std::mutex> lock(parse_frame_mutex_);
 
-        // 计算平均心跳间隔
-        int64_t avg_interval_ms = total_heartbeat_interval_ms_ / heartbeat_count_;
+    // 解析 RC Protocol v2
+    RCProtocolV2::ControlFrame control_frame;
 
-        // 动态调整检查间隔和超时时间
-        // 检查间隔设置为平均间隔的20%，但不少于10ms，不大于100ms
-        int new_check_interval = std::max(10, std::min(100, static_cast<int>(avg_interval_ms * 0.2)));
-        // 超时时间设置为平均间隔的3倍，但不少于300ms
-        int new_timeout = std::max(300, static_cast<int>(avg_interval_ms * 3));
+    if (!RCProtocolV2::parseControlFrame(frame, length, control_frame)) {
+        std::cerr << "Invalid RC v2 frame received from peer " << peer_id << std::endl;
+        return;
+    }
 
-        if (new_check_interval != watchdog_check_interval_ms_ || new_timeout != watchdog_timeout_ms_) {
-            watchdog_check_interval_ms_ = new_check_interval;
-            watchdog_timeout_ms_ = new_timeout;
-            std::cout << "动态调整: 平均心跳间隔=" << avg_interval_ms << "ms, 检查间隔=" << watchdog_check_interval_ms_
-                      << "ms, 超时时间=" << watchdog_timeout_ms_ << "ms" << std::endl;
-        }
-    } else {
-        heartbeat_count_++;
+    // 更新最后发送控制命令的peer_id
+    {
+        std::lock_guard<std::mutex> peer_id_lock(last_control_peer_id_mutex_);
+        last_control_peer_id_ = peer_id;
+    }
+    // 直接传递控制帧给电机控制器
+    motor_controller_->applyControl(control_frame);
+
+    // 更新特定DataChannel的健康状态
+    {
+        std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
+        DataChannelHealth &health = channel_health_[peer_id];
+        health.last_heartbeat = std::chrono::steady_clock::now();
+        health.missed_heartbeat_count = 0;
+        health.is_alive = true;
     }
 }
 
-void RCClient::watchdogLoop() {
-    while (watchdog_running_) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(watchdog_check_interval_ms_));
+void RCClient::healthCheckLoop() {
+    while (health_check_running_) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(HEALTH_CHECK_INTERVAL_MS));
 
-        if (!watchdog_running_) {
+        if (!health_check_running_) {
             break;
         }
 
         auto now = std::chrono::steady_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_heartbeat_).count();
+        std::vector<std::string> failed_peers;
+        std::string last_control_peer_to_check;
 
-        if (has_timeout_) {
-            has_timeout_ = false;
-            motor_controller_->stopAll();
-            continue;
+        // 获取最后发送控制命令的peer_id
+        {
+            std::lock_guard<std::mutex> peer_id_lock(last_control_peer_id_mutex_);
+            last_control_peer_to_check = last_control_peer_id_;
         }
 
-        if (elapsed > watchdog_timeout_ms_) {
-            //            std::cout << "Watchdog超时检测: " << elapsed << "ms未收到控制命令，自动停止电机" << std::endl;
-            motor_controller_->stopAll();
+        // 检查所有DataChannel的健康状态
+        {
+            std::lock_guard<std::mutex> lock(channel_health_mutex_);
+            for (auto &peer_health: channel_health_) {
+                const std::string &peer_id = peer_health.first;
+                DataChannelHealth &health = peer_health.second;
+
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    now - health.last_heartbeat).count();
+
+                // 检查是否超时
+                if (health.is_alive && elapsed > default_watchdog_timeout_ms_) {
+                    health.missed_heartbeat_count++;
+
+                    if (health.missed_heartbeat_count >= MAX_MISSED_HEARTBEATS) {
+                        health.is_alive = false;
+                        failed_peers.push_back(peer_id);
+                        std::cout << "Peer " << peer_id << " marked as unhealthy ("
+                                << elapsed << "ms elapsed)" << std::endl;
+
+                        // 如果断开的是最后控制的peer，立即停止电机
+                        if (peer_id == last_control_peer_to_check) {
+                            std::cout << "最后控制的peer " << peer_id << " 断开，自动停止电机" << std::endl;
+                            motor_controller_->stopAll();
+                        }
+                    }
+                }
+            }
+        }
+
+        // 移除失效的DataChannel（在锁外执行以避免死锁）
+        for (const auto &peer_id: failed_peers) {
+            removeDataChannel(peer_id);
         }
     }
 }
