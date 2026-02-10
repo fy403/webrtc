@@ -7,6 +7,7 @@
 #include <functional>
 #include <future>
 #include <iostream>
+#include <map>
 #include <random>
 #include <sstream>
 
@@ -41,6 +42,26 @@ void Capture::set_track_callback(TrackCallback callback) {
     track_callback_ = std::move(callback);
   }
   callback_cv_.notify_one();
+}
+
+void Capture::add_track_callback(const std::string &id, TrackCallback callback) {
+  {
+    std::lock_guard<std::mutex> lock(callbacks_mutex_);
+    track_callbacks_[id] = std::move(callback);
+  }
+  callback_cv_.notify_one();
+}
+
+void Capture::remove_track_callback(const std::string &id) {
+  {
+    std::lock_guard<std::mutex> lock(callbacks_mutex_);
+    track_callbacks_.erase(id);
+  }
+}
+
+bool Capture::has_track_callbacks() const {
+  std::lock_guard<std::mutex> lock(callbacks_mutex_);
+  return !track_callbacks_.empty();
 }
 
 void Capture::stop() {

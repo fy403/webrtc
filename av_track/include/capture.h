@@ -5,6 +5,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -38,6 +39,9 @@ public:
 
   using TrackCallback = std::function<void(const std::byte *data, size_t size)>;
   void set_track_callback(TrackCallback callback);
+  void add_track_callback(const std::string &id, TrackCallback callback);
+  void remove_track_callback(const std::string &id);
+  bool has_track_callbacks() const;
 
 protected:
   virtual void capture_loop() = 0;
@@ -56,6 +60,10 @@ protected:
   std::thread send_thread_;
   TrackCallback track_callback_;
 
+  // 多peer支持：使用map存储多个track回调
+  std::map<std::string, TrackCallback> track_callbacks_;
+  mutable std::mutex callbacks_mutex_;
+
   std::unique_ptr<Encoder> encoder_;
 
   std::shared_ptr<rtc::Track> track_;
@@ -63,6 +71,9 @@ protected:
   // 添加互斥锁和条件变量用于同步回调函数的设置
   std::mutex callback_mutex_;
   std::condition_variable callback_cv_;
+
+  // 互斥锁用于保护reconfigure等操作
+  std::mutex config_mutex_;
 
   // Queues for async processing
   SafeQueue<AVPacket *> decode_queue_;

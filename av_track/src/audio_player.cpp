@@ -169,6 +169,8 @@ bool AudioPlayer::initSDLAudio(int sample_rate, int channels,
 
 void AudioPlayer::receiveAudioData(const rtc::binary &data,
                                    const rtc::FrameInfo &info) {
+  // 使用互斥锁保护receiveAudioData的调用，避免多端并发访问竞态
+  std::lock_guard<std::mutex> lock(receive_mutex_);
 
   uint64_t timestamp_us = info.timestamp;
   uint8_t payloadType = info.payloadType;

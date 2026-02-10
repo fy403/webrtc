@@ -162,11 +162,11 @@ void AudioCapturer::stop() {
 
 void AudioCapturer::capture_loop() {
   AVPacket *packet = av_packet_alloc();
-  // 等待 track_callback_ 被设置
+  // 等待 track_callbacks_ 被设置 (多peer支持)
   {
     std::unique_lock<std::mutex> lock(callback_mutex_);
     callback_cv_.wait(
-        lock, [this] { return track_callback_ != nullptr || !is_running_; });
+        lock, [this] { return !track_callbacks_.empty() || !is_running_; });
   }
 
   if (!is_running_) {
@@ -323,15 +323,24 @@ void AudioCapturer::send_loop() {
       break;
     }
 
-    // Send data using callback
-    if (track_callback_) {
-      auto data = reinterpret_cast<const std::byte *>(packet->data);
-      track_callback_(data, packet->size);
-      if (debug_enabled_) {
-        std::cout << "Send encoded packet: size=" << packet->size
-                  << ", Send queue Len: " << send_queue_.size() << std::endl;
+    // Send data to all registered callbacks (multiple peer support)
+    auto data = reinterpret_cast<const std::byte *>(packet->data);
+    size_t data_size = packet->size;
+
+    // 使用互斥锁保护callbacks map的访问
+    std::lock_guard<std::mutex> lock(callbacks_mutex_);
+
+    for (const auto &pair : track_callbacks_) {
+      if (pair.second) {
+        pair.second(data, data_size);
       }
-    } else {
+    }
+
+    if (debug_enabled_ && !track_callbacks_.empty()) {
+      std::cout << "Send encoded packet: size=" << packet->size
+                << ", Send queue Len: " << send_queue_.size()
+                << ", Callbacks: " << track_callbacks_.size() << std::endl;
+    } else if (debug_enabled_) {
       std::cout << "Drop packet! No callback set." << std::endl;
     }
     av_packet_free(&packet);

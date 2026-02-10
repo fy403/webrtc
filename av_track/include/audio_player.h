@@ -76,6 +76,9 @@ private:
 
   // 音量控制
   std::atomic<float> volume_{0.45f}; // 音量 (0.0 - 1.0)
+
+  // 互斥锁用于保护receiveAudioData的调用
+  mutable std::mutex receive_mutex_;
 };
 
 #endif // AUDIO_PLAYER_H

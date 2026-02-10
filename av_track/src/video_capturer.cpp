@@ -315,6 +315,9 @@ void VideoCapturer::set_video_codec(const std::string &codec) {
 }
 
 void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitrate, const std::string &format) {
+  // 使用互斥锁保护reconfigure操作，避免竞态条件
+  std::lock_guard<std::mutex> lock(config_mutex_);
+
   std::cout << "Reconfiguring video capturer..." << std::endl;
 
   // 暂停采集
@@ -467,10 +470,10 @@ void VideoCapturer::capture_loop() {
       std::cout << "UDP capture loop started in direct forwarding mode" << std::endl;
     }
 
-    // 等待 track_callback_ 被设置
+    // 等待 track_callbacks_ 被设置 (多peer支持)
     {
       std::unique_lock<std::mutex> lock(callback_mutex_);
-      callback_cv_.wait(lock, [this] { return track_callback_ || !is_running_; });
+      callback_cv_.wait(lock, [this] { return !track_callbacks_.empty() || !is_running_; });
     }
 
     if (!is_running_) {
@@ -547,10 +550,10 @@ void VideoCapturer::capture_loop() {
               << ", Encode FPS: " << encoder_out_fps
               << ", Frame Drop Factor: " << frame_drop_factor << std::endl;
 
-    // 等待 track_callback_ 被设置
+    // 等待 track_callbacks_ 被设置 (多peer支持)
     {
       std::unique_lock<std::mutex> lock(callback_mutex_);
-      callback_cv_.wait(lock, [this] { return track_callback_ || !is_running_; });
+      callback_cv_.wait(lock, [this] { return !track_callbacks_.empty() || !is_running_; });
     }
 
     if (!is_running_) {
@@ -778,11 +781,23 @@ void VideoCapturer::send_loop() {
       break;
     }
 
-    // Send data using callback
-    if (track_callback_) {
-      auto data = reinterpret_cast<const std::byte *>(packet->data);
-      track_callback_(data, packet->size);
-    } else {
+    // Send data to all registered callbacks (multiple peer support)
+    auto data = reinterpret_cast<const std::byte *>(packet->data);
+    size_t data_size = packet->size;
+
+    // 使用互斥锁保护callbacks map的访问
+    std::lock_guard<std::mutex> lock(callbacks_mutex_);
+
+    for (const auto &pair : track_callbacks_) {
+      if (pair.second) {
+        pair.second(data, data_size);
+      }
+    }
+
+    if (debug_enabled_ && !track_callbacks_.empty()) {
+      std::cout << "Video sent: size=" << packet->size
+                << ", Callbacks: " << track_callbacks_.size() << std::endl;
+    } else if (debug_enabled_) {
       std::cout << "Drop packet! No callback set." << std::endl;
     }
 

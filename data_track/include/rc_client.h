@@ -90,7 +90,7 @@ private:
     std::thread health_check_thread_;
     std::atomic<bool> health_check_running_;
     const int HEALTH_CHECK_INTERVAL_MS = 500;
-    const int MAX_MISSED_HEARTBEATS = 2;
+    const int MAX_MISSED_HEARTBEATS = 3;
     int default_watchdog_timeout_ms_;
 
     // System monitor

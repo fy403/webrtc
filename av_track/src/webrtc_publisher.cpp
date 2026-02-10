@@ -143,7 +143,10 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
           std::chrono::duration_cast<std::chrono::microseconds>(
               std::chrono::steady_clock::now().time_since_epoch())
               .count();
-      video_capturer_->set_track_callback(
+
+      // 使用add_track_callback支持多peer连接
+      video_capturer_->add_track_callback(
+          id,
           [video_track, start_time](const std::byte *data, size_t size) {
             if (video_track && video_track->isOpen()) {
               try {
@@ -161,10 +164,10 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
                 std::cerr << "Failed to send video data: " << e.what()
                           << std::endl;
               }
-            } else {
-              std::cout << "Video track is not open" << std::endl;
             }
           });
+
+      // 恢复采集（如果已启动且没有其他active peer）
       video_capturer_->resume_capture();
     });
 
@@ -172,8 +175,11 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
       std::cout << "Video Track to " << id << " closed" << std::endl;
       // 检查capturer是否仍然有效
       if (video_capturer_) {
-        video_capturer_->pause_capture();
-        video_capturer_->set_track_callback(nullptr);
+        video_capturer_->remove_track_callback(id);
+        // 如果没有其他active peer，暂停采集
+        if (!video_capturer_->has_track_callbacks()) {
+          video_capturer_->pause_capture();
+        }
       }
     });
   }
@@ -219,7 +225,10 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
           std::chrono::duration_cast<std::chrono::microseconds>(
               std::chrono::steady_clock::now().time_since_epoch())
               .count();
-      audio_capturer_->set_track_callback(
+
+      // 使用add_track_callback支持多peer连接
+      audio_capturer_->add_track_callback(
+          id,
           [audio_track, start_time](const std::byte *data, size_t size) {
             if (audio_track && audio_track->isOpen()) {
               try {
@@ -237,10 +246,10 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
                 std::cerr << "Failed to send audio data: " << e.what()
                           << std::endl;
               }
-            } else {
-              std::cout << "Audio track is not open" << std::endl;
             }
           });
+
+      // 恢复采集（如果已启动且没有其他active peer）
       audio_capturer_->resume_capture();
     });
 
@@ -248,8 +257,11 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
       std::cout << "Audio Track to " << id << " closed" << std::endl;
       // 检查capturer是否仍然有效
       if (audio_capturer_) {
-        audio_capturer_->pause_capture();
-        audio_capturer_->set_track_callback(nullptr);
+        audio_capturer_->remove_track_callback(id);
+        // 如果没有其他active peer，暂停采集
+        if (!audio_capturer_->has_track_callbacks()) {
+          audio_capturer_->pause_capture();
+        }
       }
     });
   }
@@ -331,21 +343,25 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
     dataChannelMap_.emplace(id, dc);
   });
 
-  // 通道关闭时，停止音视频捕获
+  // 通道关闭时，停止音视频捕获（仅在最后一个peer关闭时）
   pc->onStateChange(
       [id, wws, this](rtc::PeerConnection::State state) {
         if (state == rtc::PeerConnection::State::Disconnected ||
             state == rtc::PeerConnection::State::Failed ||
             state == rtc::PeerConnection::State::Closed) {
-          std::cout << "PeerConnection closed, stopping captures!" << std::endl;
-          // 检查capturer是否仍然有效
+          std::cout << "PeerConnection " << id << " closed, removing callbacks..." << std::endl;
+          // 检查capturer是否仍然有效，移除对应的回调
           if (video_capturer_ && video_capturer_->is_running()) {
-            video_capturer_->set_track_callback(nullptr);
-            video_capturer_->pause_capture();
+            video_capturer_->remove_track_callback(id);
+            if (!video_capturer_->has_track_callbacks()) {
+              video_capturer_->pause_capture();
+            }
           }
           if (audio_capturer_ && audio_capturer_->is_running()) {
-            audio_capturer_->set_track_callback(nullptr);
-            audio_capturer_->pause_capture();
+            audio_capturer_->remove_track_callback(id);
+            if (!audio_capturer_->has_track_callbacks()) {
+              audio_capturer_->pause_capture();
+            }
           }
         }
         if (state == rtc::PeerConnection::State::Connected) {

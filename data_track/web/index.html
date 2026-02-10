@@ -374,10 +374,7 @@
                 <div class="config-group">
                     <label class="config-label">分辨率</label>
                     <select class="config-select" id="resolutionSelect">
-                        <option value="320x240">320x240</option>
                         <option value="640x480" selected>640x480</option>
-                        <option value="800x600">800x600</option>
-                        <option value="1024x768">1024x768</option>
                         <option value="1280x720">1280x720</option>
                         <option value="1920x1080">1920x1080</option>
                         <option value="custom">自定义</option>
@@ -387,6 +384,7 @@
                 <div class="config-group">
                     <label class="config-label">帧率 (FPS)</label>
                     <select class="config-select" id="fpsSelect">
+                        <option value="10">10</option>
                         <option value="15">15</option>
                         <option value="30" selected>30</option>
                         <option value="60">60</option>
@@ -402,12 +400,11 @@
                     <select class="config-select" id="bitrateSelect">
                         <option value="1000000">1 Mbps</option>
                         <option value="2000000">2 Mbps</option>
-                        <option value="3200000" selected>3.2 Mbps</option>
-                        <option value="5000000">5 Mbps</option>
-                        <option value="8000000">8 Mbps</option>
+                        <option value="5000000">4 Mbps</option>
+                        <option value="8000000"  selected>8 Mbps</option>
                         <option value="custom">自定义</option>
                     </select>
-                    <input type="number" class="config-input" id="bitrateCustom" placeholder="如: 3200000" disabled
+                    <input type="number" class="config-input" id="bitrateCustom" placeholder="如: 2000000" disabled
                         min="100000">
                 </div>
                 <div class="config-group">
