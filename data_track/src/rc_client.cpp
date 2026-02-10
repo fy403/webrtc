@@ -209,7 +209,6 @@ void RCClient::healthCheckLoop() {
         }
 
         auto now = std::chrono::steady_clock::now();
-        std::vector<std::string> failed_peers;
         std::string last_control_peer_to_check;
 
         // 获取最后发送控制命令的peer_id
@@ -234,7 +233,6 @@ void RCClient::healthCheckLoop() {
 
                     if (health.missed_heartbeat_count >= MAX_MISSED_HEARTBEATS) {
                         health.is_alive = false;
-                        failed_peers.push_back(peer_id);
                         std::cout << "Peer " << peer_id << " marked as unhealthy ("
                                 << elapsed << "ms elapsed)" << std::endl;
 
@@ -246,11 +244,6 @@ void RCClient::healthCheckLoop() {
                     }
                 }
             }
-        }
-
-        // 移除失效的DataChannel（在锁外执行以避免死锁）
-        for (const auto &peer_id: failed_peers) {
-            removeDataChannel(peer_id);
         }
     }
 }
