@@ -54,12 +54,12 @@ void RCClient::addDataChannel(const std::string &peer_id, std::shared_ptr<rtc::D
         return;
     }
 
-    std::lock_guard<std::mutex> lock(data_channels_mutex_);
+    // std::lock_guard<std::mutex> lock(data_channels_mutex_);
     data_channels_[peer_id] = dc;
 
     // 初始化健康检查状态
     {
-        std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
+        // std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
         DataChannelHealth health;
         health.last_heartbeat = std::chrono::steady_clock::now();
         health.is_alive = true;
@@ -74,7 +74,7 @@ void RCClient::addDataChannel(const std::string &peer_id, std::shared_ptr<rtc::D
 }
 
 void RCClient::removeDataChannel(const std::string &peer_id) {
-    std::lock_guard<std::mutex> lock(data_channels_mutex_);
+    // std::lock_guard<std::mutex> lock(data_channels_mutex_);
     auto it = data_channels_.find(peer_id);
     if (it != data_channels_.end()) {
         data_channels_.erase(it);
@@ -84,13 +84,13 @@ void RCClient::removeDataChannel(const std::string &peer_id) {
 
     // 移除健康检查状态
     {
-        std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
+        // std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
         channel_health_.erase(peer_id);
     }
 }
 
 size_t RCClient::getDataChannelCount() const {
-    std::lock_guard<std::mutex> lock(data_channels_mutex_);
+    // std::lock_guard<std::mutex> lock(data_channels_mutex_);
     return data_channels_.size();
 }
 
@@ -105,11 +105,11 @@ void RCClient::sendStatusFrame(const std::map<std::string, std::string> &statusD
     std::string jsonStr = j.dump();
 
     // 收集失效的DataChannel peer_id
-    std::vector<std::string> failed_peers;
+    // std::vector<std::string> failed_peers;
 
     // 线程安全地遍历所有DataChannel并发送数据
     {
-        std::lock_guard<std::mutex> lock(data_channels_mutex_);
+        // std::lock_guard<std::mutex> lock(data_channels_mutex_);
         for (const auto &peer_channel: data_channels_) {
             const std::string &peer_id = peer_channel.first;
             const auto &dc = peer_channel.second;
@@ -119,19 +119,19 @@ void RCClient::sendStatusFrame(const std::map<std::string, std::string> &statusD
                     dc->send(reinterpret_cast<const std::byte *>(jsonStr.data()), jsonStr.size());
                 } catch (const std::exception &e) {
                     std::cerr << "Failed to send status to peer " << peer_id << ": " << e.what() << std::endl;
-                    failed_peers.push_back(peer_id);
+                    // failed_peers.push_back(peer_id);
                 }
             } else {
-                failed_peers.push_back(peer_id);
+                // failed_peers.push_back(peer_id);
             }
         }
     }
 
     // 移除失效的DataChannel
-    for (const auto &peer_id: failed_peers) {
-        std::cerr << "Removing failed DataChannel: " << peer_id << std::endl;
-        removeDataChannel(peer_id);
-    }
+    // for (const auto &peer_id: failed_peers) {
+    //     std::cerr << "Removing failed DataChannel: " << peer_id << std::endl;
+    //     removeDataChannel(peer_id);
+    // }
 }
 
 void RCClient::stopAll() {
@@ -171,32 +171,37 @@ void RCClient::sendSystemStatus() {
 
 
 void RCClient::parseFrame(const std::string &peer_id, const uint8_t *frame, size_t length) {
-    // 多端场景下：使用互斥锁保护parseFrame，防止并发调用导致电机控制冲突
-    std::lock_guard<std::mutex> lock(parse_frame_mutex_);
-
-    // 解析 RC Protocol v2
+    // 解析 RC Protocol v2，获取消息类型
     RCProtocolV2::ControlFrame control_frame;
+    uint8_t msg_type;
 
-    if (!RCProtocolV2::parseControlFrame(frame, length, control_frame)) {
+    if (!RCProtocolV2::parseFrameWithType(frame, length, control_frame, msg_type)) {
         std::cerr << "Invalid RC v2 frame received from peer " << peer_id << std::endl;
         return;
     }
 
-    // 更新最后发送控制命令的peer_id
-    {
-        std::lock_guard<std::mutex> peer_id_lock(last_control_peer_id_mutex_);
-        last_control_peer_id_ = peer_id;
-    }
-    // 直接传递控制帧给电机控制器
-    motor_controller_->applyControl(control_frame);
-
-    // 更新特定DataChannel的健康状态
-    {
-        std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
-        DataChannelHealth &health = channel_health_[peer_id];
-        health.last_heartbeat = std::chrono::steady_clock::now();
-        health.missed_heartbeat_count = 0;
-        health.is_alive = true;
+    // 只对控制包调用电机控制
+    if (msg_type == RCProtocolV2::CONTROL_MSG) {
+        // 更新最后发送控制命令的peer_id
+        {
+            // std::lock_guard<std::mutex> peer_id_lock(last_control_peer_id_mutex_);
+            last_control_peer_id_ = peer_id;
+        }
+        {
+            // 多端场景下：使用互斥锁保护parseFrame，防止并发调用导致电机控制冲突
+            std::lock_guard<std::mutex> lock(parse_frame_mutex_);
+            // 直接传递控制帧给电机控制器
+            motor_controller_->applyControl(control_frame);
+        }
+    } else {
+        // 更新特定DataChannel的健康状态（控制包和心跳包都更新）
+        {
+            // std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
+            DataChannelHealth &health = channel_health_[peer_id];
+            health.last_heartbeat = std::chrono::steady_clock::now();
+            health.missed_heartbeat_count = 0;
+            health.is_alive = true;
+        }
     }
 }
 
@@ -213,13 +218,13 @@ void RCClient::healthCheckLoop() {
 
         // 获取最后发送控制命令的peer_id
         {
-            std::lock_guard<std::mutex> peer_id_lock(last_control_peer_id_mutex_);
+            // std::lock_guard<std::mutex> peer_id_lock(last_control_peer_id_mutex_);
             last_control_peer_to_check = last_control_peer_id_;
         }
 
         // 检查所有DataChannel的健康状态
         {
-            std::lock_guard<std::mutex> lock(channel_health_mutex_);
+            // std::lock_guard<std::mutex> lock(channel_health_mutex_);
             for (auto &peer_health: channel_health_) {
                 const std::string &peer_id = peer_health.first;
                 DataChannelHealth &health = peer_health.second;

@@ -12,6 +12,7 @@ namespace RCProtocolV2 {
     constexpr uint8_t MAGIC1 = 0xAA;
     constexpr uint8_t MAGIC2 = 0x55;
     constexpr uint8_t CONTROL_MSG = 0x01;
+    constexpr uint8_t HEARTBEAT_MSG = 0x02; // 心跳包类型
     constexpr size_t FRAME_SIZE = 67; // 2 + 1 + 16*4 = 67字节
     constexpr size_t HEADER_SIZE = 3; // MAGIC1 + MAGIC2 + TYPE
     constexpr size_t CHANNELS = 16;
@@ -72,6 +73,21 @@ namespace RCProtocolV2 {
     inline bool parseControlFrame(const uint8_t *frame, size_t length, ControlFrame &outFrame) {
         if (length != FRAME_SIZE) {
             return false;
+        }
+        return outFrame.deserialize(frame);
+    }
+
+    // 解析帧并返回消息类型
+    // 返回值: true=解析成功, false=解析失败
+    // outFrame: 填充解析后的帧数据
+    // msgType: 输出消息类型 (CONTROL_MSG 或 HEARTBEAT_MSG)
+    inline bool parseFrameWithType(const uint8_t *frame, size_t length, ControlFrame &outFrame, uint8_t &msgType) {
+        if (length != FRAME_SIZE) {
+            return false;
+        }
+        msgType = frame[2];
+        if (msgType == HEARTBEAT_MSG) {
+            return true;
         }
         return outFrame.deserialize(frame);
     }

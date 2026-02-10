@@ -156,14 +156,19 @@ window.addEventListener('load', () => {
         }
     }
 
-    // 启动心跳机制：定期发送当前状态，防止丢包导致失控
-    // 心跳间隔100ms，小于C++端watchdog超时时间（300ms），确保即使丢包也能及时恢复
+    // 启动心跳机制：定期发送心跳包，保持DataChannel活跃
+    // 心跳包只更新心跳时间，不调用电机控制
     function startHeartbeat() {
         if (heartbeatInterval) clearInterval(heartbeatInterval);
         heartbeatInterval = setInterval(() => {
             if (dataCurrentDataChannel && dataCurrentDataChannel.readyState === 'open') {
-                // 定期发送当前状态作为心跳，即使没有变化也发送
-                dataSendSbus(lastSentState.forward, lastSentState.turn);
+                // 发送心跳包，不控制电机
+                try {
+                    const heartbeatFrame = RCProtocol.encodeHeartbeat();
+                    dataCurrentDataChannel.send(heartbeatFrame);
+                } catch (e) {
+                    console.error('Failed to send heartbeat', e);
+                }
             }
         }, 300);
     }
