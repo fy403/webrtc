@@ -1,0 +1,28 @@
+# Build artifacts
+build/
+*.o
+*.so
+*.a
+
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test files
+test/
+*_test.cpp
+*_test.h
+
+# Documentation
+README*.md
+assets/
+*.png
+*.jpg
