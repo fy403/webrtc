@@ -21,7 +21,8 @@ RCClient::RCClient(const RCClientConfig &config)
       // SystemMonitor 不需要在构造函数中初始化4G模块
       system_monitor_(),
       health_check_running_(true),
-      default_watchdog_timeout_ms_(config.watchdog_timeout_ms) {
+      default_watchdog_timeout_ms_(config.watchdog_timeout_ms),
+      last_control_sequence_(0) {
     last_status_time_ = std::chrono::steady_clock::now();
 
     // 如果配置中指定了4G模块参数，则初始化4G模块
@@ -182,26 +183,38 @@ void RCClient::parseFrame(const std::string &peer_id, const uint8_t *frame, size
 
     // 只对控制包调用电机控制
     if (msg_type == RCProtocolV2::CONTROL_MSG) {
-        // 更新最后发送控制命令的peer_id
-        {
-            // std::lock_guard<std::mutex> peer_id_lock(last_control_peer_id_mutex_);
-            last_control_peer_id_ = peer_id;
+        uint32_t current_seq = control_frame.sequence;
+        uint32_t last_seq = last_control_sequence_.load();
+        // 序列号检查：
+        if (last_seq != 0 && current_seq != last_seq+1) {
+            // 检测到乱序
+            std::cout << "检测到序列号乱序: 当前=" << current_seq << ", 上次=" << last_seq
+                     << ", 停止所有电机并接受新序列号" << std::endl;
+            motor_controller_->stopAll();
+            last_control_sequence_.store(current_seq);
+        } else {
+            // 序列号正常，更新并应用控制
+            last_control_sequence_.store(current_seq);
+
+            // 更新最后发送控制命令的peer_id
+            {
+                // std::lock_guard<std::mutex> peer_id_lock(last_control_peer_id_mutex_);
+                last_control_peer_id_ = peer_id;
+            }
+            {
+                // 多端场景下：使用互斥锁保护parseFrame，防止并发调用导致电机控制冲突
+                std::lock_guard<std::mutex> lock(parse_frame_mutex_);
+                // 直接传递控制帧给电机控制器
+                motor_controller_->applyControl(control_frame);
+            }
         }
-        {
-            // 多端场景下：使用互斥锁保护parseFrame，防止并发调用导致电机控制冲突
-            std::lock_guard<std::mutex> lock(parse_frame_mutex_);
-            // 直接传递控制帧给电机控制器
-            motor_controller_->applyControl(control_frame);
-        }
-    } else {
+    }else{
         // 更新特定DataChannel的健康状态（控制包和心跳包都更新）
-        {
-            // std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
-            DataChannelHealth &health = channel_health_[peer_id];
-            health.last_heartbeat = std::chrono::steady_clock::now();
-            health.missed_heartbeat_count = 0;
-            health.is_alive = true;
-        }
+        // std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
+        DataChannelHealth &health = channel_health_[peer_id];
+        health.last_heartbeat = std::chrono::steady_clock::now();
+        health.missed_heartbeat_count = 0;
+        health.is_alive = true;
     }
 }
 

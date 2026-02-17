@@ -67,6 +67,9 @@ private:
     std::string last_control_peer_id_;
     mutable std::mutex last_control_peer_id_mutex_;
 
+    // 跟踪控制帧序列号
+    std::atomic<uint32_t> last_control_sequence_;
+
     // Data channels for WebRTC communication（支持多端连接）
     std::unordered_map<std::string, std::shared_ptr<rtc::DataChannel> > data_channels_;
     mutable std::mutex data_channels_mutex_;

@@ -10,13 +10,24 @@
     MAGIC2: 0x55,
     CONTROL_MSG: 0x01,
     HEARTBEAT_MSG: 0x02,  // 心跳包类型
-    FRAME_SIZE: 67  // 固定帧大小: 2 + 1 + 16*4 = 67字节
+    FRAME_SIZE: 71  // 固定帧大小: 2 + 1 + 4(seq) + 16*4 = 71字节
   };
+
+  // 帧序列号（全局）
+  let frameSequence = 0;
+
+  /**
+   * 获取下一个序列号
+   * @returns {number} - 递增后的序列号
+   */
+  function getNextSequence() {
+    return ++frameSequence;
+  }
 
   /**
    * 编码控制消息
    * @param {Object} channels - 通道值 {ch1: -1.0~1.0, ch2: -1.0~1.0, ...}
-   * @returns {Uint8Array} - 编码后的数据包（67字节）
+   * @returns {Uint8Array} - 编码后的数据包（71字节）
    */
   function encode(channels) {
     return encodeFrame(channels, PROTOCOL.CONTROL_MSG);
@@ -25,7 +36,7 @@
   /**
    * 编码心跳包
    * 心跳包只更新心跳时间，不调用电机控制
-   * @returns {Uint8Array} - 编码后的心跳包（67字节）
+   * @returns {Uint8Array} - 编码后的心跳包（71字节）
    */
   function encodeHeartbeat() {
     return encodeFrame({}, PROTOCOL.HEARTBEAT_MSG);
@@ -47,11 +58,19 @@
     view.setUint8(1, PROTOCOL.MAGIC2);
     view.setUint8(2, msgType);
 
+    // 序列号（大端序）
+    let seq = 0;
+    if (msgType === PROTOCOL.CONTROL_MSG) {
+      // 控制包使用递增的序列号
+      seq = getNextSequence();
+    }
+    view.setUint32(3, seq, false); // big-endian
+
     // 16个通道，每个4字节float32（大端序）
     for (let i = 0; i < 16; i++) {
       const value = channels['ch' + (i + 1)] || 0;
       const clampedValue = Math.max(-1.0, Math.min(1.0, value));
-      view.setFloat32(3 + i * 4, clampedValue, false); // big-endian
+      view.setFloat32(7 + i * 4, clampedValue, false); // big-endian
     }
 
     // 存储当前通道值用于UI显示（仅控制包）

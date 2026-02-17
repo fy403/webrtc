@@ -13,8 +13,8 @@ namespace RCProtocolV2 {
     constexpr uint8_t MAGIC2 = 0x55;
     constexpr uint8_t CONTROL_MSG = 0x01;
     constexpr uint8_t HEARTBEAT_MSG = 0x02; // 心跳包类型
-    constexpr size_t FRAME_SIZE = 67; // 2 + 1 + 16*4 = 67字节
-    constexpr size_t HEADER_SIZE = 3; // MAGIC1 + MAGIC2 + TYPE
+    constexpr size_t FRAME_SIZE = 71; // 2 + 1 + 4(seq) + 16*4 = 71字节
+    constexpr size_t HEADER_SIZE = 7; // MAGIC1 + MAGIC2 + TYPE + SEQ(4)
     constexpr size_t CHANNELS = 16;
 
     // 控制帧结构
@@ -22,6 +22,7 @@ namespace RCProtocolV2 {
         uint8_t magic1; // 0xAA
         uint8_t magic2; // 0x55
         uint8_t type; // 0x01
+        uint32_t sequence; // 帧序列号（无符号32位）
         float channels[16]; // -1.0 ~ +1.0
 
         // 序列化
@@ -30,6 +31,11 @@ namespace RCProtocolV2 {
             buffer[offset++] = magic1;
             buffer[offset++] = magic2;
             buffer[offset++] = type;
+            // 序列号（大端序）
+            buffer[offset++] = (sequence >> 24) & 0xFF;
+            buffer[offset++] = (sequence >> 16) & 0xFF;
+            buffer[offset++] = (sequence >> 8) & 0xFF;
+            buffer[offset++] = sequence & 0xFF;
 
             for (int i = 0; i < 16; i++) {
                 // 将float32转为字节（大端序）
@@ -56,6 +62,13 @@ namespace RCProtocolV2 {
             type = buffer[2];
 
             size_t offset = 3;
+            // 反序列号（大端序）
+            sequence = (buffer[offset] << 24) |
+                       (buffer[offset + 1] << 16) |
+                       (buffer[offset + 2] << 8) |
+                       buffer[offset + 3];
+            offset += 4;
+
             for (int i = 0; i < 16; i++) {
                 uint32_t value = (buffer[offset] << 24) |
                                  (buffer[offset + 1] << 16) |
