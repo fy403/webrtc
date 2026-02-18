@@ -32,6 +32,13 @@ std::shared_ptr<rtc::WebSocket> g_current_ws;
 std::string g_client_id;
 Cmdline *g_params = nullptr;
 
+// WebSocket 心跳和超时检测
+std::shared_ptr<std::thread> g_ws_heartbeat_thread;
+std::atomic<bool> g_ws_heartbeat_running{false};
+std::atomic<uint64_t> g_last_ws_activity{0};
+constexpr uint64_t WS_HEARTBEAT_INTERVAL = 1; // 心跳间隔
+constexpr uint64_t WS_TIMEOUT_SECONDS = 5; // 超时时间
+
 // 信号处理函数
 void signal_handler(int signal) {
     std::cout << "Received signal " << signal << ", shutting down gracefully..."
@@ -70,13 +77,18 @@ rtc::Configuration createIceConfig();
 
 // 封装函数：设置 WebSocket 回调和消息处理
 void setupWebSocketCallbacks(std::shared_ptr<rtc::WebSocket> ws,
-                             std::promise<void> &wsPromise,
+                             std::shared_ptr<std::promise<void>> wsPromise,
                              std::shared_ptr<RCClient> client);
 
 // WebSocket 自动重连
 void startWsReconnect();
 
 void stopWsReconnect();
+
+// WebSocket 心跳和超时检测
+void startWsHeartbeat();
+
+void stopWsHeartbeat();
 
 int main(int argc, char **argv) {
     try {
@@ -155,8 +167,9 @@ int main(int argc, char **argv) {
         // 创建 WebSocket
         auto ws = std::make_shared<rtc::WebSocket>();
 
-        std::promise<void> wsPromise;
-        auto wsFuture = wsPromise.get_future();
+        // 使用 shared_ptr 管理 promise
+        auto wsPromise = std::make_shared<std::promise<void>>();
+        auto wsFuture = wsPromise->get_future();
 
         // 设置 WebSocket 回调和消息处理（使用封装的函数）
         setupWebSocketCallbacks(ws, wsPromise, client);
@@ -173,6 +186,16 @@ int main(int argc, char **argv) {
 
         std::cout << "Waiting for signaling to be connected..." << std::endl;
         wsFuture.get();
+
+        // 更新活动时间戳
+        g_last_ws_activity.store(
+            std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now().time_since_epoch()
+            ).count()
+        );
+
+        // 启动心跳检测线程
+        startWsHeartbeat();
 
         // 检查是否在连接建立之前收到了关闭信号
         if (g_shutdown_requested.load()) {
@@ -198,6 +221,8 @@ int main(int argc, char **argv) {
         }
 
         std::cout << "Cleaning up..." << std::endl;
+        // 停止 WebSocket 心跳线程
+        stopWsHeartbeat();
         // 停止 WebSocket 重连线程
         stopWsReconnect();
         client->stopAll();
@@ -361,12 +386,12 @@ rtc::Configuration createIceConfig() {
 
 // 设置 WebSocket 回调和消息处理
 void setupWebSocketCallbacks(std::shared_ptr<rtc::WebSocket> ws,
-                             std::promise<void> &wsPromise,
+                             std::shared_ptr<std::promise<void>> wsPromise,
                              std::shared_ptr<RCClient> client) {
     auto config = createIceConfig();
     auto wws = make_weak_ptr(ws);
 
-    ws->onOpen([client, &wsPromise, ws]() {
+    ws->onOpen([client, wsPromise, ws]() {
         std::cout << "WebSocket connected, signaling ready" << std::endl;
         // 替换旧的 WebSocket
         if (g_current_ws && g_current_ws != ws) {
@@ -376,12 +401,22 @@ void setupWebSocketCallbacks(std::shared_ptr<rtc::WebSocket> ws,
         g_current_ws = ws;
         // WebSocket 连接成功，停止重连
         stopWsReconnect();
-        wsPromise.set_value();
+        // 重新启动心跳线程（如果之前停止了）
+        if (!g_ws_heartbeat_running.load()) {
+            startWsHeartbeat();
+        }
+        // 更新活动时间戳
+        g_last_ws_activity.store(
+            std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now().time_since_epoch()
+            ).count()
+        );
+        wsPromise->set_value();
     });
 
-    ws->onError([&wsPromise](std::string s) {
+    ws->onError([wsPromise](std::string s) {
         std::cout << "WebSocket error: " << s << std::endl;
-        wsPromise.set_exception(std::make_exception_ptr(std::runtime_error(s)));
+        wsPromise->set_exception(std::make_exception_ptr(std::runtime_error(s)));
     });
 
     ws->onClosed([client]() {
@@ -396,6 +431,13 @@ void setupWebSocketCallbacks(std::shared_ptr<rtc::WebSocket> ws,
         if (g_shutdown_requested.load()) {
             return;
         }
+
+        // 更新活动时间戳
+        g_last_ws_activity.store(
+            std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now().time_since_epoch()
+            ).count()
+        );
 
         // data holds either std::string or rtc::binary
         if (!std::holds_alternative<std::string>(data))
@@ -414,6 +456,11 @@ void setupWebSocketCallbacks(std::shared_ptr<rtc::WebSocket> ws,
             return;
 
         auto type = it->get<std::string>();
+
+        if (type == "ping") {
+            // std::cout << "Recv ping message" << std::endl;
+            return;
+        }
 
         // Handle peer_close message
         if (type == "peer_close") {
@@ -478,13 +525,16 @@ void startWsReconnect() {
 
     // 创建重连线程
     g_ws_reconnect_thread = std::make_shared<std::thread>([]() {
-        while (g_ws_reconnect_running) {
+        std::atomic<bool> reconnecting(true); // 局部重连标志
+
+        while (g_ws_reconnect_running && reconnecting) {
             try {
                 // 创建新的 WebSocket
                 auto newWs = std::make_shared<rtc::WebSocket>();
 
-                std::promise<void> wsPromise;
-                auto wsFuture = wsPromise.get_future();
+                // 使用 shared_ptr 管理 promise，确保 lambda 能安全访问
+                auto wsPromise = std::make_shared<std::promise<void>>();
+                auto wsFuture = wsPromise->get_future();
 
                 // 重新创建 RCClient
                 RCClientConfig rcClientConfig(
@@ -512,8 +562,15 @@ void startWsReconnect() {
 
                 // 等待连接成功
                 if (wsFuture.wait_for(std::chrono::seconds(5)) == std::future_status::ready) {
-                    std::cout << "WebSocket reconnection successful!" << std::endl;
-                    break; // 连接成功，退出重连循环
+                    try {
+                        wsFuture.get(); // 尝试获取结果，如果有异常会抛出
+                        std::cout << "WebSocket reconnection successful!" << std::endl;
+                        // 连接成功，退出重连循环（但不停止线程）
+                        reconnecting = false;
+                    } catch (const std::exception &e) {
+                        std::cerr << "WebSocket reconnection failed: " << e.what() << std::endl;
+                        // 连接失败，继续循环重试
+                    }
                 } else {
                     std::cout << "WebSocket reconnection timeout, retrying in 3 seconds..." << std::endl;
                 }
@@ -524,17 +581,101 @@ void startWsReconnect() {
             // 等待 3 秒后重试
             std::this_thread::sleep_for(std::chrono::seconds(3));
         }
+
+        // 重连线程退出时，重置全局标志
+        g_ws_reconnect_running = false;
+        std::cout << "WebSocket reconnect thread finished" << std::endl;
     });
 
     g_ws_reconnect_thread->detach();
 }
 
 void stopWsReconnect() {
+    // 设置标志让重连线程退出
     g_ws_reconnect_running = false;
-    if (g_ws_reconnect_thread && g_ws_reconnect_thread->joinable()) {
-        std::cout << "Stopping WebSocket reconnect thread..." << std::endl;
-        g_ws_reconnect_thread->join();
+
+    // 注意：线程会自动退出，不需要 join，因为使用的是 detach
+    // 只需要重置智能指针
+    if (g_ws_reconnect_thread) {
         g_ws_reconnect_thread.reset();
         std::cout << "WebSocket reconnect thread stopped" << std::endl;
+    }
+}
+
+// WebSocket 心跳和超时检测
+void startWsHeartbeat() {
+    if (g_ws_heartbeat_running.exchange(true)) {
+        std::cout << "WebSocket heartbeat already running" << std::endl;
+        return;
+    }
+
+    std::cout << "Starting WebSocket heartbeat monitor..." << std::endl;
+
+    g_ws_heartbeat_thread = std::make_shared<std::thread>([]() {
+        while (g_ws_heartbeat_running) {
+            try {
+                auto now = std::chrono::duration_cast<std::chrono::seconds>(
+                    std::chrono::system_clock::now().time_since_epoch()
+                ).count();
+
+                auto last_activity = g_last_ws_activity.load();
+                auto elapsed = now - last_activity;
+
+                if (elapsed >= WS_TIMEOUT_SECONDS) {
+                    std::cerr << "WebSocket connection timeout! No activity for " << elapsed
+                            << " seconds" << std::endl;
+                    std::cerr << "Triggering reconnection..." << std::endl;
+
+                    // 关闭当前连接（如果还存在）
+                    if (g_current_ws) {
+                        g_current_ws.reset();
+                    }
+
+                    // 停止心跳线程本身，让重连过程重新启动心跳
+                    g_ws_heartbeat_running = false;
+
+                    // 启动重连
+                    startWsReconnect();
+                    break;
+                } else if (elapsed >= WS_HEARTBEAT_INTERVAL) {
+                    // 发送心跳包
+                    if (g_current_ws) {
+                        try {
+                            json heartbeat = {
+                                {"id", g_client_id},
+                                {"type", "ping"},
+                                {"timestamp", now}
+                            };
+                            g_current_ws->send(heartbeat.dump());
+                            // std::cout << "Sent heartbeat, last activity: " << elapsed << "s ago" << std::endl;
+                        } catch (const std::exception &e) {
+                            std::cerr << "Failed to send heartbeat: " << e.what() << std::endl;
+                            // 停止心跳线程，让重连过程重新启动心跳
+                            g_ws_heartbeat_running = false;
+                            // 发送失败，触发重连
+                            startWsReconnect();
+                            break;
+                        }
+                    }
+                }
+
+                // 每秒检查一次
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            } catch (const std::exception &e) {
+                std::cerr << "Heartbeat monitor error: " << e.what() << std::endl;
+            }
+        }
+    });
+
+    g_ws_heartbeat_thread->detach();
+}
+
+void stopWsHeartbeat() {
+    g_ws_heartbeat_running = false;
+    if (g_ws_heartbeat_thread && g_ws_heartbeat_thread->joinable()) {
+        std::cout << "Stopping WebSocket heartbeat thread..." << std::endl;
+        g_ws_heartbeat_thread->join();
+        g_ws_heartbeat_thread.reset();
+        std::cout << "WebSocket heartbeat thread stopped" << std::endl;
     }
 }

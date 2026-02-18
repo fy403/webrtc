@@ -64,12 +64,23 @@ private:
   std::shared_ptr<std::thread> wsReconnectThread_;
   std::atomic<bool> wsReconnectRunning_{false};
 
+  // WebSocket 心跳和超时检测
+  std::shared_ptr<std::thread> wsHeartbeatThread_;
+  std::atomic<bool> wsHeartbeatRunning_{false};
+  std::atomic<uint64_t> lastWsActivity_{0};
+  static constexpr uint64_t WS_HEARTBEAT_INTERVAL = 1;    // 心跳间隔
+  static constexpr uint64_t WS_TIMEOUT_SECONDS = 5;       // 超时时间
+
   // WebSocket 自动重连
   void startWsReconnect();
   void stopWsReconnect();
 
+  // WebSocket 心跳和超时检测
+  void startWsHeartbeat();
+  void stopWsHeartbeat();
+
   // WebSocket 设置和消息处理（封装以供重连复用）
-  void setupWebSocketCallbacks(std::shared_ptr<rtc::WebSocket> ws, std::promise<void>& wsPromise);
+  void setupWebSocketCallbacks(std::shared_ptr<rtc::WebSocket> ws, std::shared_ptr<std::promise<void>> wsPromise);
   rtc::Configuration createIceConfig();
 
   // 创建并设置 PeerConnection
