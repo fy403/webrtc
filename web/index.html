@@ -43,23 +43,7 @@
                         </div>
                     </div>
 
-                    <!-- 右侧状态面板 -->
-                    <div class="status-overlay right-overlay">
-                        <div class="status-group">
-                            <div class="status-item-inline">
-                                <div class="hint">4G信号强度</div>
-                                <div class="mono" id="signalStrength">-- dBm</div>
-                            </div>
-                            <div class="status-item-inline">
-                                <div class="hint">服务状态</div>
-                                <div class="mono" id="serviceStatus">检查中...</div>
-                            </div>
-                            <div class="status-item-inline">
-                                <div class="hint">4G网络状态</div>
-                                <div class="mono" id="simStatus">UNKNOWN</div>
-                            </div>
-                        </div>
-                    </div>
+
 
                     <!-- 速度显示面板 -->
                     <div class="status-overlay speed-overlay">
@@ -126,20 +110,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="signal-indicator-container">
-                            <!-- 4G信号强度指示器 -->
-                            <div class="signal-indicator" id="signalIndicator">
-                                <div class="signal-bar"></div>
-                                <div class="signal-bar"></div>
-                                <div class="signal-bar"></div>
-                                <div class="signal-bar"></div>
-                                <div class="signal-bar"></div>
-                            </div>
-                            <div class="signal-info">
-                                <span class="signal-text">质量:</span>
-                                <span class="signal-quality" id="signalQuality">--</span>
-                            </div>
-                        </div>
+
                         <div class="last-update">
                             <div class="hint">最后更新: <span id="lastUpdate">--</span></div>
                         </div>
@@ -173,7 +144,6 @@
                     <div class="control-buttons">
                         <button class="btn" id="reconnectBtn">重新连接</button>
                         <button class="btn" id="stopAllBtn">STOP ALL (Space)</button>
-                        <button class="btn" id="emgBtn">急停 T</button>
                         <button class="btn" id="configBtn" title="配置">⚙️</button>
                         <!--						<button id="throttleBtn" class="btn">档位调整 F</button>-->
                     </div>
@@ -363,35 +333,29 @@
                 </div>
             </div>
         </div>
-
         <!-- 视频配置面板 -->
         <div class="video-config-panel">
             <div class="config-header">
                 <div class="config-title">视频配置</div>
-                <button class="btn btn-apply" id="applyVideoConfig">应用配置</button>
+                <button class="btn btn-apply" id="applyVideoConfigBtn">应用配置</button>
             </div>
             <div class="config-row">
                 <div class="config-group">
                     <label class="config-label">分辨率</label>
                     <select class="config-select" id="resolutionSelect">
-                        <option value="640x480" selected>640x480</option>
+                        <option value="640x480">640x480</option>
                         <option value="1280x720">1280x720</option>
                         <option value="1920x1080">1920x1080</option>
-                        <option value="custom">自定义</option>
                     </select>
-                    <input type="text" class="config-input" id="resolutionCustom" placeholder="如: 1280x720" disabled>
                 </div>
                 <div class="config-group">
                     <label class="config-label">帧率 (FPS)</label>
                     <select class="config-select" id="fpsSelect">
                         <option value="10">10</option>
                         <option value="15">15</option>
-                        <option value="30" selected>30</option>
+                        <option value="30">30</option>
                         <option value="60">60</option>
-                        <option value="custom">自定义</option>
                     </select>
-                    <input type="number" class="config-input" id="fpsCustom" placeholder="如: 30" disabled min="1"
-                        max="120">
                 </div>
             </div>
             <div class="config-row">
@@ -401,20 +365,15 @@
                         <option value="1000000">1 Mbps</option>
                         <option value="2000000">2 Mbps</option>
                         <option value="5000000">4 Mbps</option>
-                        <option value="8000000"  selected>8 Mbps</option>
-                        <option value="custom">自定义</option>
+                        <option value="8000000">8 Mbps</option>
                     </select>
-                    <input type="number" class="config-input" id="bitrateCustom" placeholder="如: 2000000" disabled
-                        min="100000">
                 </div>
                 <div class="config-group">
                     <label class="config-label">视频格式</label>
                     <select class="config-select" id="formatSelect">
                         <option value="mjpeg">MJPEG</option>
-                        <option value="yuyv422" selected>YUYV422</option>
-                        <option value="custom">自定义</option>
+                        <option value="yuyv422">YUYV422</option>
                     </select>
-                    <input type="text" class="config-input" id="formatCustom" placeholder="如: yuyv422" disabled>
                 </div>
             </div>
         </div>
@@ -427,8 +386,19 @@
             return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         }
 
+        // 监听配置更新事件
+        function handleConfigUpdate(e) {
+            if (e.key === 'webrtc_config_updated') {
+                console.log('检测到配置更新，刷新页面');
+                window.location.reload();
+            }
+        }
+
         // 页面加载完成后执行检查
         document.addEventListener('DOMContentLoaded', function () {
+            // 监听 localStorage 变化
+            window.addEventListener('storage', handleConfigUpdate);
+
             // 如果当前不是mobile.html页面且检测到是移动设备，则跳转到mobile.html
             if (!window.location.pathname.includes('mobile.html') && isMobileDevice()) {
                 window.location.href = 'mobile.html';
@@ -441,6 +411,11 @@
                     window.open('config.html', 'config', 'width=900,height=700,scrollbars=yes,resizable=yes');
                 });
             }
+        });
+
+        // 页面卸载时移除监听器
+        window.addEventListener('beforeunload', function() {
+            window.removeEventListener('storage', handleConfigUpdate);
         });
     </script>
 </body>

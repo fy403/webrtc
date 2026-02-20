@@ -57,7 +57,6 @@ window.addEventListener('load', () => {
     const dataElements = {
         reconnectBtn: document.getElementById('reconnectBtn'),
         stopAllBtn: document.getElementById('stopAllBtn'),
-        emgBtn: document.getElementById('emgBtn'),
         throttleBtn: document.getElementById('throttleBtn'),
         keyW: document.getElementById('keyW'),
         reconnectBtnMobile: document.getElementById('reconnectBtnMobile'),
@@ -76,11 +75,7 @@ window.addEventListener('load', () => {
         rightJoystickBase: document.getElementById('rightJoystickBase'),
         rightJoystickHandle: document.getElementById('rightJoystickHandle'),
         connStatus: document.getElementById('connStatus'),
-        signalStrength: document.getElementById('signalStrength'),
-        signalIndicator: document.getElementById('signalIndicator'),
-        signalQuality: document.getElementById('signalQuality'),
-        serviceStatus: document.getElementById('serviceStatus'),
-        simStatus: document.getElementById('simStatus'),
+
         rxSpeed: document.getElementById('rxSpeed'),
         txSpeed: document.getElementById('txSpeed'),
         cpuUsage: document.getElementById('cpuUsage'),
@@ -309,34 +304,8 @@ window.addEventListener('load', () => {
         if (dataElements.rxSpeed) dataElements.rxSpeed.textContent = `${rxSpeed.toFixed(2)} Kbit/s`;
         if (dataElements.txSpeed) dataElements.txSpeed.textContent = `${txSpeed.toFixed(2)} Kbit/s`;
         if (dataElements.cpuUsage) dataElements.cpuUsage.textContent = `${cpuUsage.toFixed(2)}%`;
-        if (dataElements.serviceStatus)
-            dataElements.serviceStatus.textContent = `🕹:${ttyService ? 'ON' : 'OFF'} / 🖼:${rtspService ? 'ON' : 'OFF'}`;
-        if (dataElements.signalStrength)
-            dataElements.signalStrength.textContent = signalStrength === -1 ? '-- dBm' : `${signalStrength} dBm`;
-        if (dataElements.simStatus) dataElements.simStatus.textContent = sim_status;
         if (dataElements.speedValue) dataElements.speedValue.textContent = `${uiSpeed}`;
         if (dataElements.lastUpdate) dataElements.lastUpdate.textContent = lastUpdate ? lastUpdate.toLocaleTimeString() : '--';
-
-        if (dataElements.signalIndicator) {
-            const bars = dataElements.signalIndicator.querySelectorAll('.signal-bar');
-            const level =
-                signalStrength >= -75
-                    ? 5
-                    : signalStrength >= -85
-                        ? 4
-                        : signalStrength >= -95
-                            ? 3
-                            : signalStrength >= -105
-                                ? 2
-                                : signalStrength >= -115
-                                    ? 1
-                                    : 0;
-            bars.forEach((bar, index) => {
-                if (index < level) bar.classList.add('active');
-                else bar.classList.remove('active');
-            });
-            if (dataElements.signalQuality) dataElements.signalQuality.textContent = `${level}/5`;
-        }
     }
 
     function dataParseHexString(hexString) {
@@ -395,7 +364,6 @@ window.addEventListener('load', () => {
     // Button bindings (neutralize SBUS)
     if (dataElements.reconnectBtn) dataElements.reconnectBtn.addEventListener('click', () => window.location.reload());
     if (dataElements.stopAllBtn) dataElements.stopAllBtn.addEventListener('click', () => dataSendSbus(0, 0));
-    if (dataElements.emgBtn) dataElements.emgBtn.addEventListener('click', () => dataSendSbus(0, 0));
     if (dataElements.throttleBtn) dataElements.throttleBtn.addEventListener('click', () => dataSendSbus(0, 0));
     if (dataElements.reconnectBtnMobile)
         dataElements.reconnectBtnMobile.addEventListener('click', () => window.location.reload());

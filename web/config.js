@@ -18,7 +18,14 @@ const ConfigManager = {
             ],
             bundlePolicy: 'max-bundle',
             rtcpMuxPolicy: 'require',
-            encodedInsertableStreams: false
+            encodedInsertableStreams: false,
+            // 视频参数配置
+            videoConfig: {
+                resolution: '640x480',
+                fps: 30,
+                bitrate: 8000000,
+                format: 'yuyv422'
+            }
         },
         // 数据连接配置
         data: {
@@ -267,6 +274,26 @@ const ConfigManager = {
         Object.assign(this.getCurrentConfig().video, newConfig);
         this.getCurrentConfig().updatedAt = new Date().toISOString();
         return this.saveConfigs();
+    },
+
+    // 更新视频参数配置
+    updateVideoParams(params) {
+        const config = this.getCurrentConfig();
+        if (!config) {
+            this.init();
+        }
+        if (!config.video.videoConfig) {
+            config.video.videoConfig = {};
+        }
+        Object.assign(config.video.videoConfig, params);
+        config.updatedAt = new Date().toISOString();
+        return this.saveConfigs();
+    },
+
+    // 获取视频参数配置
+    getVideoParams() {
+        const config = this.getCurrentConfig();
+        return config && config.video.videoConfig ? config.video.videoConfig : null;
     },
 
     // 更新数据配置

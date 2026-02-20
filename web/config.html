@@ -5,375 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebRTC 配置</title>
     <link href="style.css" rel="stylesheet">
-    <style>
-        .config-page {
-            padding: 20px;
-            max-width: 1200px;
-            margin: 0 auto;
-            background: #1e1e2e;
-            min-height: 100vh;
-        }
-
-        .config-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid #333;
-        }
-
-        .config-title {
-            font-size: 28px;
-            font-weight: bold;
-            color: #e0e0e0;
-        }
-
-        .config-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        .config-sidebar {
-            width: 280px;
-            background: #2a2a3e;
-            border-radius: 12px;
-            padding: 20px;
-            margin-right: 20px;
-            flex-shrink: 0;
-        }
-
-        .sidebar-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #3a3a4e;
-        }
-
-        .sidebar-title {
-            font-size: 16px;
-            font-weight: bold;
-            color: #e0e0e0;
-        }
-
-        .config-list {
-            max-height: 500px;
-            overflow-y: auto;
-        }
-
-        .config-item {
-            padding: 12px;
-            margin-bottom: 8px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: 1px solid transparent;
-        }
-
-        .config-item:hover {
-            background: #3a3a4e;
-        }
-
-        .config-item.active {
-            background: #6366f1;
-            border-color: #818cf8;
-        }
-
-        .config-item-name {
-            font-weight: 500;
-            color: #e0e0e0;
-            margin-bottom: 4px;
-        }
-
-        .config-item-desc {
-            font-size: 12px;
-            color: #9ca3af;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .config-item-actions {
-            display: none;
-            gap: 8px;
-            margin-top: 8px;
-        }
-
-        .config-item:hover .config-item-actions {
-            display: flex;
-        }
-
-        .sidebar-footer {
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid #3a3a4e;
-        }
-
-        .config-main {
-            flex: 1;
-            overflow-y: auto;
-        }
-
-        .config-header-with-sidebar {
-            display: flex;
-            gap: 20px;
-        }
-
-        .config-main-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .config-name-display {
-            font-size: 24px;
-            font-weight: bold;
-            color: #e0e0e0;
-        }
-
-        .config-section {
-            background: #2a2a3e;
-            border-radius: 12px;
-            padding: 25px;
-            margin-bottom: 25px;
-        }
-
-        .section-title {
-            font-size: 20px;
-            font-weight: bold;
-            color: #e0e0e0;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .section-title svg {
-            width: 24px;
-            height: 24px;
-        }
-
-        .config-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: 8px;
-            color: #b0b0b0;
-            font-size: 14px;
-        }
-
-        .form-input {
-            width: 100%;
-            padding: 10px 12px;
-            background: #1e1e2e;
-            border: 1px solid #3a3a4e;
-            border-radius: 6px;
-            color: #e0e0e0;
-            font-size: 14px;
-            transition: border-color 0.3s;
-        }
-
-        .form-input:focus {
-            outline: none;
-            border-color: #6366f1;
-        }
-
-        .ice-server-item {
-            background: #1e1e2e;
-            border: 1px solid #3a3a4e;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-        }
-
-        .ice-server-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .ice-server-title {
-            font-size: 14px;
-            font-weight: bold;
-            color: #b0b0b0;
-        }
-
-        .btn-icon {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 5px;
-            color: #b0b0b0;
-            transition: color 0.3s;
-        }
-
-        .btn-icon:hover {
-            color: #ef4444;
-        }
-
-        .btn-icon-small {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 3px;
-            color: #b0b0b0;
-            transition: color 0.3s;
-        }
-
-        .btn-icon-small:hover {
-            color: #6366f1;
-        }
-
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .btn-primary {
-            background: #6366f1;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #5558e8;
-        }
-
-        .btn-secondary {
-            background: #4a4a5e;
-            color: #e0e0e0;
-        }
-
-        .btn-secondary:hover {
-            background: #5a5a6e;
-        }
-
-        .btn-danger {
-            background: #ef4444;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #dc2626;
-        }
-
-        .btn-success {
-            background: #10b981;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #059669;
-        }
-
-        .form-select {
-            width: 100%;
-            padding: 10px 12px;
-            background: #1e1e2e;
-            border: 1px solid #3a3a4e;
-            border-radius: 6px;
-            color: #e0e0e0;
-            font-size: 14px;
-            cursor: pointer;
-        }
-
-        .btn-add {
-            width: 100%;
-            padding: 10px;
-            background: #2a2a3e;
-            border: 2px dashed #4a4a5e;
-            border-radius: 6px;
-            color: #b0b0b0;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .btn-add:hover {
-            background: #3a3a4e;
-            border-color: #6366f1;
-        }
-
-        .help-text {
-            font-size: 12px;
-            color: #6a6a7e;
-            margin-top: 5px;
-        }
-
-        .message {
-            padding: 12px 16px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            display: none;
-        }
-
-        .message.success {
-            background: #064e3b;
-            color: #10b981;
-            border: 1px solid #10b981;
-        }
-
-        .message.error {
-            background: #7f1d1d;
-            color: #ef4444;
-            border: 1px solid #ef4444;
-        }
-
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .modal-overlay.active {
-            display: flex;
-        }
-
-        .modal {
-            background: #2a2a3e;
-            border-radius: 12px;
-            padding: 25px;
-            min-width: 400px;
-            max-width: 500px;
-        }
-
-        .modal-header {
-            font-size: 18px;
-            font-weight: bold;
-            color: #e0e0e0;
-            margin-bottom: 20px;
-        }
-
-        .modal-footer {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            margin-top: 20px;
-        }
-    </style>
-    </style>
+    <link href="config.css" rel="stylesheet">
 </head>
 <body>
     <div class="config-page">
@@ -459,6 +91,52 @@
                     <select class="form-select" id="videoEncodedInsertableStreams">
                         <option value="false">禁用</option>
                         <option value="true">启用</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- 视频参数配置 -->
+        <div class="config-section">
+            <div class="section-title">
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <rect height="16" rx="2" width="20" x="2" y="4" />
+                    <circle cx="12" cy="12" r="4" />
+                </svg>
+                视频参数配置
+            </div>
+            <div class="config-grid">
+                <div class="form-group">
+                    <label class="form-label">分辨率</label>
+                    <select class="form-select" id="videoResolution">
+                        <option value="640x480">640x480</option>
+                        <option value="1280x720">1280x720</option>
+                        <option value="1920x1080">1920x1080</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">帧率 (FPS)</label>
+                    <select class="form-select" id="videoFps">
+                        <option value="10">10</option>
+                        <option value="15">15</option>
+                        <option value="30">30</option>
+                        <option value="60">60</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">码率 (bps)</label>
+                    <select class="form-select" id="videoBitrate">
+                        <option value="1000000">1 Mbps</option>
+                        <option value="2000000">2 Mbps</option>
+                        <option value="5000000">4 Mbps</option>
+                        <option value="8000000">8 Mbps</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">视频格式</label>
+                    <select class="form-select" id="videoFormat">
+                        <option value="mjpeg">MJPEG</option>
+                        <option value="yuyv422">YUYV422</option>
                     </select>
                 </div>
             </div>
@@ -592,6 +270,13 @@
             document.getElementById('videoBundlePolicy').value = config.video.bundlePolicy || 'max-bundle';
             document.getElementById('videoRtcpMuxPolicy').value = config.video.rtcpMuxPolicy || 'require';
             document.getElementById('videoEncodedInsertableStreams').value = config.video.encodedInsertableStreams ? 'true' : 'false';
+
+            // 视频参数配置
+            const videoConfig = config.video.videoConfig || {};
+            document.getElementById('videoResolution').value = videoConfig.resolution || '640x480';
+            document.getElementById('videoFps').value = videoConfig.fps || 30;
+            document.getElementById('videoBitrate').value = videoConfig.bitrate || 8000000;
+            document.getElementById('videoFormat').value = videoConfig.format || 'yuyv422';
 
             // 视频 ICE 服务器
             const videoIceContainer = document.getElementById('videoIceServers');
@@ -842,7 +527,13 @@
                     iceServers: getIceServersFromForm('video'),
                     bundlePolicy: document.getElementById('videoBundlePolicy').value,
                     rtcpMuxPolicy: document.getElementById('videoRtcpMuxPolicy').value,
-                    encodedInsertableStreams: document.getElementById('videoEncodedInsertableStreams').value === 'true'
+                    encodedInsertableStreams: document.getElementById('videoEncodedInsertableStreams').value === 'true',
+                    videoConfig: {
+                        resolution: document.getElementById('videoResolution').value,
+                        fps: parseInt(document.getElementById('videoFps').value),
+                        bitrate: parseInt(document.getElementById('videoBitrate').value),
+                        format: document.getElementById('videoFormat').value
+                    }
                 };
 
                 // 收集数据配置
@@ -856,15 +547,14 @@
                 ConfigManager.updateVideoConfig(videoConfig);
                 ConfigManager.updateDataConfig(dataConfig);
 
-                showMessage('配置已保存，页面将刷新以应用新配置', 'success');
+                showMessage('配置已保存', 'success');
 
-                // 刷新主页面
+                // 通知主页面配置已更新
+                localStorage.setItem('webrtc_config_updated', Date.now().toString());
+
                 setTimeout(() => {
-                    if (window.opener) {
-                        window.opener.location.reload();
-                    }
                     window.close();
-                }, 1000);
+                }, 800);
             } catch (e) {
                 console.error('保存配置失败:', e);
                 showMessage('保存配置失败: ' + e.message, 'error');
@@ -880,7 +570,13 @@
                     iceServers: getIceServersFromForm('video'),
                     bundlePolicy: document.getElementById('videoBundlePolicy').value,
                     rtcpMuxPolicy: document.getElementById('videoRtcpMuxPolicy').value,
-                    encodedInsertableStreams: document.getElementById('videoEncodedInsertableStreams').value === 'true'
+                    encodedInsertableStreams: document.getElementById('videoEncodedInsertableStreams').value === 'true',
+                    videoConfig: {
+                        resolution: document.getElementById('videoResolution').value,
+                        fps: parseInt(document.getElementById('videoFps').value),
+                        bitrate: parseInt(document.getElementById('videoBitrate').value),
+                        format: document.getElementById('videoFormat').value
+                    }
                 };
 
                 const dataConfig = {
@@ -894,10 +590,10 @@
 
                 showMessage('配置已应用', 'success');
 
+                // 通知主页面配置已更新
+                localStorage.setItem('webrtc_config_updated', Date.now().toString());
+
                 setTimeout(() => {
-                    if (window.opener) {
-                        window.opener.location.reload();
-                    }
                     window.close();
                 }, 500);
             } catch (e) {

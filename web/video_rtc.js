@@ -2,6 +2,9 @@ window.addEventListener('load', () => {
 
     // 从配置管理器加载视频配置
     const videoConfig = ConfigManager.getVideoConfig();
+    
+    // 获取视频参数配置
+    const videoParams = ConfigManager.getVideoParams();
 
     const localId = randomId(4);
     const url = `${videoConfig.signalingUrl}/${localId}`;
@@ -46,55 +49,120 @@ window.addEventListener('load', () => {
 
     // 视频配置元素
     const resolutionSelect = document.getElementById('resolutionSelect');
-    const resolutionCustom = document.getElementById('resolutionCustom');
     const fpsSelect = document.getElementById('fpsSelect');
-    const fpsCustom = document.getElementById('fpsCustom');
     const bitrateSelect = document.getElementById('bitrateSelect');
-    const bitrateCustom = document.getElementById('bitrateCustom');
     const formatSelect = document.getElementById('formatSelect');
-    const formatCustom = document.getElementById('formatCustom');
-    const applyVideoConfig = document.getElementById('applyVideoConfig');
 
-    // 处理自定义输入的启用/禁用
-    if (resolutionSelect) {
-        resolutionSelect.addEventListener('change', () => {
-            resolutionCustom.disabled = resolutionSelect.value !== 'custom';
-            if (resolutionSelect.value !== 'custom') {
-                resolutionCustom.value = '';
+    // 从配置加载视频参数默认值
+    function loadVideoParamsFromConfig() {
+        if (!videoParams) return;
+        
+        // 设置分辨率
+        if (resolutionSelect) {
+            const resolutionOptions = Array.from(resolutionSelect.options);
+            const matchingOption = resolutionOptions.find(option => option.value === videoParams.resolution);
+            if (matchingOption) {
+                resolutionSelect.value = videoParams.resolution;
+            } else {
+                // 如果配置中的分辨率不在预设选项中，添加一个临时选项
+                const tempOption = document.createElement('option');
+                tempOption.value = videoParams.resolution;
+                tempOption.text = videoParams.resolution;
+                tempOption.selected = true;
+                resolutionSelect.appendChild(tempOption);
+                resolutionSelect.value = videoParams.resolution;
             }
-        });
+        }
+        
+        // 设置帧率
+        if (fpsSelect) {
+            const fpsOptions = Array.from(fpsSelect.options);
+            const matchingOption = fpsOptions.find(option => parseInt(option.value) === videoParams.fps);
+            if (matchingOption) {
+                fpsSelect.value = videoParams.fps.toString();
+            } else {
+                // 如果配置中的帧率不在预设选项中，添加一个临时选项
+                const tempOption = document.createElement('option');
+                tempOption.value = videoParams.fps.toString();
+                tempOption.text = videoParams.fps.toString();
+                tempOption.selected = true;
+                fpsSelect.appendChild(tempOption);
+                fpsSelect.value = videoParams.fps.toString();
+            }
+        }
+        
+        // 设置码率
+        if (bitrateSelect) {
+            const bitrateOptions = Array.from(bitrateSelect.options);
+            const matchingOption = bitrateOptions.find(option => parseInt(option.value) === videoParams.bitrate);
+            if (matchingOption) {
+                bitrateSelect.value = videoParams.bitrate.toString();
+            } else {
+                // 如果配置中的码率不在预设选项中，添加一个临时选项
+                const tempOption = document.createElement('option');
+                tempOption.value = videoParams.bitrate.toString();
+                tempOption.text = `${Math.round(videoParams.bitrate / 1000000)} Mbps`;
+                tempOption.selected = true;
+                bitrateSelect.appendChild(tempOption);
+                bitrateSelect.value = videoParams.bitrate.toString();
+            }
+        }
+        
+        // 设置格式
+        if (formatSelect) {
+            const formatOptions = Array.from(formatSelect.options);
+            const matchingOption = formatOptions.find(option => option.value.toLowerCase() === videoParams.format.toLowerCase());
+            if (matchingOption) {
+                formatSelect.value = videoParams.format;
+            } else {
+                // 如果配置中的格式不在预设选项中，添加一个临时选项
+                const tempOption = document.createElement('option');
+                tempOption.value = videoParams.format;
+                tempOption.text = videoParams.format.toUpperCase();
+                tempOption.selected = true;
+                formatSelect.appendChild(tempOption);
+                formatSelect.value = videoParams.format;
+            }
+        }
+    }
+    
+    // 页面加载时从配置加载默认值
+    loadVideoParamsFromConfig();
+
+    // 发送视频参数到设备
+    function sendVideoParams(dataChannel, paramsToSend = null) {
+        // 如果传入了参数则使用传入的参数，否则从界面获取当前值
+        const videoParamsToSend = paramsToSend || {
+            resolution: resolutionSelect ? resolutionSelect.value : '640x480',
+            fps: fpsSelect ? parseInt(fpsSelect.value) : 30,
+            bitrate: bitrateSelect ? parseInt(bitrateSelect.value) : 8000000,
+            format: formatSelect ? formatSelect.value : 'yuyv422'
+        };
+
+        const configMsg = {
+            type: 'video_config',
+            resolution: videoParamsToSend.resolution,
+            fps: videoParamsToSend.fps,
+            bitrate: videoParamsToSend.bitrate,
+            format: videoParamsToSend.format
+        };
+
+        try {
+            dataChannel.send(JSON.stringify(configMsg));
+            console.log('Sent video params:', configMsg);
+            updateStatus(`Video config sent: ${configMsg.resolution}, ${configMsg.fps}fps, ${configMsg.bitrate}bps, ${configMsg.format}`);
+            return true;
+        } catch (e) {
+            console.error('Error sending video params:', e);
+            updateStatus('Failed to send video config: ' + e.message);
+            return false;
+        }
     }
 
-    if (fpsSelect) {
-        fpsSelect.addEventListener('change', () => {
-            fpsCustom.disabled = fpsSelect.value !== 'custom';
-            if (fpsSelect.value !== 'custom') {
-                fpsCustom.value = '';
-            }
-        });
-    }
-
-    if (bitrateSelect) {
-        bitrateSelect.addEventListener('change', () => {
-            bitrateCustom.disabled = bitrateSelect.value !== 'custom';
-            if (bitrateSelect.value !== 'custom') {
-                bitrateCustom.value = '';
-            }
-        });
-    }
-
-    if (formatSelect) {
-        formatSelect.addEventListener('change', () => {
-            formatCustom.disabled = formatSelect.value !== 'custom';
-            if (formatSelect.value !== 'custom') {
-                formatCustom.value = '';
-            }
-        });
-    }
-
-    // 发送视频配置
-    if (applyVideoConfig) {
-        applyVideoConfig.addEventListener('click', () => {
+    // 手动应用视频配置按钮
+    const applyVideoConfigBtn = document.getElementById('applyVideoConfigBtn');
+    if (applyVideoConfigBtn) {
+        applyVideoConfigBtn.addEventListener('click', () => {
             // 获取当前活跃的 DataChannel
             const activeIds = Object.keys(dataChannelMap);
             if (activeIds.length === 0) {
@@ -108,49 +176,24 @@ window.addEventListener('load', () => {
                 return;
             }
 
-            // 获取配置值
-            let resolution = resolutionSelect.value === 'custom' ? resolutionCustom.value : resolutionSelect.value;
-            let fps = fpsSelect.value === 'custom' ? parseInt(fpsCustom.value) : parseInt(fpsSelect.value);
-            let bitrate = bitrateSelect.value === 'custom' ? parseInt(bitrateCustom.value) : parseInt(bitrateSelect.value);
-            let format = formatSelect.value === 'custom' ? formatCustom.value : formatSelect.value;
-
-            // 验证自定义值
-            if (!resolution || !resolution.match(/^\d+x\d+$/)) {
-                updateStatus('Invalid resolution format (use WxH)');
-                return;
-            }
-            if (isNaN(fps) || fps < 1 || fps > 120) {
-                updateStatus('Invalid FPS (1-120)');
-                return;
-            }
-            if (isNaN(bitrate) || bitrate < 100000) {
-                updateStatus('Invalid bitrate (min 100000)');
-                return;
-            }
-            if (!format || format.length === 0) {
-                updateStatus('Invalid video format');
-                return;
-            }
-
-            // 发送配置消息
-            const configMsg = {
-                type: 'video_config',
-                resolution: resolution,
-                fps: fps,
-                bitrate: bitrate,
-                format: format
+            // 从界面获取当前配置值并发送
+            const currentParams = {
+                resolution: resolutionSelect ? resolutionSelect.value : '640x480',
+                fps: fpsSelect ? parseInt(fpsSelect.value) : 30,
+                bitrate: bitrateSelect ? parseInt(bitrateSelect.value) : 8000000,
+                format: formatSelect ? formatSelect.value : 'yuyv422'
             };
 
-            try {
-                dc.send(JSON.stringify(configMsg));
-                updateStatus(`Video config sent: ${resolution}, ${fps}fps, ${bitrate}bps, ${format}`);
-                console.log('Sent video config:', configMsg);
-            } catch (e) {
-                updateStatus('Failed to send video config: ' + e.message);
-                console.error('Error sending video config:', e);
-            }
+            // 同时更新配置管理器中的视频参数
+            ConfigManager.updateVideoParams(currentParams);
+
+            // 发送配置到设备
+            sendVideoParams(dc, currentParams);
         });
     }
+
+
+
 
     // Track status elements
     const videoTrackStatus = document.getElementById('videoTrackStatus');
