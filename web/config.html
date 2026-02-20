@@ -34,6 +34,106 @@
             gap: 10px;
         }
 
+        .config-sidebar {
+            width: 280px;
+            background: #2a2a3e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-right: 20px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #3a3a4e;
+        }
+
+        .sidebar-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #e0e0e0;
+        }
+
+        .config-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .config-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .config-item:hover {
+            background: #3a3a4e;
+        }
+
+        .config-item.active {
+            background: #6366f1;
+            border-color: #818cf8;
+        }
+
+        .config-item-name {
+            font-weight: 500;
+            color: #e0e0e0;
+            margin-bottom: 4px;
+        }
+
+        .config-item-desc {
+            font-size: 12px;
+            color: #9ca3af;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .config-item-actions {
+            display: none;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .config-item:hover .config-item-actions {
+            display: flex;
+        }
+
+        .sidebar-footer {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #3a3a4e;
+        }
+
+        .config-main {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .config-header-with-sidebar {
+            display: flex;
+            gap: 20px;
+        }
+
+        .config-main-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .config-name-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #e0e0e0;
+        }
+
         .config-section {
             background: #2a2a3e;
             border-radius: 12px;
@@ -121,6 +221,19 @@
 
         .btn-icon:hover {
             color: #ef4444;
+        }
+
+        .btn-icon-small {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 3px;
+            color: #b0b0b0;
+            transition: color 0.3s;
+        }
+
+        .btn-icon-small:hover {
+            color: #6366f1;
         }
 
         .btn {
@@ -220,23 +333,86 @@
             color: #ef4444;
             border: 1px solid #ef4444;
         }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #2a2a3e;
+            border-radius: 12px;
+            padding: 25px;
+            min-width: 400px;
+            max-width: 500px;
+        }
+
+        .modal-header {
+            font-size: 18px;
+            font-weight: bold;
+            color: #e0e0e0;
+            margin-bottom: 20px;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+    </style>
     </style>
 </head>
 <body>
     <div class="config-page">
-        <div class="config-header">
-            <div class="config-title">⚙️ WebRTC 配置</div>
-            <div class="config-actions">
-                <button class="btn btn-secondary" onclick="ConfigManager.resetConfig(); location.reload()">重置为默认</button>
-                <button class="btn btn-success" onclick="saveAndApply()">保存并应用</button>
-                <button class="btn btn-primary" onclick="applyOnly()">仅应用</button>
-                <button class="btn btn-danger" onclick="window.close()">关闭</button>
+        <div class="config-header-with-sidebar">
+            <!-- 左侧配置列表 -->
+            <div class="config-sidebar">
+                <div class="sidebar-header">
+                    <div class="sidebar-title">配置列表</div>
+                    <button class="btn-icon-small" onclick="showCreateConfigModal()" title="新建配置">
+                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="18" height="18">
+                            <line x1="12" x2="12" y1="5" y2="19"></line>
+                            <line x1="5" x2="19" y1="12" y2="12"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="config-list" id="configList"></div>
+                <div class="sidebar-footer">
+                    <button class="btn btn-add" style="padding: 8px;" onclick="showCreateConfigModal()">+ 新建配置</button>
+                </div>
             </div>
-        </div>
 
-        <div class="message" id="message"></div>
+            <!-- 右侧配置内容 -->
+            <div class="config-main">
+                <div class="config-main-header">
+                    <div class="config-name-display" id="currentConfigName">--</div>
+                    <div class="config-actions">
+                        <button class="btn btn-secondary" onclick="showRenameConfigModal()">重命名</button>
+                        <button class="btn btn-secondary" onclick="copyCurrentConfig()">复制</button>
+                        <button class="btn btn-secondary" onclick="deleteCurrentConfig()">删除</button>
+                        <button class="btn btn-secondary" onclick="ConfigManager.resetCurrentConfig(); loadConfigToForm()">重置为默认</button>
+                        <button class="btn btn-success" onclick="saveAndApply()">保存并应用</button>
+                        <button class="btn btn-primary" onclick="applyOnly()">仅应用</button>
+                        <button class="btn btn-danger" onclick="window.close()">关闭</button>
+                    </div>
+                </div>
 
-        <!-- 视频连接配置 -->
+                <div class="message" id="message"></div>
+
+                <!-- 视频连接配置 -->
         <div class="config-section">
             <div class="section-title">
                 <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -315,12 +491,100 @@
             </div>
         </div>
     </div>
+    </div>
+
+    <!-- 新建配置模态框 -->
+    <div class="modal-overlay" id="createConfigModal">
+        <div class="modal">
+            <div class="modal-header">新建配置</div>
+            <div class="form-group">
+                <label class="form-label">配置名称</label>
+                <input type="text" class="form-input" id="newConfigName" placeholder="请输入配置名称">
+            </div>
+            <div class="form-group">
+                <label class="form-label">配置描述（可选）</label>
+                <input type="text" class="form-input" id="newConfigDesc" placeholder="请输入配置描述">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="hideCreateConfigModal()">取消</button>
+                <button class="btn btn-primary" onclick="createConfig()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 重命名配置模态框 -->
+    <div class="modal-overlay" id="renameConfigModal">
+        <div class="modal">
+            <div class="modal-header">重命名配置</div>
+            <div class="form-group">
+                <label class="form-label">新名称</label>
+                <input type="text" class="form-input" id="renameConfigName" placeholder="请输入新名称">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="hideRenameConfigModal()">取消</button>
+                <button class="btn btn-primary" onclick="renameConfig()">确定</button>
+            </div>
+        </div>
+    </div>
 
     <script src="config.js"></script>
     <script>
+        // 渲染配置列表
+        function renderConfigList() {
+            const configList = document.getElementById('configList');
+            const configs = ConfigManager.configs;
+            const currentName = ConfigManager.getCurrentConfigName();
+
+            configList.innerHTML = '';
+
+            Object.keys(configs).forEach(name => {
+                const config = configs[name];
+                const isActive = name === currentName;
+
+                const item = document.createElement('div');
+                item.className = `config-item ${isActive ? 'active' : ''}`;
+                item.innerHTML = `
+                    <div class="config-item-name">${escapeHtml(name)}</div>
+                    <div class="config-item-desc">${escapeHtml(config.description || '无描述')}</div>
+                    <div class="config-item-actions">
+                        <button class="btn-icon-small" onclick="event.stopPropagation(); switchConfig('${escapeHtml(name)}')" title="切换到此配置">
+                            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14" height="14">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </button>
+                        <button class="btn-icon-small" onclick="event.stopPropagation(); copyConfig('${escapeHtml(name)}')" title="复制配置">
+                            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14" height="14">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                        </button>
+                    </div>
+                `;
+                item.addEventListener('click', () => switchConfig(name));
+                configList.appendChild(item);
+            });
+        }
+
+        // 切换配置
+        function switchConfig(name) {
+            ConfigManager.switchConfig(name);
+            loadConfigToForm();
+            renderConfigList();
+            showMessage(`已切换到配置: ${name}`, 'success');
+        }
+
+        // 显示当前配置名称
+        function updateCurrentConfigDisplay() {
+            const name = ConfigManager.getCurrentConfigName();
+            document.getElementById('currentConfigName').textContent = name;
+        }
+
         // 加载配置到表单
         function loadConfigToForm() {
-            const config = ConfigManager.currentConfig;
+            const config = ConfigManager.getCurrentConfig();
+            updateCurrentConfigDisplay();
+
+            if (!config) return;
 
             // 视频配置
             document.getElementById('videoSignalingUrl').value = config.video.signalingUrl || '';
@@ -350,6 +614,130 @@
                     addIceServerElement(dataIceContainer, server, 'data', index);
                 });
             }
+        }
+
+        // 显示新建配置模态框
+        function showCreateConfigModal() {
+            document.getElementById('newConfigName').value = '';
+            document.getElementById('newConfigDesc').value = '';
+            document.getElementById('createConfigModal').classList.add('active');
+        }
+
+        // 隐藏新建配置模态框
+        function hideCreateConfigModal() {
+            document.getElementById('createConfigModal').classList.remove('active');
+        }
+
+        // 创建配置
+        function createConfig() {
+            const name = document.getElementById('newConfigName').value.trim();
+            const desc = document.getElementById('newConfigDesc').value.trim();
+
+            if (!name) {
+                showMessage('请输入配置名称', 'error');
+                return;
+            }
+
+            try {
+                ConfigManager.createConfig(name, desc);
+                hideCreateConfigModal();
+                renderConfigList();
+                switchConfig(name);
+                showMessage('配置创建成功', 'success');
+            } catch (e) {
+                showMessage(e.message, 'error');
+            }
+        }
+
+        // 显示重命名配置模态框
+        function showRenameConfigModal() {
+            const currentName = ConfigManager.getCurrentConfigName();
+            document.getElementById('renameConfigName').value = currentName;
+            document.getElementById('renameConfigModal').classList.add('active');
+        }
+
+        // 隐藏重命名配置模态框
+        function hideRenameConfigModal() {
+            document.getElementById('renameConfigModal').classList.remove('active');
+        }
+
+        // 重命名配置
+        function renameConfig() {
+            const newName = document.getElementById('renameConfigName').value.trim();
+            const oldName = ConfigManager.getCurrentConfigName();
+
+            if (!newName) {
+                showMessage('请输入新名称', 'error');
+                return;
+            }
+
+            try {
+                ConfigManager.renameConfig(oldName, newName);
+                hideRenameConfigModal();
+                renderConfigList();
+                updateCurrentConfigDisplay();
+                showMessage('配置重命名成功', 'success');
+            } catch (e) {
+                showMessage(e.message, 'error');
+            }
+        }
+
+        // 复制当前配置
+        function copyCurrentConfig() {
+            const currentName = ConfigManager.getCurrentConfigName();
+            const newName = `${currentName}_copy`;
+
+            try {
+                ConfigManager.copyConfig(currentName, newName);
+                renderConfigList();
+                switchConfig(newName);
+                showMessage('配置复制成功', 'success');
+            } catch (e) {
+                showMessage(e.message, 'error');
+            }
+        }
+
+        // 复制指定配置
+        function copyConfig(name) {
+            const newName = `${name}_copy`;
+
+            try {
+                ConfigManager.copyConfig(name, newName);
+                renderConfigList();
+                switchConfig(newName);
+                showMessage('配置复制成功', 'success');
+            } catch (e) {
+                showMessage(e.message, 'error');
+            }
+        }
+
+        // 删除当前配置
+        function deleteCurrentConfig() {
+            const name = ConfigManager.getCurrentConfigName();
+
+            if (Object.keys(ConfigManager.configs).length === 1) {
+                showMessage('不能删除最后一个配置', 'error');
+                return;
+            }
+
+            if (confirm(`确定要删除配置 "${name}" 吗？`)) {
+                try {
+                    ConfigManager.deleteConfig(name);
+                    renderConfigList();
+                    loadConfigToForm();
+                    showMessage('配置删除成功', 'success');
+                } catch (e) {
+                    showMessage(e.message, 'error');
+                }
+            }
+        }
+
+        // HTML 转义
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         // 添加 ICE 服务器元素
@@ -445,6 +833,8 @@
         // 保存并应用配置
         function saveAndApply() {
             try {
+                const currentName = ConfigManager.getCurrentConfigName();
+
                 // 收集视频配置
                 const videoConfig = {
                     signalingUrl: document.getElementById('videoSignalingUrl').value.trim(),
@@ -528,7 +918,11 @@
         }
 
         // 页面加载时加载配置
-        window.addEventListener('load', loadConfigToForm);
+        window.addEventListener('load', function() {
+            ConfigManager.init();
+            renderConfigList();
+            loadConfigToForm();
+        });
     </script>
 </body>
 </html>
