@@ -61,7 +61,15 @@ const ConfigManager = {
         ch14: null,
         ch15: null,
         ch16: null
-        }
+    },
+    // 主题颜色配置
+    theme: {
+        primaryColor: '#FFA500',
+        primaryBright: '#FFD700',
+        primaryDim: '#CC8400',
+        secondaryColor: '#00CED1',
+        secondaryDim: '#008B8B'
+    }
     },
 
     // 配置集合（多套配置）
@@ -345,8 +353,136 @@ const ConfigManager = {
         Object.assign(config.channelBindings, bindings);
         config.updatedAt = new Date().toISOString();
         return this.saveConfigs();
+    },
+
+    // 获取主题颜色配置
+    getTheme() {
+        const config = this.getCurrentConfig();
+        return config && config.theme ? config.theme : this.defaultConfigTemplate.theme;
+    },
+
+    // 更新主题颜色配置
+    updateTheme(themeData) {
+        const config = this.getCurrentConfig();
+        if (!config) {
+            this.init();
+        }
+        if (!config.theme) {
+            config.theme = {};
+        }
+        Object.assign(config.theme, themeData);
+        config.updatedAt = new Date().toISOString();
+        this.saveConfigs();
+        this.applyTheme();
+        return config.theme;
+    },
+
+    // 应用主题到CSS变量
+    applyTheme() {
+        const theme = this.getTheme();
+        const root = document.documentElement;
+        root.style.setProperty('--titan-primary', theme.primaryColor);
+        root.style.setProperty('--titan-primary-bright', theme.primaryBright);
+        root.style.setProperty('--titan-primary-dim', theme.primaryDim);
+        root.style.setProperty('--titan-secondary', theme.secondaryColor);
+        root.style.setProperty('--titan-secondary-dim', theme.secondaryDim);
+        
+        // 更新发光效果
+        const primaryColor = this.hexToRgb(theme.primaryColor);
+        root.style.setProperty('--titan-glow', `0 0 10px rgba(${primaryColor.r}, ${primaryColor.g}, ${primaryColor.b}, 0.5)`);
+        root.style.setProperty('--titan-glow-strong', `0 0 20px rgba(${primaryColor.r}, ${primaryColor.g}, ${primaryColor.b}, 0.8)`);
+    },
+
+    // 将十六进制颜色转换为RGB
+    hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : { r: 255, g: 165, b: 0 };
+    },
+
+    // 根据主色调自动生成亮色和暗色
+    generateThemeColors(primaryColor) {
+        const rgb = this.hexToRgb(primaryColor);
+        const hsl = this.rgbToHsl(rgb.r, rgb.g, rgb.b);
+        
+        // 亮色：增加亮度
+        const brightHsl = { h: hsl.h, s: hsl.s, l: Math.min(hsl.l + 0.15, 1) };
+        const brightRgb = this.hslToRgb(brightHsl.h, brightHsl.s, brightHsl.l);
+        const primaryBright = this.rgbToHex(brightRgb.r, brightRgb.g, brightRgb.b);
+        
+        // 暗色：减少亮度
+        const dimHsl = { h: hsl.h, s: hsl.s, l: Math.max(hsl.l - 0.15, 0) };
+        const dimRgb = this.hslToRgb(dimHsl.h, dimHsl.s, dimHsl.l);
+        const primaryDim = this.rgbToHex(dimRgb.r, dimRgb.g, dimRgb.b);
+        
+        return {
+            primaryColor,
+            primaryBright,
+            primaryDim,
+            secondaryColor: '#00CED1',
+            secondaryDim: '#008B8B'
+        };
+    },
+
+    // RGB转HSL
+    rgbToHsl(r, g, b) {
+        r /= 255;
+        g /= 255;
+        b /= 255;
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        let h, s, l = (max + min) / 2;
+
+        if (max === min) {
+            h = s = 0;
+        } else {
+            const d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            switch (max) {
+                case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+                case g: h = ((b - r) / d + 2) / 6; break;
+                case b: h = ((r - g) / d + 4) / 6; break;
+            }
+        }
+        return { h, s, l };
+    },
+
+    // HSL转RGB
+    hslToRgb(h, s, l) {
+        let r, g, b;
+        if (s === 0) {
+            r = g = b = l;
+        } else {
+            const hue2rgb = (p, q, t) => {
+                if (t < 0) t += 1;
+                if (t > 1) t -= 1;
+                if (t < 1/6) return p + (q - p) * 6 * t;
+                if (t < 1/2) return q;
+                if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                return p;
+            };
+            const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+            const p = 2 * l - q;
+            r = hue2rgb(p, q, h + 1/3);
+            g = hue2rgb(p, q, h);
+            b = hue2rgb(p, q, h - 1/3);
+        }
+        return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
+    },
+
+    // RGB转十六进制
+    rgbToHex(r, g, b) {
+        return '#' + [r, g, b].map(x => {
+            const hex = x.toString(16);
+            return hex.length === 1 ? '0' + hex : hex;
+        }).join('');
     }
 };
 
 // 页面加载时初始化配置
 ConfigManager.init();
+// 应用主题颜色
+ConfigManager.applyTheme();

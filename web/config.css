@@ -364,3 +364,47 @@
     gap: 10px;
     margin-top: 20px;
 }
+
+.form-color-input {
+    width: 60px;
+    height: 40px;
+    border: 2px solid #3a3a4e;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.3s;
+}
+
+.form-color-input:hover {
+    border-color: #6366f1;
+}
+
+.theme-preset-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #1e1e2e;
+    border: 2px solid #3a3a4e;
+    border-radius: 8px;
+    color: #e0e0e0;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.theme-preset-btn:hover {
+    background: #3a3a4e;
+    border-color: #6366f1;
+    transform: translateY(-2px);
+}
+
+.theme-preset-btn:active {
+    transform: translateY(0);
+}
+
+.theme-preview {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid #3a3a4e;
+}

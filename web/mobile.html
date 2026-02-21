@@ -268,8 +268,27 @@
 			return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 		}
 
+		// 监听配置更新事件
+		function handleConfigUpdate(e) {
+			if (e.key === 'webrtc_config_updated') {
+				console.log('检测到配置更新，刷新页面');
+				window.location.reload();
+			}
+			if (e.key === 'webrtc_theme_updated') {
+				console.log('检测到主题更新，应用新主题');
+				ConfigManager.init();
+				ConfigManager.applyTheme();
+			}
+		}
+
 		// 页面加载完成后执行检查
 		document.addEventListener('DOMContentLoaded', function () {
+			ConfigManager.init();
+			ConfigManager.applyTheme();
+
+			// 监听 localStorage 变化
+			window.addEventListener('storage', handleConfigUpdate);
+
 			// 如果当前不是mobile.html页面且检测到是移动设备，则跳转到mobile.html
 			if (!window.location.pathname.includes('mobile.html') && isMobileDevice()) {
 				window.location.href = 'mobile.html';

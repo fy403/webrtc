@@ -168,6 +168,69 @@
                 <button class="btn-add" onclick="addDataIceServer()">+ 添加 ICE 服务器</button>
             </div>
         </div>
+
+        <!-- 主题颜色配置 -->
+        <div class="config-section">
+            <div class="section-title">
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                </svg>
+                主题颜色配置
+            </div>
+            <div class="config-grid">
+                <div class="form-group">
+                    <label class="form-label">主色调</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="color" class="form-color-input" id="themePrimaryColor" value="#FFA500" style="width: 60px; height: 40px; border: none; cursor: pointer;">
+                        <input type="text" class="form-input" id="themePrimaryColorText" value="#FFA500" placeholder="#FFA500" style="flex: 1;">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">次色调</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="color" class="form-color-input" id="themeSecondaryColor" value="#00CED1" style="width: 60px; height: 40px; border: none; cursor: pointer;">
+                        <input type="text" class="form-input" id="themeSecondaryColorText" value="#00CED1" placeholder="#00CED1" style="flex: 1;">
+                    </div>
+                </div>
+            </div>
+            <div class="config-grid" style="margin-top: 20px;">
+                <div class="form-group">
+                    <label class="form-label">预设主题</label>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="theme-preset-btn" data-color="#FFA500" onclick="applyPresetTheme('#FFA500', '#00CED1')" title="橙色主题">
+                            <span class="theme-preview" style="background: linear-gradient(135deg, #FFA500, #00CED1);"></span>
+                            橙色
+                        </button>
+                        <button class="theme-preset-btn" data-color="#FF6B6B" onclick="applyPresetTheme('#FF6B6B', '#4ECDC4')" title="红色主题">
+                            <span class="theme-preview" style="background: linear-gradient(135deg, #FF6B6B, #4ECDC4);"></span>
+                            红色
+                        </button>
+                        <button class="theme-preset-btn" data-color="#4ECDC4" onclick="applyPresetTheme('#4ECDC4', '#45B7D1')" title="青色主题">
+                            <span class="theme-preview" style="background: linear-gradient(135deg, #4ECDC4, #45B7D1);"></span>
+                            青色
+                        </button>
+                        <button class="theme-preset-btn" data-color="#A855F7" onclick="applyPresetTheme('#A855F7', '#EC4899')" title="紫色主题">
+                            <span class="theme-preview" style="background: linear-gradient(135deg, #A855F7, #EC4899);"></span>
+                            紫色
+                        </button>
+                        <button class="theme-preset-btn" data-color="#22C55E" onclick="applyPresetTheme('#22C55E', '#3B82F6')" title="绿色主题">
+                            <span class="theme-preview" style="background: linear-gradient(135deg, #22C55E, #3B82F6);"></span>
+                            绿色
+                        </button>
+                        <button class="theme-preset-btn" data-color="#F59E0B" onclick="applyPresetTheme('#F59E0B', '#EF4444')" title="金色主题">
+                            <span class="theme-preview" style="background: linear-gradient(135deg, #F59E0B, #EF4444);"></span>
+                            金色
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top: 20px;">
+                <button class="btn btn-success" onclick="saveTheme()">保存主题</button>
+                <button class="btn btn-secondary" onclick="previewTheme()">预览主题</button>
+                <button class="btn btn-secondary" onclick="resetTheme()">重置主题</button>
+            </div>
+        </div>
     </div>
     </div>
 
@@ -299,7 +362,101 @@
                     addIceServerElement(dataIceContainer, server, 'data', index);
                 });
             }
+
+            // 主题配置
+            const theme = config.theme || {};
+            document.getElementById('themePrimaryColor').value = theme.primaryColor || '#FFA500';
+            document.getElementById('themePrimaryColorText').value = theme.primaryColor || '#FFA500';
+            document.getElementById('themeSecondaryColor').value = theme.secondaryColor || '#00CED1';
+            document.getElementById('themeSecondaryColorText').value = theme.secondaryColor || '#00CED1';
         }
+
+        // 应用预设主题
+        function applyPresetTheme(primaryColor, secondaryColor) {
+            document.getElementById('themePrimaryColor').value = primaryColor;
+            document.getElementById('themePrimaryColorText').value = primaryColor;
+            document.getElementById('themeSecondaryColor').value = secondaryColor;
+            document.getElementById('themeSecondaryColorText').value = secondaryColor;
+            previewTheme();
+        }
+
+        // 预览主题
+        function previewTheme() {
+            const primaryColor = document.getElementById('themePrimaryColor').value;
+            const secondaryColor = document.getElementById('themeSecondaryColor').value;
+            
+            const themeColors = ConfigManager.generateThemeColors(primaryColor);
+            themeColors.secondaryColor = secondaryColor;
+            
+            const rgb = ConfigManager.hexToRgb(secondaryColor);
+            const hsl = ConfigManager.rgbToHsl(rgb.r, rgb.g, rgb.b);
+            const dimHsl = { h: hsl.h, s: hsl.s, l: Math.max(hsl.l - 0.15, 0) };
+            const dimRgb = ConfigManager.hslToRgb(dimHsl.h, dimHsl.s, dimHsl.l);
+            themeColors.secondaryDim = ConfigManager.rgbToHex(dimRgb.r, dimRgb.g, dimRgb.b);
+            
+            const root = document.documentElement;
+            root.style.setProperty('--titan-primary', themeColors.primaryColor);
+            root.style.setProperty('--titan-primary-bright', themeColors.primaryBright);
+            root.style.setProperty('--titan-primary-dim', themeColors.primaryDim);
+            root.style.setProperty('--titan-secondary', themeColors.secondaryColor);
+            root.style.setProperty('--titan-secondary-dim', themeColors.secondaryDim);
+            
+            const primaryRgb = ConfigManager.hexToRgb(themeColors.primaryColor);
+            root.style.setProperty('--titan-glow', `0 0 10px rgba(${primaryRgb.r}, ${primaryRgb.g}, ${primaryRgb.b}, 0.5)`);
+            root.style.setProperty('--titan-glow-strong', `0 0 20px rgba(${primaryRgb.r}, ${primaryRgb.g}, ${primaryRgb.b}, 0.8)`);
+            
+            showMessage('主题预览已应用', 'success');
+        }
+
+        // 保存主题
+        function saveTheme() {
+            const primaryColor = document.getElementById('themePrimaryColor').value;
+            const secondaryColor = document.getElementById('themeSecondaryColor').value;
+            
+            const themeColors = ConfigManager.generateThemeColors(primaryColor);
+            themeColors.secondaryColor = secondaryColor;
+            
+            const rgb = ConfigManager.hexToRgb(secondaryColor);
+            const hsl = ConfigManager.rgbToHsl(rgb.r, rgb.g, rgb.b);
+            const dimHsl = { h: hsl.h, s: hsl.s, l: Math.max(hsl.l - 0.15, 0) };
+            const dimRgb = ConfigManager.hslToRgb(dimHsl.h, dimHsl.s, dimHsl.l);
+            themeColors.secondaryDim = ConfigManager.rgbToHex(dimRgb.r, dimRgb.g, dimRgb.b);
+            
+            ConfigManager.updateTheme(themeColors);
+            showMessage('主题已保存', 'success');
+            
+            localStorage.setItem('webrtc_theme_updated', Date.now().toString());
+        }
+
+        // 重置主题
+        function resetTheme() {
+            const defaultTheme = ConfigManager.defaultConfigTemplate.theme;
+            document.getElementById('themePrimaryColor').value = defaultTheme.primaryColor;
+            document.getElementById('themePrimaryColorText').value = defaultTheme.primaryColor;
+            document.getElementById('themeSecondaryColor').value = defaultTheme.secondaryColor;
+            document.getElementById('themeSecondaryColorText').value = defaultTheme.secondaryColor;
+            
+            ConfigManager.updateTheme(defaultTheme);
+            showMessage('主题已重置', 'success');
+        }
+
+        // 颜色输入同步
+        document.getElementById('themePrimaryColor').addEventListener('input', function() {
+            document.getElementById('themePrimaryColorText').value = this.value;
+        });
+        document.getElementById('themePrimaryColorText').addEventListener('input', function() {
+            if (/^#[0-9A-Fa-f]{6}$/.test(this.value)) {
+                document.getElementById('themePrimaryColor').value = this.value;
+            }
+        });
+        document.getElementById('themeSecondaryColor').addEventListener('input', function() {
+            document.getElementById('themeSecondaryColorText').value = this.value;
+        });
+        document.getElementById('themeSecondaryColorText').addEventListener('input', function() {
+            if (/^#[0-9A-Fa-f]{6}$/.test(this.value)) {
+                document.getElementById('themeSecondaryColor').value = this.value;
+            }
+        });
 
         // 显示新建配置模态框
         function showCreateConfigModal() {
@@ -543,14 +700,28 @@
                     iceServers: getIceServersFromForm('data')
                 };
 
+                // 收集主题配置
+                const primaryColor = document.getElementById('themePrimaryColor').value;
+                const secondaryColor = document.getElementById('themeSecondaryColor').value;
+                const themeColors = ConfigManager.generateThemeColors(primaryColor);
+                themeColors.secondaryColor = secondaryColor;
+                
+                const rgb = ConfigManager.hexToRgb(secondaryColor);
+                const hsl = ConfigManager.rgbToHsl(rgb.r, rgb.g, rgb.b);
+                const dimHsl = { h: hsl.h, s: hsl.s, l: Math.max(hsl.l - 0.15, 0) };
+                const dimRgb = ConfigManager.hslToRgb(dimHsl.h, dimHsl.s, dimHsl.l);
+                themeColors.secondaryDim = ConfigManager.rgbToHex(dimRgb.r, dimRgb.g, dimRgb.b);
+
                 // 更新配置
                 ConfigManager.updateVideoConfig(videoConfig);
                 ConfigManager.updateDataConfig(dataConfig);
+                ConfigManager.updateTheme(themeColors);
 
                 showMessage('配置已保存', 'success');
 
                 // 通知主页面配置已更新
                 localStorage.setItem('webrtc_config_updated', Date.now().toString());
+                localStorage.setItem('webrtc_theme_updated', Date.now().toString());
 
                 setTimeout(() => {
                     window.close();
