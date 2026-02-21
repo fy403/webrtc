@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试模态框</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1e1e2e;
+            color: #e0e0e0;
+        }
+        button {
+            padding: 10px 20px;
+            background: #6366f1;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal {
+            background: #2a2a3e;
+            border-radius: 12px;
+            padding: 25px;
+            min-width: 400px;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            z-index: 1001;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            border: 2px solid #6366f1;
+            display: flex;
+            flex-direction: column;
+            color: #e0e0e0 !important;
+        }
+        .modal-header {
+            font-size: 18px;
+            font-weight: bold;
+            color: #e0e0e0 !important;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #b0b0b0;
+            font-size: 14px;
+        }
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            background: #1e1e2e;
+            border: 1px solid #3a3a4e;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>模态框测试</h1>
+    <button onclick="showModal()">显示模态框</button>
+    <p>点击按钮测试模态框是否正常显示</p>
+
+    <div class="modal-overlay" id="testModal">
+        <div class="modal">
+            <div class="modal-header">测试模态框</div>
+            <div class="form-group">
+                <label class="form-label">输入框 1</label>
+                <input type="text" class="form-input" placeholder="请输入内容">
+            </div>
+            <div class="form-group">
+                <label class="form-label">输入框 2</label>
+                <input type="text" class="form-input" placeholder="请输入内容">
+            </div>
+            <div class="modal-footer">
+                <button onclick="hideModal()">取消</button>
+                <button onclick="hideModal()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showModal() {
+            console.log('showModal called');
+            const modal = document.getElementById('testModal');
+            console.log('modal:', modal);
+            console.log('modal classes before:', modal.className);
+            modal.classList.add('active');
+            console.log('modal classes after:', modal.className);
+        }
+
+        function hideModal() {
+            const modal = document.getElementById('testModal');
+            modal.classList.remove('active');
+        }
+    </script>
+</body>
+</html>

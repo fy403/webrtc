@@ -349,12 +349,21 @@
     padding: 25px;
     min-width: 400px;
     max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    z-index: 1001;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    border: 2px solid #6366f1;
+    display: flex;
+    flex-direction: column;
+    color: #e0e0e0 !important;
 }
 
 .modal-header {
     font-size: 18px;
     font-weight: bold;
-    color: #e0e0e0;
+    color: #e0e0e0 !important;
     margin-bottom: 20px;
 }
 

@@ -45,7 +45,7 @@
                 <div class="message" id="message"></div>
 
                 <!-- 视频连接配置 -->
-        <div class="config-section">
+                <div class="config-section">
             <div class="section-title">
                 <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <rect height="16" rx="2" width="20" x="2" y="4" />
@@ -230,8 +230,9 @@
                 <button class="btn btn-secondary" onclick="previewTheme()">预览主题</button>
                 <button class="btn btn-secondary" onclick="resetTheme()">重置主题</button>
             </div>
+                </div>
+            </div>
         </div>
-    </div>
     </div>
 
     <!-- 新建配置模态框 -->
@@ -460,9 +461,13 @@
 
         // 显示新建配置模态框
         function showCreateConfigModal() {
+            console.log('showCreateConfigModal called');
             document.getElementById('newConfigName').value = '';
             document.getElementById('newConfigDesc').value = '';
-            document.getElementById('createConfigModal').classList.add('active');
+            const modal = document.getElementById('createConfigModal');
+            console.log('modal element:', modal);
+            modal.classList.add('active');
+            console.log('modal classes after adding active:', modal.className);
         }
 
         // 隐藏新建配置模态框
