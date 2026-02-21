@@ -78,7 +78,9 @@ window.addEventListener('load', () => {
 
         rxSpeed: document.getElementById('rxSpeed'),
         txSpeed: document.getElementById('txSpeed'),
-        cpuUsage: document.getElementById('cpuUsage'),
+        txSpeedUnit: document.getElementById('txSpeedUnit'),
+        rxSpeedUnit: document.getElementById('rxSpeedUnit'),
+        cpuValue: document.getElementById('cpuValue'),
         lastUpdate: document.getElementById('lastUpdate'),
         speedValue: document.getElementById('speedValue'),
         throttleLimitIndicator: document.getElementById('throttleLimitIndicator'),
@@ -297,13 +299,41 @@ window.addEventListener('load', () => {
         }
     }
 
+    function formatSpeed(speed) {
+        // speed 已经是 Kbps 单位
+        if (speed >= 1000000) {
+            const value = speed / 1000000;
+            return { value: value >= 100 ? Math.round(value).toString() : value.toFixed(1), unit: 'Gbps' };
+        } else if (speed >= 1000) {
+            const value = speed / 1000;
+            return { value: value >= 100 ? Math.round(value).toString() : value.toFixed(1), unit: 'Mbps' };
+        } else {
+            const value = speed;
+            return { value: value >= 100 ? Math.round(value).toString() : value.toFixed(1), unit: 'Kbps' };
+        }
+    }
+
     function dataUpdateSystemStatusDisplay() {
         const {rxSpeed, txSpeed, cpuUsage, ttyService, rtspService, signalStrength, sim_status, lastUpdate} =
             dataSystemStatus;
 
-        if (dataElements.rxSpeed) dataElements.rxSpeed.textContent = `${rxSpeed.toFixed(2)} Kbit/s`;
-        if (dataElements.txSpeed) dataElements.txSpeed.textContent = `${txSpeed.toFixed(2)} Kbit/s`;
-        if (dataElements.cpuUsage) dataElements.cpuUsage.textContent = `${cpuUsage.toFixed(2)}%`;
+        if (dataElements.rxSpeed && dataElements.rxSpeedUnit) {
+            const rxSpeedFormatted = formatSpeed(rxSpeed);
+            dataElements.rxSpeed.textContent = rxSpeedFormatted.value;
+            dataElements.rxSpeedUnit.textContent = rxSpeedFormatted.unit;
+        }
+        if (dataElements.txSpeed && dataElements.txSpeedUnit) {
+            const txSpeedFormatted = formatSpeed(txSpeed);
+            dataElements.txSpeed.textContent = txSpeedFormatted.value;
+            dataElements.txSpeedUnit.textContent = txSpeedFormatted.unit;
+        }
+        if (dataElements.cpuValue) {
+            dataElements.cpuValue.textContent = cpuUsage.toFixed(1);
+            const cpuDisplay = dataElements.cpuValue.closest('.cpu-display');
+            if (cpuDisplay) {
+                cpuDisplay.style.setProperty('--cpu-level', `${cpuUsage}%`);
+            }
+        }
         if (dataElements.speedValue) dataElements.speedValue.textContent = `${uiSpeed}`;
         if (dataElements.lastUpdate) dataElements.lastUpdate.textContent = lastUpdate ? lastUpdate.toLocaleTimeString() : '--';
     }

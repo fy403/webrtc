@@ -58,18 +58,6 @@
 					<!-- 左侧状态面板 -->
 					<div class="status-overlay left-overlay">
 						<div class="status-group">
-							<div class="status-item-inline">
-								<div class="hint">上行网速</div>
-								<div class="mono" id="txSpeed">0.00 Kbit/s</div>
-							</div>
-							<div class="status-item-inline">
-								<div class="hint">下行网速</div>
-								<div class="mono" id="rxSpeed">0.00 Kbit/s</div>
-							</div>
-							<div class="status-item-inline">
-								<div class="hint">CPU使用率</div>
-								<div class="mono" id="cpuUsage">0.00%</div>
-							</div>
 						</div>
 					</div>
 
@@ -99,8 +87,32 @@
 						</div>
 					</div>
 
+					<!-- CPU显示面板 -->
+					<div class="status-overlay cpu-overlay">
+						<div class="speed-display">
+							<div class="speed-value" id="cpuValue">0</div>
+							<div class="speed-unit">%</div>
+						</div>
+					</div>
+
 					<!-- 底部状态面板 -->
 					<div class="status-overlay bottom-overlay">
+						<div class="network-speed-container">
+							<div class="network-speed-item tx-speed">
+								<svg class="network-speed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M12 19V5M5 12l7-7 7 7"/>
+								</svg>
+								<div class="network-speed-value" id="txSpeed">0</div>
+								<div class="network-speed-unit" id="txSpeedUnit">Kbps</div>
+							</div>
+							<div class="network-speed-item rx-speed">
+								<svg class="network-speed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M12 5v14M5 12l7 7 7-7"/>
+								</svg>
+								<div class="network-speed-value" id="rxSpeed">0</div>
+								<div class="network-speed-unit" id="rxSpeedUnit">Kbps</div>
+							</div>
+						</div>
 						<div class="status-indicators-container">
 							<!-- 控制器状态指示器 -->
 							<div class="controller-status">

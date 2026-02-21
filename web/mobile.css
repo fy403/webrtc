@@ -82,7 +82,7 @@
 		.left-overlay {
 			top: 15px;
 			left: 5px;
-			width: 180px;
+			width: 60px;
 		}
 
 		.right-overlay {
@@ -116,6 +116,20 @@
 			border: 2px solid rgba(255, 255, 255, 0.1);
 		}
 
+		.cpu-overlay {
+			bottom: 15px;
+			left: 15px;
+			width: 60px;
+			height: 60px;
+			border-radius: 50%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: rgba(18, 24, 51, 0.5);
+			backdrop-filter: blur(4px);
+			border: 2px solid rgba(255, 255, 255, 0.1);
+		}
+
 		.speed-display {
 			text-align: center;
 		}
@@ -129,6 +143,78 @@
 		.speed-unit {
 			font-size: 10px;
 			color: #93a4d6;
+		}
+
+		.cpu-display {
+			width: 60px;
+			height: 60px;
+			border-radius: 50%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			position: relative;
+		}
+
+		.cpu-display::before {
+			content: '';
+			position: absolute;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			height: var(--cpu-level, 0%);
+			background: linear-gradient(to top, rgba(16, 185, 129, 0.3), rgba(16, 185, 129, 0.6));
+			border-radius: 50% 50% 0 0;
+			transition: height 0.3s ease;
+		}
+
+		.cpu-display .speed-value {
+			position: relative;
+			z-index: 1;
+			font-weight: normal;
+		}
+
+		/* Network speed container for mobile */
+		.network-speed-container {
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+		}
+
+		.network-speed-item {
+			display: flex;
+			align-items: center;
+			gap: 1px;
+		}
+
+		.network-speed-icon {
+			width: 12px;
+			height: 12px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			border-radius: 2px;
+		}
+
+		.tx-speed .network-speed-icon {
+			stroke: #10b981;
+		}
+
+		.rx-speed .network-speed-icon {
+			stroke: #3b82f6;
+		}
+
+		.network-speed-value {
+			font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+			font-size: 9px;
+			color: #c7d2fe;
+			min-width: 18px;
+			text-align: right;
+		}
+
+		.network-speed-unit {
+			font-size: 7px;
+			color: #93a4d6;
+			min-width: 18px;
 		}
 
 		.status-group {
