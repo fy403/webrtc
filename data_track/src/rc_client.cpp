@@ -144,9 +144,9 @@ void RCClient::sendSystemStatus() {
 
     system_monitor_.getNetworkStats(rx_speed, tx_speed);
     system_monitor_.getCPUUsage(cpu_usage);
+    // bool tty_service = system_monitor_.checkServiceStatus("data_track_rtc.service");
+    // bool rtsp_service = system_monitor_.checkServiceStatus("av_track_rtc.service");
 
-    bool tty_service = system_monitor_.checkServiceStatus("data_track_rtc.service");
-    bool rtsp_service = system_monitor_.checkServiceStatus("av_track_rtc.service");
 
     std::string signal, simStatus, network, moduleInfo;
     system_monitor_.getGsmInfo(signal, simStatus, network, moduleInfo);
@@ -157,8 +157,8 @@ void RCClient::sendSystemStatus() {
     // System resources
     statusData["cpu_usage"] = std::to_string(static_cast<uint16_t>(cpu_usage * 100));
     // Service status
-    statusData["tty_service"] = tty_service ? "1" : "0";
-    statusData["rtsp_service"] = rtsp_service ? "1" : "0";
+    // statusData["tty_service"] = tty_service ? "1" : "0";
+    // statusData["rtsp_service"] = rtsp_service ? "1" : "0";
     // 4G
     statusData["4g_signal"] = signal;
     statusData["sim_status"] = simStatus;

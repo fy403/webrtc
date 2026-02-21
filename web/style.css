@@ -1242,3 +1242,290 @@ body.mobile-layout {
     }
 }
 
+/* 按键绑定模态框样式 */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.modal-content {
+    background: #121833;
+    border: 1px solid #243056;
+    border-radius: 12px;
+    min-width: 450px;
+    max-width: 500px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: #0f1630;
+    border-bottom: 1px solid #243056;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #e6eaf2;
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    color: #93a4d6;
+    font-size: 24px;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+    background: #1a2142;
+    color: #c7d2fe;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 20px;
+    background: #0f1630;
+    border-top: 1px solid #243056;
+}
+
+/* 绑定表单样式 */
+.binding-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #93a4d6;
+}
+
+.channel-number {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e6eaf2;
+}
+
+.binding-type-select,
+.binding-value-input {
+    background: #0a0f24;
+    border: 1px solid #2a375f;
+    color: #c7d2fe;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+.binding-type-select:focus,
+.binding-value-input:focus {
+    outline: none;
+    border-color: #4760b5;
+    box-shadow: 0 0 0 2px rgba(71, 96, 181, 0.2);
+}
+
+/* 按键捕获按钮 */
+.key-capture-btn {
+    background: #0f1630;
+    border: 1px solid #2a375f;
+    color: #bed0ff;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 13px;
+}
+
+.key-capture-btn:hover {
+    background: #152047;
+    border-color: #475f9e;
+}
+
+.key-capture-btn:active {
+    background: #1c2750;
+}
+
+.captured-key {
+    font-size: 12px;
+    color: #c7d2fe;
+    font-weight: 600;
+    padding: 4px 8px;
+    background: #0a0f24;
+    border-radius: 4px;
+    border: 1px solid #2a375f;
+    min-height: 24px;
+    display: inline-flex;
+    align-items: center;
+}
+
+.captured-key.capturing {
+    color: #fbbf24;
+    border-color: #f59e0b;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* 连续范围输入 */
+.range-input-group {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.range-input-group > div {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.range-input-group label {
+    font-size: 11px;
+    color: #93a4d6;
+}
+
+.range-input-group input {
+    background: #0a0f24;
+    border: 1px solid #2a375f;
+    color: #c7d2fe;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 12px;
+}
+
+/* 按钮样式 */
+.btn-cancel {
+    background: #0f1630;
+    border-color: #2a375f;
+    color: #bed0ff;
+}
+
+.btn-cancel:hover {
+    background: #152047;
+}
+
+.btn-danger {
+    background: #2a1a1a;
+    border-color: #ef4444;
+    color: #fca5a5;
+}
+
+.btn-danger:hover {
+    background: #382222;
+    border-color: #f87171;
+}
+
+.btn-primary {
+    background: #1c2750;
+    border-color: #4760b5;
+    color: #bed0ff;
+}
+
+.btn-primary:hover {
+    background: #253065;
+    border-color: #5d7bc4;
+}
+
+/* 响应式设计 */
+@media (max-width: 600px) {
+    .modal-content {
+        min-width: 90%;
+        max-width: 90%;
+        margin: 20px;
+    }
+
+    .modal-header,
+    .modal-body,
+    .modal-footer {
+        padding: 16px;
+    }
+
+    .range-input-group {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+}
+
+/* 通道点击提示 */
+.channel-bar-wrapper:hover {
+    background: #121833;
+    border: 1px solid #31406d;
+    cursor: pointer;
+}
+
+.channel-bar-wrapper:hover::after {
+    content: '点击绑定';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    z-index: 10;
+}
+
+/* 只读通道样式 */
+.channel-bar-wrapper[data-channel="1"],
+.channel-bar-wrapper[data-channel="2"] {
+    cursor: default;
+    opacity: 0.7;
+}
+
+.channel-bar-wrapper[data-channel="1"]:hover,
+.channel-bar-wrapper[data-channel="2"]:hover {
+    background: #0a0f24;
+    border: 1px solid #243056;
+}
+
+.channel-bar-wrapper[data-channel="1"]:hover::after,
+.channel-bar-wrapper[data-channel="2"]:hover::after {
+    content: '只读';
+    background: rgba(0, 0, 0, 0.6);
+}
+
+
+

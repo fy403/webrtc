@@ -16,6 +16,7 @@
     <script src="virtual_joystick_controller.js"></script>
     <script src="xbox_controller.js"></script>
     <script src="controller_manager.js"></script>
+    <script src="channel_key_binder.js"></script>
     <script src="data_rtc.js"></script>
 </head>
 
@@ -392,6 +393,71 @@
     </div>
     </div>
 
+    <!-- 通道按键绑定设置模态框 -->
+    <div class="modal" id="channelBindingModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>通道按键绑定</h3>
+                <button class="modal-close" id="closeBindingModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="binding-form">
+                    <div class="form-group">
+                        <label>通道:</label>
+                        <span class="channel-number" id="bindingChannelNum">CH1</span>
+                    </div>
+                    <div class="form-group">
+                        <label>绑定类型:</label>
+                        <select class="binding-type-select" id="bindingTypeSelect">
+                            <option value="single">一档 (按下置1, 不按为0)</option>
+                            <option value="continuous">连续范围</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="singleKeyGroup">
+                        <label>按键:</label>
+                        <button class="key-capture-btn" id="captureSingleKey">点击设置</button>
+                        <span class="captured-key" id="singleKeyDisplay">未设置</span>
+                    </div>
+                    <div class="form-group" id="negativeKeyGroup" style="display: none;">
+                        <label>负值按键:</label>
+                        <button class="key-capture-btn" id="captureNegativeKey">点击设置</button>
+                        <span class="captured-key" id="negativeKeyDisplay">未设置</span>
+                    </div>
+                    <div class="form-group" id="positiveKeyGroup" style="display: none;">
+                        <label>正值按键:</label>
+                        <button class="key-capture-btn" id="capturePositiveKey">点击设置</button>
+                        <span class="captured-key" id="positiveKeyDisplay">未设置</span>
+                    </div>
+                    <div class="form-group" id="valueGroup">
+                        <label>数值:</label>
+                        <input type="number" class="binding-value-input" id="bindingValue" value="1.0" step="0.1" min="0.1" max="1.0">
+                    </div>
+                    <div class="form-group" id="continuousRangeGroup" style="display: none;">
+                        <div class="range-input-group">
+                            <div>
+                                <label>最小值:</label>
+                                <input type="number" id="bindingMinValue" value="-1.0" step="0.1" min="-1.0" max="0">
+                            </div>
+                            <div>
+                                <label>最大值:</label>
+                                <input type="number" id="bindingMaxValue" value="1.0" step="0.1" min="0" max="1.0">
+                            </div>
+                            <div>
+                                <label>起始点:</label>
+                                <input type="number" id="bindingStartValue" value="0" step="0.1" min="-1.0" max="1.0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-cancel" id="cancelBinding">取消</button>
+                <button class="btn btn-danger" id="clearBinding">清除绑定</button>
+                <button class="btn btn-primary" id="saveBinding">保存</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // 设备检测并重定向逻辑
         function isMobileDevice() {
@@ -423,13 +489,275 @@
                     window.open('config.html', 'config', 'width=900,height=700,scrollbars=yes,resizable=yes');
                 });
             }
+
+            // 初始化通道点击事件
+            initChannelBindingUI();
         });
+
+        // 初始化通道绑定UI
+        function initChannelBindingUI() {
+            const channelWrappers = document.querySelectorAll('.channel-bar-wrapper');
+            const modal = document.getElementById('channelBindingModal');
+            let currentChannelNum = null;
+
+            // 为每个通道添加点击事件
+            channelWrappers.forEach(wrapper => {
+                const channelNum = parseInt(wrapper.getAttribute('data-channel'));
+                wrapper.style.cursor = 'pointer';
+                wrapper.addEventListener('click', function() {
+                    openBindingModal(channelNum);
+                });
+            });
+
+            // 打开绑定模态框
+            function openBindingModal(channelNum) {
+                currentChannelNum = channelNum;
+                document.getElementById('bindingChannelNum').textContent = `CH${channelNum}`;
+
+                // 加载现有绑定
+                const binding = window.channelKeyBinder?.getBinding(channelNum);
+                loadBindingToForm(binding);
+
+                modal.style.display = 'flex';
+            }
+
+            // 加载绑定到表单
+            function loadBindingToForm(binding) {
+                const typeSelect = document.getElementById('bindingTypeSelect');
+                const singleKeyDisplay = document.getElementById('singleKeyDisplay');
+                const negativeKeyDisplay = document.getElementById('negativeKeyDisplay');
+                const positiveKeyDisplay = document.getElementById('positiveKeyDisplay');
+                const valueInput = document.getElementById('bindingValue');
+                const minValueInput = document.getElementById('bindingMinValue');
+                const maxValueInput = document.getElementById('bindingMaxValue');
+                const startValueInput = document.getElementById('bindingStartValue');
+
+                if (binding) {
+                    typeSelect.value = binding.type;
+                    updateFormByType(binding.type);
+
+                    if (binding.key) {
+                        singleKeyDisplay.textContent = formatKeyName(binding.key);
+                    } else {
+                        singleKeyDisplay.textContent = '未设置';
+                    }
+
+                    if (binding.negativeKey) {
+                        negativeKeyDisplay.textContent = formatKeyName(binding.negativeKey);
+                    } else {
+                        negativeKeyDisplay.textContent = '未设置';
+                    }
+
+                    if (binding.positiveKey) {
+                        positiveKeyDisplay.textContent = formatKeyName(binding.positiveKey);
+                    } else {
+                        positiveKeyDisplay.textContent = '未设置';
+                    }
+
+                    valueInput.value = binding.value || 1.0;
+                    minValueInput.value = binding.minValue !== undefined ? binding.minValue : -1.0;
+                    maxValueInput.value = binding.maxValue !== undefined ? binding.maxValue : 1.0;
+                    startValueInput.value = binding.startValue !== undefined ? binding.startValue : 0;
+                } else {
+                    typeSelect.value = 'single';
+                    updateFormByType('single');
+                    singleKeyDisplay.textContent = '未设置';
+                    negativeKeyDisplay.textContent = '未设置';
+                    positiveKeyDisplay.textContent = '未设置';
+                    valueInput.value = 1.0;
+                    minValueInput.value = -1.0;
+                    maxValueInput.value = 1.0;
+                    startValueInput.value = 0;
+                }
+            }
+
+            // 根据类型更新表单显示
+            function updateFormByType(type) {
+                const singleKeyGroup = document.getElementById('singleKeyGroup');
+                const negativeKeyGroup = document.getElementById('negativeKeyGroup');
+                const positiveKeyGroup = document.getElementById('positiveKeyGroup');
+                const valueGroup = document.getElementById('valueGroup');
+                const continuousRangeGroup = document.getElementById('continuousRangeGroup');
+
+                if (type === 'single') {
+                    singleKeyGroup.style.display = 'flex';
+                    negativeKeyGroup.style.display = 'none';
+                    positiveKeyGroup.style.display = 'none';
+                    valueGroup.style.display = 'flex';
+                    continuousRangeGroup.style.display = 'none';
+                } else if (type === 'continuous') {
+                    singleKeyGroup.style.display = 'none';
+                    negativeKeyGroup.style.display = 'flex';
+                    positiveKeyGroup.style.display = 'flex';
+                    valueGroup.style.display = 'none';
+                    continuousRangeGroup.style.display = 'flex';
+                }
+            }
+
+            // 格式化按键名
+            function formatKeyName(code) {
+                if (!code) return '未设置';
+                return code.replace('Key', '').replace('Digit', '');
+            }
+
+            // 关闭模态框
+            document.getElementById('closeBindingModal').addEventListener('click', function() {
+                modal.style.display = 'none';
+                stopKeyCapture();
+            });
+
+            document.getElementById('cancelBinding').addEventListener('click', function() {
+                modal.style.display = 'none';
+                stopKeyCapture();
+            });
+
+            // 清除绑定
+            document.getElementById('clearBinding').addEventListener('click', function() {
+                // 通道1和通道2为只读，禁止清除
+                if (currentChannelNum === 1 || currentChannelNum === 2) {
+                    alert('通道1和通道2为系统默认绑定，禁止修改');
+                    return;
+                }
+                if (currentChannelNum && window.channelKeyBinder) {
+                    window.channelKeyBinder.clearBinding(currentChannelNum);
+                    console.log(`已清除 CH${currentChannelNum} 的按键绑定`);
+                }
+                modal.style.display = 'none';
+                stopKeyCapture();
+            });
+
+            // 保存绑定
+            document.getElementById('saveBinding').addEventListener('click', function() {
+                // 通道1和通道2为只读，禁止修改
+                if (currentChannelNum === 1 || currentChannelNum === 2) {
+                    alert('通道1和通道2为系统默认绑定，禁止修改');
+                    return;
+                }
+                if (!currentChannelNum || !window.channelKeyBinder) return;
+
+                const type = document.getElementById('bindingTypeSelect').value;
+                const singleKey = parseKeyName(document.getElementById('singleKeyDisplay').textContent);
+                const negativeKey = parseKeyName(document.getElementById('negativeKeyDisplay').textContent);
+                const positiveKey = parseKeyName(document.getElementById('positiveKeyDisplay').textContent);
+                const value = parseFloat(document.getElementById('bindingValue').value);
+                const minValue = parseFloat(document.getElementById('bindingMinValue').value);
+                const maxValue = parseFloat(document.getElementById('bindingMaxValue').value);
+                const startValue = parseFloat(document.getElementById('bindingStartValue').value);
+
+                if (type === 'single') {
+                    if (!singleKey) {
+                        alert('请设置按键');
+                        return;
+                    }
+                    const success = window.channelKeyBinder.setBinding(currentChannelNum, {
+                        type: 'single',
+                        key: singleKey,
+                        value: value
+                    });
+                    if (!success) return; // 冲突检测失败，不关闭模态框
+                } else if (type === 'continuous') {
+                    if (!negativeKey || !positiveKey) {
+                        alert('请设置负值和正值按键');
+                        return;
+                    }
+                    const success = window.channelKeyBinder.setBinding(currentChannelNum, {
+                        type: 'continuous',
+                        negativeKey: negativeKey,
+                        positiveKey: positiveKey,
+                        minValue: minValue,
+                        maxValue: maxValue,
+                        startValue: startValue
+                    });
+                    if (!success) return; // 冲突检测失败，不关闭模态框
+                }
+
+                console.log(`已保存 CH${currentChannelNum} 的按键绑定`);
+                modal.style.display = 'none';
+                stopKeyCapture();
+            });
+
+            // 解析按键名
+            function parseKeyName(text) {
+                if (!text || text === '未设置' || text === '按下任意键...') return null;
+                // 简单的按键名转换
+                const upper = text.toUpperCase();
+                if (upper.length === 1 && /[A-Z]/.test(upper)) {
+                    return 'Key' + upper;
+                }
+                // 数字键
+                if (upper.length === 1 && /[0-9]/.test(upper)) {
+                    return 'Digit' + upper;
+                }
+                // 已经是完整的按键码格式
+                if (text.startsWith('Key') || text.startsWith('Digit')) {
+                    return text;
+                }
+                return text;
+            }
+
+            // 按键类型改变
+            document.getElementById('bindingTypeSelect').addEventListener('change', function() {
+                updateFormByType(this.value);
+            });
+
+            // 按键捕获功能
+            let capturingKey = null;
+            let keyCaptureHandler = null;
+
+            function startKeyCapture(targetDisplay) {
+                stopKeyCapture();
+                capturingKey = targetDisplay;
+                targetDisplay.textContent = '按下任意键...';
+                targetDisplay.classList.add('capturing');
+
+                keyCaptureHandler = function(e) {
+                    e.preventDefault();
+                    const code = e.code;
+                    targetDisplay.textContent = formatKeyName(code);
+                    targetDisplay.classList.remove('capturing');
+                    stopKeyCapture();
+                };
+
+                window.addEventListener('keydown', keyCaptureHandler);
+            }
+
+            function stopKeyCapture() {
+                if (keyCaptureHandler) {
+                    window.removeEventListener('keydown', keyCaptureHandler);
+                    keyCaptureHandler = null;
+                }
+                const displays = document.querySelectorAll('.captured-key');
+                displays.forEach(d => d.classList.remove('capturing'));
+                capturingKey = null;
+            }
+
+            document.getElementById('captureSingleKey').addEventListener('click', function() {
+                startKeyCapture(document.getElementById('singleKeyDisplay'));
+            });
+
+            document.getElementById('captureNegativeKey').addEventListener('click', function() {
+                startKeyCapture(document.getElementById('negativeKeyDisplay'));
+            });
+
+            document.getElementById('capturePositiveKey').addEventListener('click', function() {
+                startKeyCapture(document.getElementById('positiveKeyDisplay'));
+            });
+
+            // 点击模态框外部关闭
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    modal.style.display = 'none';
+                    stopKeyCapture();
+                }
+            });
+        }
 
         // 页面卸载时移除监听器
         window.addEventListener('beforeunload', function() {
             window.removeEventListener('storage', handleConfigUpdate);
         });
     </script>
+
 </body>
 
 </html>

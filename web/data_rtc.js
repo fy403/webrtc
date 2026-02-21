@@ -95,10 +95,6 @@ window.addEventListener('load', () => {
         rxSpeed: 0,
         txSpeed: 0,
         cpuUsage: 0,
-        ttyService: false,
-        rtspService: false,
-        signalStrength: -1,
-        sim_status: 'UNKNOWN',
         lastUpdate: null,
     };
 
@@ -139,12 +135,34 @@ window.addEventListener('load', () => {
         const limitedForward = dataApplyThrottleLimit(forward);
         uiSpeed = Math.round(Math.abs(limitedForward) * 100);
         dataUpdateSystemStatusDisplay();
+
+        // 获取通道绑定的值
+        let channelValues = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        if (window.channelKeyBinder) {
+            channelValues = window.channelKeyBinder.getAllChannelValues();
+        }
+
         try {
             // 使用新协议 RCProtocol v2，直接传输-1.0~1.0浮点数
-            const frame = RCProtocol.encode({ch1: limitedForward, ch2: turn || 0,
-                ch3: 0, ch4: 0, ch5: 0, ch6: 0, ch7: 0, ch8: 0,
-                ch9: 0, ch10: 0, ch11: 0, ch12: 0, ch13: 0,
-                ch14: 0, ch15: 0, ch16: 0});
+            // CH1, CH2 由控制器控制，其他通道由按键绑定控制
+            const frame = RCProtocol.encode({
+                ch1: limitedForward,
+                ch2: turn || 0,
+                ch3: channelValues[2],
+                ch4: channelValues[3],
+                ch5: channelValues[4],
+                ch6: channelValues[5],
+                ch7: channelValues[6],
+                ch8: channelValues[7],
+                ch9: channelValues[8],
+                ch10: channelValues[9],
+                ch11: channelValues[10],
+                ch12: channelValues[11],
+                ch13: channelValues[12],
+                ch14: channelValues[13],
+                ch15: channelValues[14],
+                ch16: channelValues[15]
+            });
             dataCurrentDataChannel.send(frame);
             // 更新通道显示
             dataUpdateChannelDisplay();
@@ -266,7 +284,17 @@ window.addEventListener('load', () => {
 
     // 更新SBUS通道显示
     function dataUpdateChannelDisplay() {
-        const values = window.currentChannelValues || [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        // 如果没有通道绑定器，使用默认值
+        let values = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        if (window.currentChannelValues) {
+            values = window.currentChannelValues;
+        } else if (window.channelKeyBinder) {
+            values = window.channelKeyBinder.getAllChannelValues();
+        }
+
+        // 更新 CH1 和 CH2 为当前的控制器值
+        values[0] = lastSentState.forward || 0;
+        values[1] = lastSentState.turn || 0;
 
         for (let i = 0; i < 16; i++) {
             const channelNum = i + 1;
@@ -314,7 +342,7 @@ window.addEventListener('load', () => {
     }
 
     function dataUpdateSystemStatusDisplay() {
-        const {rxSpeed, txSpeed, cpuUsage, ttyService, rtspService, signalStrength, sim_status, lastUpdate} =
+        const {rxSpeed, txSpeed, cpuUsage, lastUpdate} =
             dataSystemStatus;
 
         if (dataElements.rxSpeed && dataElements.rxSpeedUnit) {
@@ -370,13 +398,6 @@ window.addEventListener('load', () => {
         if (statusData.rx_speed !== undefined) dataSystemStatus.rxSpeed = (parseInt(statusData.rx_speed) * 8) / 100;
         if (statusData.tx_speed !== undefined) dataSystemStatus.txSpeed = (parseInt(statusData.tx_speed) * 8) / 100;
         if (statusData.cpu_usage !== undefined) dataSystemStatus.cpuUsage = parseInt(statusData.cpu_usage) / 100;
-        if (statusData.tty_service !== undefined) dataSystemStatus.ttyService = statusData.tty_service === '1';
-        if (statusData.rtsp_service !== undefined) dataSystemStatus.rtspService = statusData.rtsp_service === '1';
-        if (statusData['4g_signal'] !== undefined) {
-            const signalParts = statusData['4g_signal'].split(',');
-            if (signalParts.length >= 1) dataSystemStatus.signalStrength = parseInt(signalParts[0]);
-        }
-        if (statusData.sim_status !== undefined) dataSystemStatus.sim_status = statusData.sim_status;
         dataSystemStatus.lastUpdate = new Date();
         dataUpdateSystemStatusDisplay();
         dataUpdateConnStatus('connected', 'CONNECTED');
@@ -409,6 +430,23 @@ window.addEventListener('load', () => {
 
     // Initialize controllers
     initControllers();
+
+    // 初始化通道按键绑定器
+    if (typeof ChannelKeyBinder !== 'undefined') {
+        window.channelKeyBinder = new ChannelKeyBinder();
+        window.channelKeyBinder.loadFromConfig();
+        window.channelKeyBinder.start();
+
+        // 当通道值变化时，立即发送新的 SBUS 帧
+        window.channelKeyBinder.setOnValueChange((values) => {
+            if (lastSentState) {
+                // 使用最后发送的 forward 和 turn 值
+                dataSendSbus(lastSentState.forward, lastSentState.turn);
+            }
+        });
+
+        console.log('通道按键绑定器已启动');
+    }
 
     // Send peer_close on page unload
     window.addEventListener('beforeunload', () => {

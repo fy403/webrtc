@@ -41,6 +41,26 @@ const ConfigManager = {
                     credential: 'qwertyuiop'
                 }
             ]
+        },
+    // 通道按键绑定配置
+    channelBindings: {
+        // 1-16通道的按键绑定
+        ch1: { type: 'continuous', negativeKey: 'KeyS', positiveKey: 'KeyW', minValue: -1.0, maxValue: 1.0, startValue: 0 },
+        ch2: { type: 'continuous', negativeKey: 'KeyA', positiveKey: 'KeyD', minValue: -1.0, maxValue: 1.0, startValue: 0 },
+        ch3: null,
+        ch4: null,
+        ch5: null,
+        ch6: null,
+        ch7: null,
+        ch8: null,
+        ch9: null,
+        ch10: null,
+        ch11: null,
+        ch12: null,
+        ch13: null,
+        ch14: null,
+        ch15: null,
+        ch16: null
         }
     },
 
@@ -304,6 +324,26 @@ const ConfigManager = {
         }
         Object.assign(this.getCurrentConfig().data, newConfig);
         this.getCurrentConfig().updatedAt = new Date().toISOString();
+        return this.saveConfigs();
+    },
+
+    // 获取通道按键绑定
+    getChannelBindings() {
+        const config = this.getCurrentConfig();
+        return config && config.channelBindings ? config.channelBindings : {};
+    },
+
+    // 更新通道按键绑定
+    updateChannelBindings(bindings) {
+        const config = this.getCurrentConfig();
+        if (!config) {
+            this.init();
+        }
+        if (!config.channelBindings) {
+            config.channelBindings = {};
+        }
+        Object.assign(config.channelBindings, bindings);
+        config.updatedAt = new Date().toISOString();
         return this.saveConfigs();
     }
 };
