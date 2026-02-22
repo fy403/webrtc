@@ -101,6 +101,7 @@ window.addEventListener('load', () => {
 
     let uiSpeed = 0;
     let lastSentState = { forward: 0, turn: 0 };
+    let actualSentForward = 0; // 实际发送的油门值（经过限幅）
     let heartbeatInterval = null;
 
     // SBUS control pipeline
@@ -134,6 +135,7 @@ window.addEventListener('load', () => {
     function dataSendSbus(forward, turn) {
         if (!dataCurrentDataChannel || dataCurrentDataChannel.readyState !== 'open') return;
         const limitedForward = dataApplyThrottleLimit(forward);
+        actualSentForward = limitedForward; // 保存实际发送的油门值
         uiSpeed = Math.round(Math.abs(limitedForward) * 100);
         dataUpdateSystemStatusDisplay();
 
@@ -359,11 +361,11 @@ window.addEventListener('load', () => {
         
         // 更新CPU仪表盘
         updateCpuGauge(cpuUsage);
-        
-        // 更新油门比例仪表盘 (使用lastSentState.forward)
-        const throttlePercent = Math.abs(lastSentState.forward * 100);
+
+        // 更新油门比例仪表盘 (使用实际发送的油门值)
+        const throttlePercent = Math.abs(actualSentForward * 100);
         updateThrottleGauge(throttlePercent);
-        
+
         // 更新车辆速度表盘 (使用statusData中的vehicleSpeed)
         updateVehicleSpeedGauge(dataSystemStatus.vehicleSpeed);
         
@@ -434,17 +436,18 @@ window.addEventListener('load', () => {
 
     function updateVehicleSpeedGauge(speed) {
         const speedPointer = document.getElementById('speedPointer');
+        const pointerGroup = speedPointer?.closest('.pointer-group');
         const vehicleSpeedValue = document.getElementById('vehicleSpeedValue');
-        
-        if (speedPointer && vehicleSpeedValue) {
+
+        if (speedPointer && pointerGroup && vehicleSpeedValue) {
             // 最大速度为 160 km/h
             const maxSpeed = 160;
             const clampedSpeed = Math.max(0, Math.min(maxSpeed, speed));
-            
+
             // 角度范围: 从 -120度 到 120度 (共240度)
             const angle = -120 + (clampedSpeed / maxSpeed) * 240;
-            speedPointer.style.transform = `rotate(${angle}deg)`;
-            
+            pointerGroup.style.transform = `rotate(${angle}deg)`;
+
             vehicleSpeedValue.textContent = Math.round(clampedSpeed);
         }
     }
@@ -556,8 +559,15 @@ window.addEventListener('load', () => {
     // Initialize controllers
     initControllers();
 
+
     // 初始化速度表盘刻度
     initSpeedGaugeTicks();
+
+    // 初始化速度表盘指针到0位置
+    updateVehicleSpeedGauge(0);
+
+    // 初始化油门比例仪表盘到0%
+    updateThrottleGauge(0);
 
     // 初始化通道按键绑定器
     if (typeof ChannelKeyBinder !== 'undefined') {

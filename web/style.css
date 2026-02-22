@@ -1072,7 +1072,8 @@ body.mobile-layout {
     display: flex;
     flex-direction: row;
     gap: 15px;
-    z-index: 20;
+    z-index: 25;
+    align-items: center;
 }
 
 /* 车辆速度仪表盘 */
@@ -1083,7 +1084,7 @@ body.mobile-layout {
 .speed-gauge-wrapper {
     position: relative;
     width: 200px;
-    height: 130px;
+    height: 180px;
 }
 
 .speed-gauge-svg {
