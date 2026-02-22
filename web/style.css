@@ -1064,74 +1064,252 @@ body.mobile-layout {
     letter-spacing: 0.5px;
 }
 
-.speed-overlay {
-    bottom: 15px;
-    right: 15px;
-    width: 70px;
-    height: 70px;
-    border-radius: 0;
+/* 左下角仪表盘容器 - 包含速度和油门比例 */
+.gauges-bottom-left {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(10, 14, 26, 0.85);
-    backdrop-filter: blur(8px);
-    border: 2px solid rgba(255, 165, 0, 0.5);
-    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    flex-direction: row;
+    gap: 15px;
+    z-index: 20;
 }
 
-.cpu-overlay {
-    bottom: 15px;
-    left: 15px;
-    width: 70px;
-    height: 70px;
-    border-radius: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(10, 14, 26, 0.85);
-    backdrop-filter: blur(8px);
-    border: 2px solid rgba(255, 165, 0, 0.5);
-    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+/* 车辆速度仪表盘 */
+.vehicle-speed-container {
+    position: relative;
 }
 
-.speed-display {
+.speed-gauge-wrapper {
+    position: relative;
+    width: 200px;
+    height: 130px;
+}
+
+.speed-gauge-svg {
+    width: 100%;
+    height: 100%;
+}
+
+.speed-gauge-bg {
+    stroke-linecap: round;
+}
+
+.pointer-group {
+    transform-origin: 150px 150px;
+}
+
+.pointer-line {
+    transition: transform 0.2s ease;
+    filter: drop-shadow(0 0 4px rgba(255, 69, 0, 0.8));
+}
+
+.pointer-center {
+    filter: drop-shadow(0 0 4px rgba(255, 69, 0, 0.8));
+}
+
+.speed-display-value {
+    position: absolute;
+    bottom: 25px;
+    left: 50%;
+    transform: translateX(-50%);
     text-align: center;
 }
 
-.cpu-display {
-    width: 70px;
-    height: 70px;
-    border-radius: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+.vehicle-speed-number {
+    font-size: 36px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 12px rgba(255, 69, 0, 0.8);
+    line-height: 1;
 }
 
-.cpu-display::before {
-    content: '';
+.vehicle-speed-unit {
+    font-size: 12px;
+    color: #FF4500;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+/* 油门比例仪表盘 */
+.throttle-gauge-container {
+    position: relative;
+}
+
+.gauge-wrapper {
+    position: relative;
+    width: 160px;
+    height: 100px;
+}
+
+.gauge-svg {
+    width: 100%;
+    height: 100%;
+}
+
+.gauge-bg {
+    stroke-linecap: round;
+}
+
+.gauge-progress {
+    transition: stroke-dashoffset 0.3s ease;
+    filter: drop-shadow(0 0 8px rgba(255, 165, 0, 0.6));
+}
+
+.ticks {
+    transform: rotate(0deg);
+}
+
+.gauge-value-container {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+}
+
+.gauge-number {
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 10px rgba(255, 165, 0, 0.8);
+}
+
+.gauge-unit {
+    font-size: 12px;
+    color: var(--titan-primary);
+    font-weight: 600;
+}
+
+.gauge-label {
     position: absolute;
     bottom: 0;
-    left: 0;
-    right: 0;
-    height: var(--cpu-level, 0%);
-    background: linear-gradient(to top, rgba(255, 165, 0, 0.3), rgba(255, 165, 0, 0.6));
-    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-    transition: height 0.3s ease;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    color: var(--titan-text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
 }
 
-.cpu-display .speed-value {
+.pointer-center {
+    filter: drop-shadow(0 0 4px rgba(255, 69, 0, 0.8));
+}
+
+.speed-display-value {
+    position: absolute;
+    bottom: 25px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+}
+
+.vehicle-speed-number {
+    font-size: 36px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 12px rgba(255, 69, 0, 0.8);
+    line-height: 1;
+}
+
+.vehicle-speed-unit {
+    font-size: 12px;
+    color: #FF4500;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+/* CPU仪表盘容器 - 右下角 */
+.cpu-gauge-container {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    z-index: 20;
+}
+
+.cpu-gauge {
+    position: relative;
+    width: 120px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.cpu-circle {
+    position: relative;
+    width: 100px;
+    height: 100px;
+}
+
+.cpu-svg {
+    width: 100%;
+    height: 100%;
+}
+
+.cpu-bg {
+    stroke-linecap: round;
+}
+
+.cpu-progress {
+    transition: stroke-dashoffset 0.3s ease;
+    filter: drop-shadow(0 0 8px rgba(0, 206, 209, 0.6));
+}
+
+.cpu-value-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+}
+
+.cpu-number {
+    font-size: 24px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 10px rgba(0, 206, 209, 0.8);
+}
+
+.cpu-unit {
+    font-size: 12px;
+    color: var(--titan-secondary);
+    font-weight: 600;
+}
+
+.cpu-label {
+    font-size: 10px;
+    color: var(--titan-text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.panel-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--titan-primary);
+    letter-spacing: 1px;
+    text-transform: uppercase;
     position: relative;
     z-index: 1;
-    font-weight: normal;
 }
 
 .speed-value {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: bold;
     color: var(--titan-primary);
     text-shadow: 0 0 10px var(--titan-primary);
+    position: relative;
+    z-index: 1;
+}
+
+.speed-value.cpu-warning {
+    color: var(--titan-warning);
+    text-shadow: 0 0 10px var(--titan-warning);
 }
 
 .speed-unit {

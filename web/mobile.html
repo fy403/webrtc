@@ -79,19 +79,62 @@
 						</div>
 					</div>
 
-					<!-- 速度显示面板 -->
-					<div class="status-overlay speed-overlay">
-						<div class="speed-display">
-							<div class="speed-value" id="speedValue">0</div>
-							<div class="speed-unit">%</div>
+					<!-- 左下角 - 速度和油门比例仪表盘容器 -->
+					<div class="gauges-bottom-left">
+						<!-- 车辆速度仪表盘 -->
+						<div class="vehicle-speed-container">
+							<div class="speed-gauge-wrapper">
+								<svg class="speed-gauge-svg" viewBox="0 0 300 180">
+									<path class="speed-gauge-bg" d="M 30 150 A 120 120 0 1 1 270 150" fill="none" stroke="#1a1a1a" stroke-width="20"/>
+									<g id="speedTicks"></g>
+									<g id="speedNumbers"></g>
+									<g class="pointer-group">
+										<line class="pointer-line" id="speedPointer" x1="150" y1="150" x2="150" y2="50" stroke="#FF4500" stroke-width="4" stroke-linecap="round"/>
+										<circle class="pointer-center" cx="150" cy="150" r="8" fill="#FF4500"/>
+									</g>
+								</svg>
+								<div class="speed-display-value">
+									<div class="vehicle-speed-number" id="vehicleSpeedValue">0</div>
+									<div class="vehicle-speed-unit">km/h</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- 油门比例仪表盘 -->
+						<div class="throttle-gauge-container">
+							<div class="gauge-wrapper">
+								<svg class="gauge-svg" viewBox="0 0 200 120">
+									<path class="gauge-bg" d="M 20 100 A 80 80 0 1 1 180 100" fill="none" stroke="#1a1a1a" stroke-width="15"/>
+									<path class="gauge-progress" id="throttleGaugeProgress" d="M 20 100 A 80 80 0 1 1 180 100" fill="none" stroke="#FFA500" stroke-width="15" stroke-dasharray="251.2" stroke-dashoffset="251.2"/>
+									<g class="ticks">
+										<line x1="100" y1="20" x2="100" y2="30" stroke="#fff" stroke-width="2"/>
+										<line x1="35" y1="65" x2="43" y2="70" stroke="#fff" stroke-width="2"/>
+										<line x1="165" y1="65" x2="157" y2="70" stroke="#fff" stroke-width="2"/>
+									</g>
+								</svg>
+								<div class="gauge-value-container">
+									<div class="gauge-number" id="throttleValue">0</div>
+									<div class="gauge-unit">%</div>
+								</div>
+								<div class="gauge-label">油门比例</div>
+							</div>
 						</div>
 					</div>
 
-					<!-- CPU显示面板 -->
-					<div class="status-overlay cpu-overlay">
-						<div class="speed-display">
-							<div class="speed-value" id="cpuValue">0</div>
-							<div class="speed-unit">%</div>
+					<!-- 右下角 - CPU显示 -->
+					<div class="cpu-gauge-container">
+						<div class="cpu-gauge">
+							<div class="cpu-circle">
+								<svg class="cpu-svg" viewBox="0 0 100 100">
+									<circle class="cpu-bg" cx="50" cy="50" r="45" fill="none" stroke="#1a1a1a" stroke-width="8"/>
+									<circle class="cpu-progress" id="cpuProgress" cx="50" cy="50" r="45" fill="none" stroke="#00CED1" stroke-width="8" stroke-dasharray="283" stroke-dashoffset="283" stroke-linecap="round" transform="rotate(-90 50 50)"/>
+								</svg>
+								<div class="cpu-value-container">
+									<div class="cpu-number" id="cpuValue">0</div>
+									<div class="cpu-unit">%</div>
+								</div>
+							</div>
+							<div class="cpu-label">CPU</div>
 						</div>
 					</div>
 

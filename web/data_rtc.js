@@ -95,6 +95,7 @@ window.addEventListener('load', () => {
         rxSpeed: 0,
         txSpeed: 0,
         cpuUsage: 0,
+        vehicleSpeed: 0,
         lastUpdate: null,
     };
 
@@ -355,14 +356,17 @@ window.addEventListener('load', () => {
             dataElements.txSpeed.textContent = txSpeedFormatted.value;
             dataElements.txSpeedUnit.textContent = txSpeedFormatted.unit;
         }
-        if (dataElements.cpuValue) {
-            dataElements.cpuValue.textContent = cpuUsage.toFixed(1);
-            const cpuDisplay = dataElements.cpuValue.closest('.cpu-display');
-            if (cpuDisplay) {
-                cpuDisplay.style.setProperty('--cpu-level', `${cpuUsage}%`);
-            }
-        }
-        if (dataElements.speedValue) dataElements.speedValue.textContent = `${uiSpeed}`;
+        
+        // 更新CPU仪表盘
+        updateCpuGauge(cpuUsage);
+        
+        // 更新油门比例仪表盘 (使用lastSentState.forward)
+        const throttlePercent = Math.abs(lastSentState.forward * 100);
+        updateThrottleGauge(throttlePercent);
+        
+        // 更新车辆速度表盘 (使用statusData中的vehicleSpeed)
+        updateVehicleSpeedGauge(dataSystemStatus.vehicleSpeed);
+        
         if (dataElements.lastUpdate) dataElements.lastUpdate.textContent = lastUpdate ? lastUpdate.toLocaleTimeString() : '--';
     }
 
@@ -398,9 +402,130 @@ window.addEventListener('load', () => {
         if (statusData.rx_speed !== undefined) dataSystemStatus.rxSpeed = (parseInt(statusData.rx_speed) * 8) / 100;
         if (statusData.tx_speed !== undefined) dataSystemStatus.txSpeed = (parseInt(statusData.tx_speed) * 8) / 100;
         if (statusData.cpu_usage !== undefined) dataSystemStatus.cpuUsage = parseInt(statusData.cpu_usage) / 100;
+        if (statusData.vehicle_speed !== undefined) dataSystemStatus.vehicleSpeed = parseFloat(statusData.vehicle_speed);
         dataSystemStatus.lastUpdate = new Date();
         dataUpdateSystemStatusDisplay();
         dataUpdateConnStatus('connected', 'CONNECTED');
+    }
+
+    function updateThrottleGauge(throttlePercent) {
+        const throttleProgress = document.getElementById('throttleGaugeProgress');
+        const throttleValue = document.getElementById('throttleValue');
+        
+        if (throttleProgress && throttleValue) {
+            // 仪表盘弧的总长度是 251.2 (2 * PI * 40 * 0.8)
+            const maxDash = 251.2;
+            const percent = Math.max(0, Math.min(100, throttlePercent));
+            const dashOffset = maxDash - (percent / 100) * maxDash;
+            
+            throttleProgress.style.strokeDashoffset = dashOffset;
+            throttleValue.textContent = Math.round(percent);
+            
+            // 根据百分比改变颜色
+            if (percent >= 80) {
+                throttleProgress.style.stroke = '#FF4500';
+            } else if (percent >= 50) {
+                throttleProgress.style.stroke = '#FFA500';
+            } else {
+                throttleProgress.style.stroke = '#32CD32';
+            }
+        }
+    }
+
+    function updateVehicleSpeedGauge(speed) {
+        const speedPointer = document.getElementById('speedPointer');
+        const vehicleSpeedValue = document.getElementById('vehicleSpeedValue');
+        
+        if (speedPointer && vehicleSpeedValue) {
+            // 最大速度为 160 km/h
+            const maxSpeed = 160;
+            const clampedSpeed = Math.max(0, Math.min(maxSpeed, speed));
+            
+            // 角度范围: 从 -120度 到 120度 (共240度)
+            const angle = -120 + (clampedSpeed / maxSpeed) * 240;
+            speedPointer.style.transform = `rotate(${angle}deg)`;
+            
+            vehicleSpeedValue.textContent = Math.round(clampedSpeed);
+        }
+    }
+
+    function updateCpuGauge(cpuPercent) {
+        const cpuProgress = document.getElementById('cpuProgress');
+        const cpuValue = document.getElementById('cpuValue');
+        
+        if (cpuProgress && cpuValue) {
+            // 圆周长是 283 (2 * PI * 45)
+            const maxDash = 283;
+            const percent = Math.max(0, Math.min(100, cpuPercent));
+            const dashOffset = maxDash - (percent / 100) * maxDash;
+            
+            cpuProgress.style.strokeDashoffset = dashOffset;
+            cpuValue.textContent = Math.round(percent);
+            
+            // 根据CPU使用率改变颜色
+            if (percent >= 80) {
+                cpuProgress.style.stroke = '#FF4500';
+            } else if (percent >= 50) {
+                cpuProgress.style.stroke = '#FFA500';
+            } else {
+                cpuProgress.style.stroke = '#00CED1';
+            }
+        }
+    }
+
+    // 初始化速度表盘刻度
+    function initSpeedGaugeTicks() {
+        const speedTicksGroup = document.getElementById('speedTicks');
+        const speedNumbersGroup = document.getElementById('speedNumbers');
+        
+        if (!speedTicksGroup || !speedNumbersGroup) return;
+        
+        const maxSpeed = 160;
+        const centerX = 150;
+        const centerY = 150;
+        const radius = 100;
+        
+        // 生成刻度 (每10km/h一个主刻度,每20km/h一个数字)
+        for (let speed = 0; speed <= maxSpeed; speed += 10) {
+            const angle = -120 + (speed / maxSpeed) * 240;
+            const angleRad = (angle * Math.PI) / 180;
+            
+            const isMajor = speed % 20 === 0;
+            const length = isMajor ? 12 : 8;
+            const strokeWidth = isMajor ? 2 : 1;
+            
+            const innerX = centerX + (radius - length) * Math.sin(angleRad);
+            const innerY = centerY - (radius - length) * Math.cos(angleRad);
+            const outerX = centerX + radius * Math.sin(angleRad);
+            const outerY = centerY - radius * Math.cos(angleRad);
+            
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', innerX);
+            line.setAttribute('y1', innerY);
+            line.setAttribute('x2', outerX);
+            line.setAttribute('y2', outerY);
+            line.setAttribute('stroke', speed >= 120 ? '#FF4500' : '#fff');
+            line.setAttribute('stroke-width', strokeWidth);
+            speedTicksGroup.appendChild(line);
+            
+            // 每20km/h显示数字
+            if (isMajor && speed > 0) {
+                const textRadius = radius - 25;
+                const textX = centerX + textRadius * Math.sin(angleRad);
+                const textY = centerY - textRadius * Math.cos(angleRad);
+                
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', textX);
+                text.setAttribute('y', textY);
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('dominant-baseline', 'middle');
+                text.setAttribute('fill', speed >= 120 ? '#FF4500' : '#fff');
+                text.setAttribute('font-size', '12');
+                text.setAttribute('font-weight', '600');
+                text.textContent = speed;
+                speedNumbersGroup.appendChild(text);
+            }
+        }
     }
 
     function dataHandleThrottlePreset(ev) {
@@ -430,6 +555,9 @@ window.addEventListener('load', () => {
 
     // Initialize controllers
     initControllers();
+
+    // 初始化速度表盘刻度
+    initSpeedGaugeTicks();
 
     // 初始化通道按键绑定器
     if (typeof ChannelKeyBinder !== 'undefined') {

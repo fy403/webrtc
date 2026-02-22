@@ -101,76 +101,197 @@
 			padding: 8px 15px;
 		}
 
-		/* Speed overlay styles */
-		.speed-overlay {
-			bottom: 15px;
-			right: 15px;
-			width: 60px;
-			height: 60px;
-			border-radius: 50%;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			background: rgba(18, 24, 51, 0.5);
-			backdrop-filter: blur(4px);
-			border: 2px solid rgba(255, 255, 255, 0.1);
-		}
-
-		.cpu-overlay {
-			bottom: 15px;
+		/* 左下角仪表盘容器 - 包含速度和油门比例 */
+		.gauges-bottom-left {
+			position: absolute;
+			top: 15px;
 			left: 15px;
-			width: 60px;
-			height: 60px;
-			border-radius: 50%;
 			display: flex;
-			align-items: center;
-			justify-content: center;
-			background: rgba(18, 24, 51, 0.5);
-			backdrop-filter: blur(4px);
-			border: 2px solid rgba(255, 255, 255, 0.1);
+			flex-direction: row;
+			gap: 10px;
+			z-index: 20;
 		}
 
-		.speed-display {
+		/* 车辆速度仪表盘 - 移动端版本 */
+		.vehicle-speed-container {
+			position: relative;
+		}
+
+		.speed-gauge-wrapper {
+			position: relative;
+			width: 150px;
+			height: 100px;
+		}
+
+		.speed-gauge-svg {
+			width: 100%;
+			height: 100%;
+		}
+
+		.speed-gauge-bg {
+			stroke-linecap: round;
+		}
+
+		.pointer-group {
+			transform-origin: 150px 150px;
+		}
+
+		.pointer-line {
+			transition: transform 0.2s ease;
+			filter: drop-shadow(0 0 4px rgba(255, 69, 0, 0.8));
+		}
+
+		.pointer-center {
+			filter: drop-shadow(0 0 4px rgba(255, 69, 0, 0.8));
+		}
+
+		.speed-display-value {
+			position: absolute;
+			bottom: 20px;
+			left: 50%;
+			transform: translateX(-50%);
 			text-align: center;
 		}
 
-		.speed-value {
-			font-size: 18px;
-			font-weight: bold;
-			color: #ffffff;
+		.vehicle-speed-number {
+			font-size: 28px;
+			font-weight: 700;
+			color: #fff;
+			text-shadow: 0 0 10px rgba(255, 69, 0, 0.8);
+			line-height: 1;
 		}
 
-		.speed-unit {
+		.vehicle-speed-unit {
 			font-size: 10px;
-			color: #93a4d6;
+			color: #FF4500;
+			font-weight: 600;
+			letter-spacing: 0.5px;
 		}
 
-		.cpu-display {
-			width: 60px;
-			height: 60px;
-			border-radius: 50%;
-			display: flex;
-			align-items: center;
-			justify-content: center;
+		/* 油门比例仪表盘 - 移动端版本 */
+		.throttle-gauge-container {
 			position: relative;
 		}
 
-		.cpu-display::before {
-			content: '';
+		.gauge-wrapper {
+			position: relative;
+			width: 120px;
+			height: 75px;
+		}
+
+		.gauge-svg {
+			width: 100%;
+			height: 100%;
+		}
+
+		.gauge-bg {
+			stroke-linecap: round;
+		}
+
+		.gauge-progress {
+			transition: stroke-dashoffset 0.3s ease;
+			filter: drop-shadow(0 0 8px rgba(255, 165, 0, 0.6));
+		}
+
+		.gauge-value-container {
+			position: absolute;
+			bottom: 6px;
+			left: 50%;
+			transform: translateX(-50%);
+			display: flex;
+			align-items: baseline;
+			gap: 2px;
+		}
+
+		.gauge-number {
+			font-size: 22px;
+			font-weight: 700;
+			color: #fff;
+			text-shadow: 0 0 10px rgba(255, 165, 0, 0.8);
+		}
+
+		.gauge-unit {
+			font-size: 10px;
+			color: var(--titan-primary);
+			font-weight: 600;
+		}
+
+		.gauge-label {
 			position: absolute;
 			bottom: 0;
-			left: 0;
-			right: 0;
-			height: var(--cpu-level, 0%);
-			background: linear-gradient(to top, rgba(16, 185, 129, 0.3), rgba(16, 185, 129, 0.6));
-			border-radius: 50% 50% 0 0;
-			transition: height 0.3s ease;
+			left: 50%;
+			transform: translateX(-50%);
+			font-size: 8px;
+			color: #8a8a8a;
+			letter-spacing: 1px;
+			text-transform: uppercase;
 		}
 
-		.cpu-display .speed-value {
+		/* CPU gauge styles */
+		.cpu-gauge-container {
+			position: absolute;
+			bottom: 15px;
+			right: 15px;
+			z-index: 20;
+		}
+
+		.cpu-gauge {
 			position: relative;
-			z-index: 1;
-			font-weight: normal;
+			width: 90px;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 6px;
+		}
+
+		.cpu-circle {
+			position: relative;
+			width: 80px;
+			height: 80px;
+		}
+
+		.cpu-svg {
+			width: 100%;
+			height: 100%;
+		}
+
+		.cpu-bg {
+			stroke-linecap: round;
+		}
+
+		.cpu-progress {
+			transition: stroke-dashoffset 0.3s ease;
+			filter: drop-shadow(0 0 8px rgba(0, 206, 209, 0.6));
+		}
+
+		.cpu-value-container {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			display: flex;
+			align-items: baseline;
+			gap: 2px;
+		}
+
+		.cpu-number {
+			font-size: 20px;
+			font-weight: 700;
+			color: #fff;
+			text-shadow: 0 0 10px rgba(0, 206, 209, 0.8);
+		}
+
+		.cpu-unit {
+			font-size: 10px;
+			color: var(--titan-secondary);
+			font-weight: 600;
+		}
+
+		.cpu-label {
+			font-size: 9px;
+			color: #8a8a8a;
+			letter-spacing: 1px;
+			text-transform: uppercase;
 		}
 
 		/* Network speed container for mobile */
