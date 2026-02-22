@@ -30,6 +30,104 @@ body {
     position: relative;
 }
 
+/* GitHub星标引导条 */
+.github-star-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(90deg, #24292e 0%, #2c3e50 100%);
+    border-bottom: 2px solid #58a6ff;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 20px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    animation: slideDown 0.5s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.github-star-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.github-star-link:hover {
+    opacity: 0.9;
+    transform: scale(1.02);
+}
+
+.github-icon {
+    width: 24px;
+    height: 24px;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.github-star-text {
+    color: #e8e8e8;
+    white-space: nowrap;
+}
+
+.star-icon {
+    width: 20px;
+    height: 20px;
+    color: #ffd700;
+    flex-shrink: 0;
+    animation: starPulse 2s ease-in-out infinite;
+}
+
+@keyframes starPulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.2);
+    }
+}
+
+.close-banner {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #8a8a8a;
+    font-size: 24px;
+    cursor: pointer;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+    line-height: 1;
+}
+
+.close-banner:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
 body::before {
     content: '';
     position: fixed;
