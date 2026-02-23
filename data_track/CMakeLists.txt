@@ -27,14 +27,19 @@ message(STATUS "Found libdatachannel library: ${LIBDATACHANNEL_LIBRARY}")
 # Add executable
 add_executable(webrtc_publisher
         src/4g_tty.cpp
+        src/cpu_monitor.cpp
         src/getopt.cpp
+        src/gsm_monitor.cpp
         src/main.cpp
+        src/network_monitor.cpp
         src/parse_cl.cpp
         src/rc_client.cpp
+        src/service_monitor.cpp
         src/motor_controller.cpp
         src/system_monitor.cpp
         src/uart_motor_driver.cpp
         src/crsf_motor_driver.cpp
+        src/gps_nmea_monitor.cpp
 )
 
 # Include directories

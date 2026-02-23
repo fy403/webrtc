@@ -56,6 +56,8 @@ private:
   std::string _gsmPort;   // 新添加的gsmPort参数
   int _gsmBaudrate;       // 新添加的gsmBaudrate参数
   std::string _motorDriverType; // 新添加的motorDriverType参数
+  std::string _gpsPort;   // 新添加的gpsPort参数
+  int _gpsBaudrate;       // 新添加的gpsBaudrate参数
 
   /* other stuff to keep track of */
   std::string _program_name;
@@ -92,6 +94,8 @@ public:
   std::string gsmPort() const { return _gsmPort; }    // 新添加的gsmPort getter
   int gsmBaudrate() const { return _gsmBaudrate; }    // 新添加的gsmBaudrate getter
   std::string motorDriverType() const { return _motorDriverType; } // 新添加的motorDriverType getter
+  std::string gpsPort() const { return _gpsPort; }    // 新添加的gpsPort getter
+  int gpsBaudrate() const { return _gpsBaudrate; }    // 新添加的gpsBaudrate getter
 };
 
 #endif

@@ -32,6 +32,13 @@ RCClient::RCClient(const RCClientConfig &config)
         }
     }
 
+    // 如果配置中指定了GPS模块参数，则初始化GPS模块
+    if (config.hasGpsConfig()) {
+        if (!system_monitor_.open_gps(config.system_monitor_gps_port, config.system_monitor_gps_baudrate)) {
+            std::cerr << "Warning: Failed to initialize GPS module, continuing without GPS support" << std::endl;
+        }
+    }
+
     // 启动DataChannel健康检查线程
     health_check_thread_ = std::thread(&RCClient::healthCheckLoop, this);
     std::cout << "DataChannel健康检查已启动，检查间隔: " << HEALTH_CHECK_INTERVAL_MS << "ms" << std::endl;
@@ -140,33 +147,63 @@ void RCClient::stopAll() {
 }
 
 void RCClient::sendSystemStatus() {
-    double rx_speed, tx_speed, cpu_usage;
-
+    // 获取网络和CPU资源信息
+    double rx_speed = 0.0, tx_speed = 0.0, cpu_usage = 0.0;
     system_monitor_.getNetworkStats(rx_speed, tx_speed);
     system_monitor_.getCPUUsage(cpu_usage);
-    // bool tty_service = system_monitor_.checkServiceStatus("data_track_rtc.service");
-    // bool rtsp_service = system_monitor_.checkServiceStatus("av_track_rtc.service");
 
+    // 获取4G模块信息
+    std::string signal = "N/A", simStatus = "N/A", network = "N/A", moduleInfo = "N/A";
+    if (system_monitor_.is4gInitialized()) {
+        system_monitor_.getGsmInfo(signal, simStatus, network, moduleInfo);
+    }
 
-    std::string signal, simStatus, network, moduleInfo;
-    system_monitor_.getGsmInfo(signal, simStatus, network, moduleInfo);
+    // 获取GPS NMEA数据
+    std::string gps_time;
+    float gps_latitude = 0.0f, gps_longitude = 0.0f, gps_altitude = 0.0f;
+    char gps_lat_dir = 'N', gps_lon_dir = 'E';
+    int gps_quality = 0, gps_satellites = 0;
+    float gps_speed_knots = 0.0f, gps_course_true = 0.0f, gps_speed_kmh = 0.0f;
 
+    if (system_monitor_.isGpsInitialized()) {
+        system_monitor_.getGpsGGAInfo(gps_time, gps_latitude, gps_lat_dir,
+                                      gps_longitude, gps_lon_dir, gps_quality,
+                                      gps_satellites, gps_altitude);
+        system_monitor_.getGpsVTGInfo(gps_course_true, gps_speed_knots, gps_speed_kmh);
+    }
+
+    // 构建状态数据
     std::map<std::string, std::string> statusData;
+
+    // 网络信息
     statusData["rx_speed"] = std::to_string(static_cast<uint16_t>(rx_speed * 100));
     statusData["tx_speed"] = std::to_string(static_cast<uint16_t>(tx_speed * 100));
-    // System resources
+
+    // 系统资源
     statusData["cpu_usage"] = std::to_string(static_cast<uint16_t>(cpu_usage * 100));
-    // Service status
-    // statusData["tty_service"] = tty_service ? "1" : "0";
-    // statusData["rtsp_service"] = rtsp_service ? "1" : "0";
-    // 4G
+
+    // 4G模块信息
     statusData["4g_signal"] = signal;
     statusData["sim_status"] = simStatus;
     statusData["network"] = network;
     statusData["module_info"] = moduleInfo;
-    // System info (can be extended)
+
+    // GPS信息
+    statusData["gps_time"] = gps_time;
+    statusData["gps_latitude"] = std::to_string(gps_latitude);
+    // statusData["gps_lat_dir"] = std::string(1, gps_lat_dir);
+    statusData["gps_longitude"] = std::to_string(gps_longitude);
+    // statusData["gps_lon_dir"] = std::string(1, gps_lon_dir);
+    statusData["gps_altitude"] = std::to_string(gps_altitude);
+    statusData["gps_quality"] = std::to_string(gps_quality);
+    // statusData["gps_satellites"] = std::to_string(gps_satellites);
+    // statusData["gps_course"] = std::to_string(gps_course_true);
+    statusData["gps_speed_kmh"] = std::to_string(gps_speed_kmh);
+
+    // 时间戳
     statusData["timestamp"] = std::to_string(std::time(nullptr));
-    // Send system status frame
+
+    // 发送状态数据
     sendStatusFrame(statusData);
 }
 

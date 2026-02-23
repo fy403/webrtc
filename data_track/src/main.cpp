@@ -111,7 +111,9 @@ int main(int argc, char **argv) {
             params.motorDriverType(), // MotorController.MotorDriver: 驱动类型
             params.ttyBaudrate(), // MotorController.MotorDriver: 串口波特率
             params.gsmPort(), // SystemMonitor: 4G模块串口设备
-            params.gsmBaudrate() // SystemMonitor: 4G模块串口波特率
+            params.gsmBaudrate(), // SystemMonitor: 4G模块串口波特率
+            params.gpsPort(), // SystemMonitor: GPS模块串口设备
+            params.gpsBaudrate() // SystemMonitor: GPS模块串口波特率
         );
 
         // 创建局部的 RCClient 实例，使用智能指针管理
@@ -542,7 +544,9 @@ void startWsReconnect() {
                     g_params->motorDriverType(),
                     g_params->ttyBaudrate(),
                     g_params->gsmPort(),
-                    g_params->gsmBaudrate()
+                    g_params->gsmBaudrate(),
+                    g_params->gpsPort(),
+                    g_params->gpsBaudrate()
                 );
                 std::shared_ptr<RCClient> client = std::make_shared<RCClient>(rcClientConfig);
                 client->stopAll();
