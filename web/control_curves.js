@@ -18,6 +18,56 @@
       }
       return this.points[this.points.length - 1].v;
     }
+
+    // Get curve duration
+    getDuration() {
+      if (this.points.length === 0) return 0;
+      return this.points[this.points.length - 1].t;
+    }
+
+    // Get max speed
+    getMaxSpeed() {
+      if (this.points.length === 0) return 0;
+      return Math.max(...this.points.map(p => p.v));
+    }
+
+    // Clone curve
+    clone() {
+      return new SpeedCurve(JSON.parse(JSON.stringify(this.points)));
+    }
+
+    // Validate points
+    static validatePoints(points) {
+      if (!Array.isArray(points) || points.length < 2) {
+        return { valid: false, error: '至少需要2个控制点' };
+      }
+
+      // Check first point is at t=0, v=0
+      if (points[0].t !== 0 || points[0].v !== 0) {
+        return { valid: false, error: '第一个点必须是 t=0, v=0' };
+      }
+
+      // Check last point v=1
+      if (points[points.length - 1].v !== 1) {
+        return { valid: false, error: '最后一个点的速度必须为 1.0' };
+      }
+
+      // Check times are sorted
+      for (let i = 1; i < points.length; i++) {
+        if (points[i].t <= points[i - 1].t) {
+          return { valid: false, error: '时间必须递增' };
+        }
+      }
+
+      // Check v values are in [0, 1]
+      for (const p of points) {
+        if (p.v < 0 || p.v > 1) {
+          return { valid: false, error: '速度值必须在 0.0-1.0 之间' };
+        }
+      }
+
+      return { valid: true };
+    }
   }
 
   const DEFAULT_SPEED_CURVE = new SpeedCurve([

@@ -12,6 +12,7 @@
     <script src="webrtc_optimizer.js"></script>
     <script src="video_rtc.js"></script>
     <script src="control_curves.js"></script>
+    <script src="curve_manager.js"></script>
     <script src="keyboard_controller.js"></script>
     <script src="virtual_joystick_controller.js"></script>
     <script src="xbox_controller.js"></script>
@@ -217,6 +218,7 @@
                     <div class="control-buttons">
                         <button class="btn" id="reconnectBtn">RECONNECT</button>
                         <button class="btn" id="stopAllBtn">STOP ALL (Space)</button>
+                        <button class="btn" id="curveBtn" title="SPEED CURVE">📈</button>
                         <button class="btn" id="configBtn" title="CONFIG">⚙️</button>
                     </div>
                 </div>
@@ -556,6 +558,14 @@
             if (configBtn) {
                 configBtn.addEventListener('click', function() {
                     window.open('config.html', 'config', 'width=900,height=700,scrollbars=yes,resizable=yes');
+                });
+            }
+
+            // 初始化曲线编辑器按钮
+            const curveBtn = document.getElementById('curveBtn');
+            if (curveBtn) {
+                curveBtn.addEventListener('click', function() {
+                    window.open('curve_editor.html', 'curveEditor', 'width=1200,height=800,scrollbars=yes,resizable=yes');
                 });
             }
 

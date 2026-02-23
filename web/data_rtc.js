@@ -199,8 +199,15 @@ window.addEventListener('load', () => {
     }
 
     function initControllers() {
+        // Initialize curve manager and load saved curve
+        const currentSpeedCurve = speedCurveManager.getCurrentSpeedCurve() || DEFAULT_SPEED_CURVE;
+        const currentCurve = speedCurveManager.getCurrentCurve();
+        const curveName = currentCurve ? currentCurve.name : 'Default';
+        console.log('Loading speed curve:', speedCurveManager.currentCurveId, curveName);
+        updateStatus(`加速曲线: ${curveName}`);
+
         const keyboard = new KeyboardController({
-            curve: DEFAULT_SPEED_CURVE,
+            curve: currentSpeedCurve,
             onVisualChange: (state) => {
                 dataState.W = !!state.W?.pressed;
                 dataState.S = !!state.S?.pressed;
@@ -214,6 +221,41 @@ window.addEventListener('load', () => {
 
         controllerManager.register('keyboard', keyboard, 10);
         controllerManager.register('xbox', xbox, 8);
+
+        // Set up curve change callback - update keyboard curve when it changes
+        speedCurveManager.setOnChange((curve) => {
+            if (curve) {
+                // Update the keyboard controller's curve
+                keyboard.curve = new SpeedCurve(curve.points);
+                console.log('Speed curve updated:', curve.name);
+                if (typeof updateStatus === 'function') {
+                    updateStatus(`加速曲线已切换: ${curve.name}`);
+                }
+            }
+        });
+
+        // Listen for localStorage changes from curve editor page
+        window.addEventListener('storage', (event) => {
+            if (event.key === 'speedCurveId' || event.key === 'customSpeedCurves') {
+                console.log('[Storage] Detected curve change:', event.key);
+                // Reload custom curves from localStorage
+                speedCurveManager.reloadCustomCurves();
+                // Get the current curve
+                const currentCurveId = localStorage.getItem('speedCurveId') || 'linear';
+                const curve = speedCurveManager.getCurve(currentCurveId);
+                if (curve) {
+                    // Update the keyboard controller's curve
+                    keyboard.curve = new SpeedCurve(curve.points);
+                    console.log('[Storage] Speed curve reloaded:', curve.name);
+                    if (typeof updateStatus === 'function') {
+                        updateStatus(`加速曲线已更新: ${curve.name}`);
+                    }
+                }
+            }
+        });
+
+        // Expose keyboard for curve updates
+        window.keyboardController = keyboard;
 
         // For desktop, register single joystick if elements exist
         if (dataElements.joystickContainer && dataElements.joystickBase && dataElements.joystickHandle) {
