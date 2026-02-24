@@ -2,7 +2,13 @@
 window.addEventListener('load', () => {
     // Wait for controllerManager to be available
     setTimeout(() => {
-        if (window.controllerManager) {
+        if (window.controllerManager && window.speedCurveManager) {
+            // Get current speed curve from curve manager (same as keyboard controller)
+            const currentSpeedCurve = window.speedCurveManager.getCurrentSpeedCurve() || window.DEFAULT_SPEED_CURVE;
+            const currentCurve = window.speedCurveManager.getCurrentCurve();
+            const curveName = currentCurve ? currentCurve.name : 'Default';
+            console.log('Loading speed curve for dual joystick:', window.speedCurveManager.currentCurveId, curveName);
+
             const dualJoystick = new DualJoystickController({
                 elements: {
                     leftBase: document.getElementById('leftJoystickBase'),
@@ -10,6 +16,7 @@ window.addEventListener('load', () => {
                     rightBase: document.getElementById('rightJoystickBase'),
                     rightHandle: document.getElementById('rightJoystickHandle'),
                 },
+                curve: currentSpeedCurve,
             });
 
             // Register dual joystick with higher priority than single joystick
@@ -21,9 +28,17 @@ window.addEventListener('load', () => {
                 console.log('Unregistered single joystick in favor of dual joystick');
             }
 
-            console.log('Dual joystick controller initialized and registered');
+            // Set up curve change callback - update dual joystick curve when it changes
+            window.speedCurveManager.setOnChange((curve) => {
+                if (curve) {
+                    dualJoystick.setCurve(new window.SpeedCurve(curve.points));
+                    console.log('Dual joystick curve updated to:', curve.name);
+                }
+            });
+
+            console.log('Dual joystick controller initialized and registered with speed curve support');
         } else {
-            console.error('ControllerManager not available');
+            console.error('ControllerManager or SpeedCurveManager not available');
         }
     }, 100);
 });

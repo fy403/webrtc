@@ -6,17 +6,19 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 	<title>Signal Control Client - Mobile</title>
 	<link rel="stylesheet" href="mobile.css">
-	<script src="config.js"></script>
-	<script src="rc_protocol_v2.js"></script>
-	<script src="webrtc_optimizer.js"></script>
-	<script src="video_rtc.js"></script>
-	<script src="control_curves.js"></script>
-	<script src="keyboard_controller.js"></script>
-	<script src="virtual_joystick_controller.js"></script>
-	<script src="xbox_controller.js"></script>
-	<script src="gyroscope_controller.js"></script>
-	<script src="controller_manager.js"></script>
-	<script src="data_rtc.js"></script>
+	
+    <script src="config.js"></script>
+    <script src="rc_protocol_v2.js"></script>
+    <script src="webrtc_optimizer.js"></script>
+    <script src="video_rtc.js"></script>
+    <script src="control_curves.js"></script>
+    <script src="curve_manager.js"></script>
+    <script src="keyboard_controller.js"></script>
+    <script src="virtual_joystick_controller.js"></script>
+    <script src="xbox_controller.js"></script>
+    <script src="controller_manager.js"></script>
+    <script src="channel_key_binder.js"></script>
+    <script src="data_rtc.js"></script>
 	<script src="dual_joystick_init.js"></script>
 </head>
 
@@ -62,7 +64,7 @@
 					</div>
 
 					<!-- 右侧状态面板 -->
-					<div class="status-overlay right-overlay">
+					<!-- <div class="status-overlay right-overlay">
 						<div class="status-group">
 							<div class="status-item-inline">
 								<div class="hint">4G信号强度</div>
@@ -77,7 +79,7 @@
 								<div class="mono" id="simStatus">UNKNOWN</div>
 							</div>
 						</div>
-					</div>
+					</div> -->
 
 					<!-- 左下角 - 速度和油门比例仪表盘容器 -->
 					<div class="gauges-bottom-left">

@@ -55,13 +55,23 @@
   }
 
   // Dual joystick controller: left for forward/back, right for left/right
+  // Supports speed curves similar to keyboard controller based on hold duration
   class DualJoystickController {
-    constructor({ elements = {}, onChange } = {}) {
+    constructor({ elements = {}, onChange, curve = global.DEFAULT_SPEED_CURVE } = {}) {
       this.onChange = onChange;
       this.el = elements;
       this.active = false;
       this.forward = 0;
       this.turn = 0;
+      this.curve = curve;
+
+      // Track joystick hold states for speed curve
+      this.joystickStates = {
+        forward: { held: false, since: 0, direction: 0 },
+        turn: { held: false, since: 0, direction: 0 }
+      };
+
+      this._tick = this._tick.bind(this);
     }
 
     start() {
@@ -85,7 +95,7 @@
         updateCenter(rightBase, 'right');
       };
 
-      const onMove = (base, handle, clientX, clientY, key, axis) => {
+      const onMove = (handle, clientX, clientY, key, axis) => {
         const centerData = this[key];
         if (!centerData) return;
 
@@ -97,34 +107,36 @@
 
         handle.style.transform = `translate(${normX * 50}%, ${normY * 50}%)`;
 
-        // Left joystick: forward/back (Y axis)
-        // Right joystick: left/right (X axis)
-        if (axis === 'forward') {
-          this.forward = -normY;
-        } else if (axis === 'turn') {
-          this.turn = normX;
-        }
+        // Update joystick state for speed curve
+        const state = this.joystickStates[axis];
+        if (distance > 0.01) {
+          // Joystick is being held in some direction
+          if (!state.held) {
+            state.held = true;
+            state.since = performance.now();
+          }
 
-        this.onChange?.({
-          forward: this.forward,
-          turn: this.turn,
-          active: true
-        });
+          // Determine direction only (sign: -1 or 1), ignore magnitude
+          // Speed curve will determine the actual value based on hold duration
+          if (axis === 'forward') {
+            state.direction = -normY < 0 ? -1 : 1; // Y is inverted
+          } else if (axis === 'turn') {
+            state.direction = normX < 0 ? -1 : 1;
+          }
+        } else {
+          // Joystick is in center position
+          state.held = false;
+          state.direction = 0;
+        }
       };
 
       const stopJoystick = (handle, axis) => {
         handle.style.transform = "translate(-50%, -50%)";
-        if (axis === 'forward') {
-          this.forward = 0;
-        } else if (axis === 'turn') {
-          this.turn = 0;
-        }
 
-        this.onChange?.({
-          forward: this.forward,
-          turn: this.turn,
-          active: this.forward !== 0 || this.turn !== 0
-        });
+        // Reset joystick state
+        const state = this.joystickStates[axis];
+        state.held = false;
+        state.direction = 0;
       };
 
       // Left joystick (forward/back)
@@ -132,11 +144,11 @@
         updateAllCenters();
         this.active = true;
         leftBase.setPointerCapture(e.pointerId);
-        onMove(leftBase, leftHandle, e.clientX, e.clientY, 'left', 'forward');
+        onMove(leftHandle, e.clientX, e.clientY, 'left', 'forward');
       });
 
       leftBase.addEventListener("pointermove", (e) => {
-        onMove(leftBase, leftHandle, e.clientX, e.clientY, 'left', 'forward');
+        onMove(leftHandle, e.clientX, e.clientY, 'left', 'forward');
       });
 
       leftBase.addEventListener("pointerup", () => stopJoystick(leftHandle, 'forward'));
@@ -147,11 +159,11 @@
         updateAllCenters();
         this.active = true;
         rightBase.setPointerCapture(e.pointerId);
-        onMove(rightBase, rightHandle, e.clientX, e.clientY, 'right', 'turn');
+        onMove(rightHandle, e.clientX, e.clientY, 'right', 'turn');
       });
 
       rightBase.addEventListener("pointermove", (e) => {
-        onMove(rightBase, rightHandle, e.clientX, e.clientY, 'right', 'turn');
+        onMove(rightHandle, e.clientX, e.clientY, 'right', 'turn');
       });
 
       rightBase.addEventListener("pointerup", () => stopJoystick(rightHandle, 'turn'));
@@ -159,6 +171,51 @@
 
       window.addEventListener("resize", updateAllCenters);
       updateAllCenters();
+
+      // Start tick loop for speed curve application
+      requestAnimationFrame(this._tick);
+    }
+
+    // Apply speed curve based on hold duration
+    _tick() {
+      const now = performance.now();
+
+      // Calculate forward axis with speed curve
+      const forwardState = this.joystickStates.forward;
+      if (forwardState.held && Math.abs(forwardState.direction) > 0.001) {
+        const duration = now - forwardState.since;
+        const curveValue = this.curve.sample(duration);
+        // Apply curve value in the direction of joystick movement
+        this.forward = forwardState.direction * curveValue;
+      } else {
+        this.forward = 0;
+      }
+
+      // Calculate turn axis with speed curve
+      const turnState = this.joystickStates.turn;
+      if (turnState.held && Math.abs(turnState.direction) > 0.001) {
+        const duration = now - turnState.since;
+        const curveValue = this.curve.sample(duration);
+        // Apply curve value in the direction of joystick movement
+        this.turn = turnState.direction * curveValue;
+      } else {
+        this.turn = 0;
+      }
+
+      const active = Math.abs(this.forward) > 0.001 || Math.abs(this.turn) > 0.001;
+
+      this.onChange?.({
+        forward: this.forward,
+        turn: this.turn,
+        active
+      });
+
+      requestAnimationFrame(this._tick);
+    }
+
+    // Update speed curve
+    setCurve(curve) {
+      this.curve = curve;
     }
   }
 
