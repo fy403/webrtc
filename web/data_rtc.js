@@ -95,6 +95,9 @@ window.addEventListener('load', () => {
         rxSpeed: 0,
         txSpeed: 0,
         cpuUsage: 0,
+        memTotal: 0,
+        memUsed: 0,
+        connectionCount: 0,
         vehicleSpeed: 0,
         lastUpdate: null,
     };
@@ -387,8 +390,7 @@ window.addEventListener('load', () => {
     }
 
     function dataUpdateSystemStatusDisplay() {
-        const {rxSpeed, txSpeed, cpuUsage, lastUpdate} =
-            dataSystemStatus;
+        const {rxSpeed, txSpeed, lastUpdate} = dataSystemStatus;
 
         if (dataElements.rxSpeed && dataElements.rxSpeedUnit) {
             const rxSpeedFormatted = formatSpeed(rxSpeed);
@@ -400,9 +402,9 @@ window.addEventListener('load', () => {
             dataElements.txSpeed.textContent = txSpeedFormatted.value;
             dataElements.txSpeedUnit.textContent = txSpeedFormatted.unit;
         }
-        
-        // 更新CPU仪表盘
-        updateCpuGauge(cpuUsage);
+
+        // 更新系统状态面板
+        updateSystemStatusPanel();
 
         // 更新油门比例仪表盘 (使用实际发送的油门值)
         const throttlePercent = Math.abs(actualSentForward * 100);
@@ -410,8 +412,55 @@ window.addEventListener('load', () => {
 
         // 更新车辆速度表盘 (使用statusData中的vehicleSpeed)
         updateVehicleSpeedGauge(dataSystemStatus.vehicleSpeed);
-        
+
         if (dataElements.lastUpdate) dataElements.lastUpdate.textContent = lastUpdate ? lastUpdate.toLocaleTimeString() : '--';
+    }
+
+    function updateSystemStatusPanel() {
+        const {cpuUsage, memUsed, memTotal, connectionCount} = dataSystemStatus;
+
+        // 更新CPU状态 - 显示百分比数值
+        updateStatusItem('cpu', cpuUsage, cpuUsage, '%', 80);
+
+        // 更新内存状态 - 显示已用MB数
+        const memPercent = memTotal > 0 ? (memUsed / memTotal) * 100 : 0;
+        const memValueText = memUsed > 0 ? `${memUsed} MB` : '0 MB';
+        updateStatusItem('mem', memPercent, memValueText, 90);
+
+        // 更新连接数
+        const connCountElement = document.getElementById('connCount');
+        if (connCountElement) {
+            connCountElement.textContent = connectionCount || 0;
+        }
+    }
+
+    function updateStatusItem(type, value, displayValue, suffix, highLoadThreshold) {
+        const percent = Math.max(0, Math.min(100, value));
+
+        const valueElement = document.getElementById(`${type}Value`);
+        const barElement = document.getElementById(`${type}Bar`);
+
+        if (valueElement) {
+            if (typeof displayValue === 'number') {
+                valueElement.textContent = `${Math.round(displayValue)}${suffix || ''}`;
+            } else {
+                valueElement.textContent = displayValue;
+            }
+        }
+
+        if (barElement) {
+            barElement.style.width = `${percent}%`;
+
+            // 根据负载改变颜色
+            const statusItem = barElement.closest('.status-item');
+            if (statusItem) {
+                if (percent >= highLoadThreshold) {
+                    statusItem.classList.add('high-load');
+                } else {
+                    statusItem.classList.remove('high-load');
+                }
+            }
+        }
     }
 
     function dataParseHexString(hexString) {
@@ -442,12 +491,34 @@ window.addEventListener('load', () => {
     }
 
     function dataHandleSystemStatusData(statusData) {
-        // console.log("Data: ", statusData)
+        console.log("Data: ", statusData)
         if (!statusData) return;
         if (statusData.rx_speed !== undefined) dataSystemStatus.rxSpeed = (parseInt(statusData.rx_speed) * 8) / 100;
         if (statusData.tx_speed !== undefined) dataSystemStatus.txSpeed = (parseInt(statusData.tx_speed) * 8) / 100;
-        if (statusData.cpu_usage !== undefined) dataSystemStatus.cpuUsage = parseInt(statusData.cpu_usage) / 100;
-        if (statusData.vehicle_speed !== undefined) dataSystemStatus.vehicleSpeed = parseFloat(statusData.vehicle_speed);
+
+        // CPU信息
+        if (statusData.cpu_usage !== undefined) {
+            dataSystemStatus.cpuUsage = parseInt(statusData.cpu_usage) / 100;
+        }
+
+        // 内存信息
+        if (statusData.mem_total_mb !== undefined) {
+            dataSystemStatus.memTotal = parseInt(statusData.mem_total_mb);
+        }
+        if (statusData.mem_used_mb !== undefined) {
+            dataSystemStatus.memUsed = parseInt(statusData.mem_used_mb);
+        }
+
+        // 连接数
+        if (statusData.connection_count !== undefined) {
+            dataSystemStatus.connectionCount = parseInt(statusData.connection_count);
+        }
+
+        // 车辆速度
+        if (statusData.vehicle_speed !== undefined) {
+            dataSystemStatus.vehicleSpeed = parseFloat(statusData.vehicle_speed);
+        }
+
         dataSystemStatus.lastUpdate = new Date();
         dataUpdateSystemStatusDisplay();
         dataUpdateConnStatus('connected', 'CONNECTED');
@@ -492,30 +563,6 @@ window.addEventListener('load', () => {
             pointerGroup.style.transform = `rotate(${angle}deg)`;
 
             vehicleSpeedValue.textContent = Math.round(clampedSpeed);
-        }
-    }
-
-    function updateCpuGauge(cpuPercent) {
-        const cpuProgress = document.getElementById('cpuProgress');
-        const cpuValue = document.getElementById('cpuValue');
-        
-        if (cpuProgress && cpuValue) {
-            // 圆周长是 283 (2 * PI * 45)
-            const maxDash = 283;
-            const percent = Math.max(0, Math.min(100, cpuPercent));
-            const dashOffset = maxDash - (percent / 100) * maxDash;
-            
-            cpuProgress.style.strokeDashoffset = dashOffset;
-            cpuValue.textContent = Math.round(percent);
-            
-            // 根据CPU使用率改变颜色
-            if (percent >= 80) {
-                cpuProgress.style.stroke = '#FF4500';
-            } else if (percent >= 50) {
-                cpuProgress.style.stroke = '#FFA500';
-            } else {
-                cpuProgress.style.stroke = '#00CED1';
-            }
         }
     }
 
@@ -619,7 +666,7 @@ window.addEventListener('load', () => {
         window.channelKeyBinder.start();
 
         // 当通道值变化时，立即发送新的 SBUS 帧
-        window.channelKeyBinder.setOnValueChange((values) => {
+        window.channelKeyBinder.setOnValueChange(() => {
             if (lastSentState) {
                 // 使用最后发送的 forward 和 turn 值
                 dataSendSbus(lastSentState.forward, lastSentState.turn);

@@ -1320,71 +1320,168 @@ body.mobile-layout {
     letter-spacing: 1px;
 }
 
-/* CPU仪表盘容器 - 右下角 */
-.cpu-gauge-container {
+/* 系统状态显示面板 - 右下角 */
+.system-status-panel {
     position: absolute;
     bottom: 20px;
     right: 20px;
-    z-index: 20;
-}
-
-.cpu-gauge {
-    position: relative;
-    width: 120px;
     display: flex;
     flex-direction: column;
-    align-items: center;
     gap: 8px;
+    z-index: 20;
+    background: rgba(10, 14, 26, 0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--titan-border);
+    padding: 10px;
+    border-radius: 0;
+    clip-path: polygon(
+        0 0,
+        calc(100% - 10px) 0,
+        100% 10px,
+        100% 100%,
+        10px 100%,
+        0 calc(100% - 10px)
+    );
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
 }
 
-.cpu-circle {
-    position: relative;
-    width: 100px;
-    height: 100px;
-}
-
-.cpu-svg {
-    width: 100%;
-    height: 100%;
-}
-
-.cpu-bg {
-    stroke-linecap: round;
-}
-
-.cpu-progress {
-    transition: stroke-dashoffset 0.3s ease;
-    filter: drop-shadow(0 0 8px rgba(0, 206, 209, 0.6));
-}
-
-.cpu-value-container {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+.status-item {
     display: flex;
-    align-items: baseline;
+    align-items: center;
+    gap: 10px;
+    min-width: 180px;
+}
+
+.status-icon-circle {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--titan-bg-light);
+    border: 1px solid var(--titan-border);
+    border-radius: 0;
+    flex-shrink: 0;
+}
+
+.status-item-icon {
+    width: 18px;
+    height: 18px;
+    stroke: var(--titan-secondary);
+}
+
+.cpu-status .status-item-icon {
+    stroke: var(--titan-secondary);
+}
+
+.memory-status .status-item-icon {
+    stroke: #9370DB;
+}
+
+.connection-status .status-item-icon {
+    stroke: var(--titan-primary);
+}
+
+.status-item-content {
+    display: flex;
+    flex-direction: column;
     gap: 2px;
+    flex: 1;
 }
 
-.cpu-number {
-    font-size: 24px;
-    font-weight: 700;
-    color: #fff;
-    text-shadow: 0 0 10px rgba(0, 206, 209, 0.8);
-}
-
-.cpu-unit {
-    font-size: 12px;
-    color: var(--titan-secondary);
-    font-weight: 600;
-}
-
-.cpu-label {
-    font-size: 10px;
+.status-item-label {
+    font-size: 9px;
     color: var(--titan-text-dim);
+    font-weight: 600;
     letter-spacing: 1px;
     text-transform: uppercase;
+}
+
+.status-item-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--titan-text);
+    font-family: 'Courier New', monospace;
+    text-shadow: 0 0 6px rgba(255, 255, 255, 0.3);
+}
+
+.status-item-bar {
+    width: 60px;
+    height: 4px;
+    background: var(--titan-bg-mid);
+    border-radius: 0;
+    overflow: hidden;
+    border: 1px solid var(--titan-border);
+    flex-shrink: 0;
+}
+
+.status-item-progress {
+    height: 100%;
+    background: linear-gradient(90deg, var(--titan-secondary), var(--titan-secondary-dim));
+    border-radius: 0;
+    transition: width 0.3s ease;
+    filter: drop-shadow(0 0 4px rgba(0, 206, 209, 0.6));
+}
+
+.cpu-status .status-item-progress {
+    background: linear-gradient(90deg, var(--titan-secondary), var(--titan-secondary-dim));
+}
+
+.memory-status .status-item-progress {
+    background: linear-gradient(90deg, #9370DB, #8A2BE2);
+    filter: drop-shadow(0 0 4px rgba(147, 112, 219, 0.6));
+}
+
+.connection-status .status-item-progress {
+    background: linear-gradient(90deg, var(--titan-primary), var(--titan-warning));
+    filter: drop-shadow(0 0 4px rgba(255, 165, 0, 0.6));
+}
+
+/* 状态警告颜色 */
+.status-item.high-load .status-item-progress {
+    background: linear-gradient(90deg, var(--titan-warning), #FF6347);
+    filter: drop-shadow(0 0 6px rgba(255, 69, 0, 0.8));
+}
+
+.status-item.high-load .status-item-value {
+    color: var(--titan-warning);
+    text-shadow: 0 0 8px rgba(255, 69, 0, 0.6);
+}
+
+@media (max-width: 768px) {
+    .system-status-panel {
+        bottom: 10px;
+        right: 10px;
+        padding: 8px;
+        gap: 6px;
+    }
+
+    .status-item {
+        min-width: 140px;
+    }
+
+    .status-icon-circle {
+        width: 28px;
+        height: 28px;
+    }
+
+    .status-item-icon {
+        width: 14px;
+        height: 14px;
+    }
+
+    .status-item-label {
+        font-size: 8px;
+    }
+
+    .status-item-value {
+        font-size: 12px;
+    }
+
+    .status-item-bar {
+        width: 45px;
+        height: 3px;
+    }
 }
 
 .panel-label {

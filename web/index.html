@@ -92,22 +92,59 @@
                         </div>
                     </div>
 
-                    <!-- 右下角 - CPU显示 -->
-                    <div class="cpu-gauge-container">
-                        <div class="cpu-gauge">
-                            <div class="cpu-circle">
-                                <svg class="cpu-svg" viewBox="0 0 100 100">
-                                    <!-- CPU背景圆 -->
-                                    <circle class="cpu-bg" cx="50" cy="50" r="45" fill="none" stroke="#1a1a1a" stroke-width="8"/>
-                                    <!-- CPU进度圆 -->
-                                    <circle class="cpu-progress" id="cpuProgress" cx="50" cy="50" r="45" fill="none" stroke="#00CED1" stroke-width="8" stroke-dasharray="283" stroke-dashoffset="283" stroke-linecap="round" transform="rotate(-90 50 50)"/>
+                    <!-- 右下角 - 系统状态显示面板 -->
+                    <div class="system-status-panel">
+                        <!-- CPU -->
+                        <div class="status-item cpu-status">
+                            <div class="status-icon-circle">
+                                <svg class="status-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="4" y="4" width="16" height="16" rx="2"/>
+                                    <line x1="9" y1="9" x2="9" y2="9"/>
+                                    <line x1="15" y1="9" x2="15" y2="9"/>
+                                    <line x1="9" y1="15" x2="15" y2="15"/>
                                 </svg>
-                                <div class="cpu-value-container">
-                                    <div class="cpu-number" id="cpuValue">0</div>
-                                    <div class="cpu-unit">%</div>
-                                </div>
                             </div>
-                            <div class="cpu-label">CPU</div>
+                            <div class="status-item-content">
+                                <div class="status-item-label">CPU</div>
+                                <div class="status-item-value" id="cpuValue">0%</div>
+                            </div>
+                            <div class="status-item-bar">
+                                <div class="status-item-progress" id="cpuBar"></div>
+                            </div>
+                        </div>
+
+                        <!-- Memory -->
+                        <div class="status-item memory-status">
+                            <div class="status-icon-circle">
+                                <svg class="status-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M4 6h16v12H4z"/>
+                                    <line x1="4" y1="10" x2="20" y2="10"/>
+                                    <line x1="4" y1="14" x2="20" y2="14"/>
+                                </svg>
+                            </div>
+                            <div class="status-item-content">
+                                <div class="status-item-label">MEM</div>
+                                <div class="status-item-value" id="memValue">0 MB</div>
+                            </div>
+                            <div class="status-item-bar">
+                                <div class="status-item-progress" id="memBar"></div>
+                            </div>
+                        </div>
+
+                        <!-- Connection Count -->
+                        <div class="status-item connection-status">
+                            <div class="status-icon-circle">
+                                <svg class="status-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                    <circle cx="9" cy="7" r="4"/>
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                                </svg>
+                            </div>
+                            <div class="status-item-content">
+                                <div class="status-item-label">CONNECTIONS</div>
+                                <div class="status-item-value" id="connCount">0</div>
+                            </div>
                         </div>
                     </div>
 

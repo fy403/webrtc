@@ -132,6 +132,19 @@ TURN服务器可以自己搭建[搭建私有TURN服务器](turn_server/README.md
 
 
 ### 安装启动
+```shell
+# 配置开机启动Docker
+sudo systemctl enable docker
+# 从网盘下载Docker镜像()
+# 通过网盘分享的文件：alifys_ubuntu_arm64.tar.gz
+# 链接: https://pan.baidu.com/s/1KUMbif2980GnhZgIphmZ5g?pwd=fy43 提取码: fy43
+
+# 解压
+gzip -d -c alifys_ubuntu_arm64.tar.gz > alifys_ubuntu_arm64.tar
+# 导入镜像
+# 加载tar文件并获取镜像ID，然后直接打标签
+docker import alifys_ubuntu_arm64.tar alifys/ubuntu:arm64
+```
 
 ```shell
 
