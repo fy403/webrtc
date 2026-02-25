@@ -46,6 +46,70 @@
                     <div class="corner-decoration top-right"></div>
                     <div class="corner-decoration bottom-left"></div>
                     <div class="corner-decoration bottom-right"></div>
+
+                    <!-- 右上角 - 视频参数面板 -->
+                    <div class="video-stats-panel" id="videoStatsPanel">
+                        <div class="video-stats-header">
+                            <svg class="video-stats-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect height="16" rx="2" width="20" x="2" y="4" />
+                                <polygon points="10 8 16 12 10 16 10 8" />
+                            </svg>
+                            <span>VIDEO TRACK</span>
+                        </div>
+                        <div class="video-stats-content">
+                            <div class="video-stat-item">
+                                <span class="video-stat-label">FPS</span>
+                                <span class="video-stat-value" id="videoFps">0</span>
+                            </div>
+                            <div class="video-stat-item">
+                                <span class="video-stat-label">BITRATE</span>
+                                <span class="video-stat-value" id="videoBitrate">0 Kbps</span>
+                            </div>
+                            <div class="video-stat-item">
+                                <span class="video-stat-label">LATENCY</span>
+                                <span class="video-stat-value" id="videoLatency">0 ms</span>
+                            </div>
+                            <div class="video-stat-item">
+                                <span class="video-stat-label">CODEC</span>
+                                <span class="video-stat-value" id="videoCodec">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 左上角 - 音频状态指示器 -->
+                    <div class="audio-status-indicators">
+                        <!-- 麦克风发送状态 -->
+                        <div class="audio-indicator mic-indicator" id="micIndicator" title="麦克风发送">
+                            <div class="audio-indicator-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                                    <line x1="12" x2="12" y1="19" y2="23" />
+                                    <line x1="8" x2="16" y1="23" y2="23" />
+                                </svg>
+                            </div>
+                            <div class="mic-waves">
+                                <div class="mic-wave wave-1"></div>
+                                <div class="mic-wave wave-2"></div>
+                                <div class="mic-wave wave-3"></div>
+                            </div>
+                        </div>
+                        <!-- 扬声器接收状态 -->
+                        <div class="audio-indicator speaker-indicator" id="speakerIndicator" title="扬声器接收">
+                            <div class="audio-indicator-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                                </svg>
+                            </div>
+                            <div class="speaker-waves">
+                                <div class="speaker-wave wave-1"></div>
+                                <div class="speaker-wave wave-2"></div>
+                                <div class="speaker-wave wave-3"></div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- 左下角 - 速度和油门比例仪表盘容器 -->
                     <div class="gauges-bottom-left">
                         <!-- 车辆速度仪表盘 -->

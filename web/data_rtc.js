@@ -491,7 +491,7 @@ window.addEventListener('load', () => {
     }
 
     function dataHandleSystemStatusData(statusData) {
-        console.log("Data: ", statusData)
+        // console.log("Data: ", statusData)
         if (!statusData) return;
         if (statusData.rx_speed !== undefined) dataSystemStatus.rxSpeed = (parseInt(statusData.rx_speed) * 8) / 100;
         if (statusData.tx_speed !== undefined) dataSystemStatus.txSpeed = (parseInt(statusData.tx_speed) * 8) / 100;

@@ -236,6 +236,186 @@ window.addEventListener('load', () => {
     // Initialize track status
     updateTrackStatus();
 
+    // ========== 视频统计更新模块 ==========
+    const videoStatsElements = {
+        fps: document.getElementById('videoFps'),
+        bitrate: document.getElementById('videoBitrate'),
+        latency: document.getElementById('videoLatency'),
+        codec: document.getElementById('videoCodec')
+    };
+
+    let lastBytesReceived = 0;
+    let lastTimestamp = Date.now();
+
+    // 更新视频统计信息
+    async function updateVideoStats() {
+        if (!remoteVideo.srcObject) {
+            return;
+        }
+
+        const activeConnections = Object.values(peerConnectionMap).filter(
+            pc => pc && pc.connectionState === 'connected'
+        );
+
+        if (activeConnections.length === 0) return;
+
+        const pc = activeConnections[0];
+
+        try {
+            const stats = await pc.getStats();
+            let videoStats = null;
+            let inboundAudioStats = null;
+
+            // 查找入站视频和音频统计
+            for (const [, report] of stats.entries()) {
+                if (report.type === 'inbound-rtp' && report.kind === 'video') {
+                    videoStats = report;
+                }
+                if (report.type === 'inbound-rtp' && report.kind === 'audio') {
+                    inboundAudioStats = report;
+                }
+            }
+
+            if (!videoStats) return;
+
+            // 更新 FPS
+            const fps = videoStats.framesPerSecond || 0;
+            if (videoStatsElements.fps) {
+                videoStatsElements.fps.textContent = fps.toFixed(1);
+            }
+
+            // 更新码率
+            const bytesReceived = videoStats.bytesReceived || 0;
+            const now = Date.now();
+            const timeDiff = (now - lastTimestamp) / 1000; // 秒
+            const bytesDiff = bytesReceived - lastBytesReceived;
+            const bitrate = timeDiff > 0 ? (bytesDiff * 8 / 1000) : 0; // Kbps
+
+            if (videoStatsElements.bitrate) {
+                if (bitrate >= 1000) {
+                    videoStatsElements.bitrate.textContent = (bitrate / 1000).toFixed(2) + ' Mbps';
+                } else {
+                    videoStatsElements.bitrate.textContent = bitrate.toFixed(0) + ' Kbps';
+                }
+            }
+
+            lastBytesReceived = bytesReceived;
+            lastTimestamp = now;
+
+            // 更新延迟
+            const jitterBufferDelay = ((videoStats.jitterBufferDelay || 0) / (videoStats.jitterBufferEmittedCount || 1)) * 1000;
+            const decodeTime = ((videoStats.totalDecodeTime || 0) / (videoStats.framesDecoded || 1)) * 1000;
+            const totalLatency = jitterBufferDelay + decodeTime;
+
+            if (videoStatsElements.latency) {
+                videoStatsElements.latency.textContent = totalLatency.toFixed(0) + ' ms';
+            }
+
+            // 更新编解码器信息
+            if (videoStats.codecId) {
+                const codecReport = stats.get(videoStats.codecId);
+                if (codecReport && codecReport.mimeType) {
+                    const codecName = codecReport.mimeType.split('/')[1].toUpperCase();
+                    if (videoStatsElements.codec) {
+                        videoStatsElements.codec.textContent = codecName;
+                    }
+                }
+            }
+
+            // 更新音频波纹效果 - 检测是否在接收音频
+            if (inboundAudioStats) {
+                const audioLevel = inboundAudioStats.audioLevel || 0;
+                const speakerIndicator = document.getElementById('speakerIndicator');
+
+                if (speakerIndicator) {
+                    if (audioLevel > 0.01) {
+                        speakerIndicator.classList.add('active');
+                    } else {
+                        speakerIndicator.classList.remove('active');
+                    }
+                }
+            }
+
+        } catch (err) {
+            console.warn('Failed to update video stats:', err);
+        }
+    }
+
+    // 每秒更新视频统计
+    setInterval(updateVideoStats, 1000);
+
+    // ========== 音频发送检测模块 ==========
+    let audioContext = null;
+    let analyser = null;
+
+    // 初始化音频分析
+    async function setupAudioAnalysis() {
+        if (!localStream) return;
+
+        try {
+            // 创建音频上下文
+            audioContext = new (window.AudioContext || window['webkitAudioContext'])();
+
+            // 创建分析器
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.8;
+
+            // 连接音频源
+            const audioTracks = localStream.getAudioTracks();
+            if (audioTracks.length > 0) {
+                const source = audioContext.createMediaStreamSource(localStream);
+                source.connect(analyser);
+
+                // 开始检测音频
+                detectAudioActivity();
+            }
+        } catch (err) {
+            console.warn('Failed to setup audio analysis:', err);
+        }
+    }
+
+    // 检测麦克风活动
+    function detectAudioActivity() {
+        if (!analyser) return;
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const micIndicator = document.getElementById('micIndicator');
+
+        function checkAudioLevel() {
+            analyser.getByteFrequencyData(dataArray);
+
+            // 计算平均音量
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+            }
+            const average = sum / dataArray.length;
+
+            // 更新麦克风指示器
+            if (micIndicator) {
+                if (average > 30) {
+                    micIndicator.classList.add('active');
+                } else {
+                    micIndicator.classList.remove('active');
+                }
+            }
+
+            requestAnimationFrame(checkAudioLevel);
+        }
+
+        checkAudioLevel();
+    }
+
+    // 在获取本地流后初始化音频分析
+    const originalGetLocalStream = getLocalStream;
+    getLocalStream = async function() {
+        await originalGetLocalStream();
+        if (localStream) {
+            setupAudioAnalysis();
+        }
+    };
+
     // ========== 性能优化模块 ==========
     // 使用独立的优化类
     const PerformanceOptimizer = new WebRTCOptimizer(remoteVideo);
