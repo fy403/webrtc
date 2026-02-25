@@ -186,6 +186,9 @@ void RCClient::sendSystemStatus() {
     // 构建状态数据
     std::map<std::string, std::string> statusData;
 
+    // 连接信息
+    statusData["connection_count"] = std::to_string(getDataChannelCount());
+
     // 网络信息
     statusData["rx_speed"] = std::to_string(static_cast<uint16_t>(rx_speed * 100));
     statusData["tx_speed"] = std::to_string(static_cast<uint16_t>(tx_speed * 100));
