@@ -4,11 +4,35 @@
 #include <memory>
 
 NetworkMonitor::NetworkMonitor()
-    : last_rx_bytes_(0), last_tx_bytes_(0),
-      last_net_time_(std::chrono::steady_clock::now()) {}
-NetworkMonitor::~NetworkMonitor() {}
+    : AsyncMonitor(),
+      last_rx_bytes_(0), last_tx_bytes_(0),
+      last_net_time_(std::chrono::steady_clock::now()),
+      cached_rx_speed_(0), cached_tx_speed_(0) {}
+
+NetworkMonitor::~NetworkMonitor()
+{
+}
+
+void NetworkMonitor::collectData()
+{
+    double rx_speed, tx_speed;
+    if (getStatsInternal(rx_speed, tx_speed))
+    {
+        std::lock_guard<std::mutex> lock(stats_mutex_);
+        cached_rx_speed_ = rx_speed;
+        cached_tx_speed_ = tx_speed;
+    }
+}
 
 bool NetworkMonitor::getStats(double &rx_speed, double &tx_speed)
+{
+    std::lock_guard<std::mutex> lock(stats_mutex_);
+    rx_speed = cached_rx_speed_;
+    tx_speed = cached_tx_speed_;
+    return true;
+}
+
+bool NetworkMonitor::getStatsInternal(double &rx_speed, double &tx_speed)
 {
     try
     {

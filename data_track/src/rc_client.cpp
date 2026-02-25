@@ -25,6 +25,9 @@ RCClient::RCClient(const RCClientConfig &config)
       last_control_sequence_(0) {
     last_status_time_ = std::chrono::steady_clock::now();
 
+    // 启动系统资源监控线程
+    system_monitor_.startMonitoring();
+
     // 如果配置中指定了4G模块参数，则初始化4G模块
     if (config.has4gConfig()) {
         if (!system_monitor_.open_4g(config.system_monitor_gsm_port, config.system_monitor_gsm_baudrate)) {
@@ -50,6 +53,9 @@ RCClient::~RCClient() {
     if (health_check_thread_.joinable()) {
         health_check_thread_.join();
     }
+
+    // 停止系统资源监控线程
+    system_monitor_.stopMonitoring();
 
     if (motor_controller_) {
         delete motor_controller_;
@@ -148,9 +154,14 @@ void RCClient::stopAll() {
 
 void RCClient::sendSystemStatus() {
     // 获取网络和CPU资源信息
-    double rx_speed = 0.0, tx_speed = 0.0, cpu_usage = 0.0;
+    double rx_speed = 0.0, tx_speed = 0.0;
+    double mem_total_mb = 0.0, mem_used_mb = 0.0, mem_free_mb = 0.0, mem_usage = 0.0;
     system_monitor_.getNetworkStats(rx_speed, tx_speed);
-    system_monitor_.getCPUUsage(cpu_usage);
+    system_monitor_.getMemoryInfo(mem_total_mb, mem_used_mb, mem_free_mb, mem_usage);
+
+    // 获取详细CPU信息
+    CPUMonitor::CPUInfo cpu_info;
+    system_monitor_.getCPUInfo(cpu_info);
 
     // 获取4G模块信息
     std::string signal = "N/A", simStatus = "N/A", network = "N/A", moduleInfo = "N/A";
@@ -179,8 +190,29 @@ void RCClient::sendSystemStatus() {
     statusData["rx_speed"] = std::to_string(static_cast<uint16_t>(rx_speed * 100));
     statusData["tx_speed"] = std::to_string(static_cast<uint16_t>(tx_speed * 100));
 
-    // 系统资源
-    statusData["cpu_usage"] = std::to_string(static_cast<uint16_t>(cpu_usage * 100));
+    // CPU信息
+    statusData["cpu_usage"] = std::to_string(static_cast<uint16_t>(cpu_info.total_usage * 100));
+    statusData["cpu_core_count"] = std::to_string(cpu_info.core_count);
+    statusData["cpu_load_1min"] = std::to_string(static_cast<uint16_t>(cpu_info.load_1min * 100));
+    statusData["cpu_load_5min"] = std::to_string(static_cast<uint16_t>(cpu_info.load_5min * 100));
+    statusData["cpu_load_15min"] = std::to_string(static_cast<uint16_t>(cpu_info.load_15min * 100));
+    statusData["cpu_total_tasks"] = std::to_string(cpu_info.total_tasks);
+    statusData["cpu_running_tasks"] = std::to_string(cpu_info.running_tasks);
+    statusData["cpu_sleeping_tasks"] = std::to_string(cpu_info.sleeping_tasks);
+
+    // 各核心使用率（使用逗号分隔）
+    std::string core_usage_str;
+    for (size_t i = 0; i < cpu_info.core_usage.size(); ++i) {
+        if (i > 0) core_usage_str += ",";
+        core_usage_str += std::to_string(static_cast<uint16_t>(cpu_info.core_usage[i] * 100));
+    }
+    statusData["cpu_core_usage"] = core_usage_str;
+
+    // 内存信息
+    statusData["mem_usage"] = std::to_string(static_cast<uint16_t>(mem_usage * 100));
+    statusData["mem_total_mb"] = std::to_string(static_cast<uint32_t>(mem_total_mb));
+    statusData["mem_used_mb"] = std::to_string(static_cast<uint32_t>(mem_used_mb));
+    statusData["mem_free_mb"] = std::to_string(static_cast<uint32_t>(mem_free_mb));
 
     // 4G模块信息
     statusData["4g_signal"] = signal;

@@ -1,8 +1,23 @@
 #include "system_monitor.h"
 
 SystemMonitor::SystemMonitor()
-    : cpu_monitor_(), network_monitor_(), service_monitor_(), gsm_monitor_(), gps_monitor_()
+    : cpu_monitor_(), network_monitor_(), memory_monitor_(),
+      service_monitor_(), gsm_monitor_(), gps_monitor_()
 {
+}
+
+void SystemMonitor::startMonitoring()
+{
+    cpu_monitor_.start();
+    network_monitor_.start();
+    memory_monitor_.start();
+}
+
+void SystemMonitor::stopMonitoring()
+{
+    cpu_monitor_.stop();
+    network_monitor_.stop();
+    memory_monitor_.stop();
 }
 
 // 初始化4G模块（可选）
@@ -25,6 +40,16 @@ bool SystemMonitor::getNetworkStats(double &rx_speed, double &tx_speed)
 bool SystemMonitor::getCPUUsage(double &cpu_usage)
 {
     return cpu_monitor_.getUsage(cpu_usage);
+}
+
+bool SystemMonitor::getCPUInfo(CPUMonitor::CPUInfo &info)
+{
+    return cpu_monitor_.getCPUInfo(info);
+}
+
+bool SystemMonitor::getMemoryInfo(double &total_mb, double &used_mb, double &free_mb, double &usage_percent)
+{
+    return memory_monitor_.getMemoryInfo(total_mb, used_mb, free_mb, usage_percent);
 }
 
 bool SystemMonitor::checkServiceStatus(const std::string &service_name)

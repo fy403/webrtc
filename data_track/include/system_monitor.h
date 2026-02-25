@@ -9,6 +9,7 @@
 #include <map>
 #include "cpu_monitor.h"
 #include "network_monitor.h"
+#include "memory_monitor.h"
 #include "service_monitor.h"
 #include "gsm_monitor.h"
 #include "gps_nmea_monitor.h"
@@ -17,6 +18,12 @@ class SystemMonitor
 {
 public:
     SystemMonitor();
+
+    // 启动所有监控线程
+    void startMonitoring();
+
+    // 停止所有监控线程
+    void stopMonitoring();
 
     // 初始化4G模块（可选）
     bool open_4g(const std::string &gsm_port = "/dev/ttyACM0", int gsm_baudrate = 115200);
@@ -29,6 +36,12 @@ public:
 
     // CPU usage
     bool getCPUUsage(double &cpu_usage);
+
+    // CPU detailed info
+    bool getCPUInfo(CPUMonitor::CPUInfo &info);
+
+    // Memory info
+    bool getMemoryInfo(double &total_mb, double &used_mb, double &free_mb, double &usage_percent);
 
     // Service status
     bool checkServiceStatus(const std::string &service_name);
@@ -58,6 +71,7 @@ private:
     // 子Monitor类实例
     CPUMonitor cpu_monitor_;
     NetworkMonitor network_monitor_;
+    MemoryMonitor memory_monitor_;
     ServiceMonitor service_monitor_;
     GSMMonitor gsm_monitor_;
     GPSNMEAMonitor gps_monitor_;
