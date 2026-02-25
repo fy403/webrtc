@@ -297,6 +297,17 @@
                     <div class="video-container">
                         <video autoplay id="remoteVideo" playsinline></video>
 
+                        <div class="helper-lines">
+                            <div class="helper-line vertical left"></div>
+                            <div class="helper-line vertical right"></div>
+                            <div class="helper-line horizontal top"></div>
+                            <div class="helper-line horizontal bottom"></div>
+                            <div class="helper-line focus top-left"></div>
+                            <div class="helper-line focus top-right"></div>
+                            <div class="helper-line focus bottom-left"></div>
+                            <div class="helper-line focus bottom-right"></div>
+                        </div>
+
                         <div class="no-signal-overlay" id="noSignalOverlay">
                             <div class="no-signal-text">NO SIGNAL</div>
                         </div>
@@ -319,6 +330,7 @@
                     <div class="control-buttons">
                         <button class="btn" id="reconnectBtn">RECONNECT</button>
                         <button class="btn" id="stopAllBtn">STOP ALL (Space)</button>
+                        <button class="btn" id="helperLinesBtn" title="TOGGLE HELPER LINES">📐</button>
                         <button class="btn" id="curveBtn" title="SPEED CURVE">📈</button>
                         <button class="btn" id="configBtn" title="CONFIG">⚙️</button>
                     </div>
@@ -667,6 +679,25 @@
             if (curveBtn) {
                 curveBtn.addEventListener('click', function() {
                     window.open('curve_editor.html', 'curveEditor', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+                });
+            }
+
+            // 初始化辅助线按钮
+            const helperLinesBtn = document.getElementById('helperLinesBtn');
+            const helperLines = document.querySelector('.helper-lines');
+            if (helperLinesBtn && helperLines) {
+                // 默认显示辅助线
+                helperLines.style.display = 'block';
+                helperLinesBtn.classList.add('btn-active');
+                
+                helperLinesBtn.addEventListener('click', function() {
+                    if (helperLines.style.display === 'block') {
+                        helperLines.style.display = 'none';
+                        helperLinesBtn.classList.remove('btn-active');
+                    } else {
+                        helperLines.style.display = 'block';
+                        helperLinesBtn.classList.add('btn-active');
+                    }
                 });
             }
 

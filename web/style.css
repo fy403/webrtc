@@ -1878,6 +1878,86 @@ body.mobile-layout {
     clip-path: polygon(100% 100%, 100% 0, 0 100%);
 }
 
+/* Helper Lines */
+.helper-lines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.helper-line {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.7);
+}
+
+/* Vertical lines */
+.helper-line.vertical {
+    width: 1px;
+    height: 100%;
+}
+
+.helper-line.vertical.left {
+    left: 25%;
+}
+
+.helper-line.vertical.right {
+    right: 25%;
+}
+
+/* Horizontal lines */
+.helper-line.horizontal {
+    width: 100%;
+    height: 1px;
+}
+
+.helper-line.horizontal.top {
+    top: 25%;
+}
+
+.helper-line.horizontal.bottom {
+    bottom: 25%;
+}
+
+/* Focus lines (corner indicators) */
+.helper-line.focus {
+    width: 20px;
+    height: 20px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.7);
+}
+
+.helper-line.focus.top-left {
+    top: 10%;
+    left: 10%;
+    border-right: none;
+    border-bottom: none;
+}
+
+.helper-line.focus.top-right {
+    top: 10%;
+    right: 10%;
+    border-left: none;
+    border-bottom: none;
+}
+
+.helper-line.focus.bottom-left {
+    bottom: 10%;
+    left: 10%;
+    border-right: none;
+    border-top: none;
+}
+
+.helper-line.focus.bottom-right {
+    bottom: 10%;
+    right: 10%;
+    border-left: none;
+    border-top: none;
+}
+
 .data-stream {
     position: absolute;
     width: 2px;
