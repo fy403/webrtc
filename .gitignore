@@ -12,3 +12,4 @@ cmake*/
 .history
 data_track/.history
 av_track/.history
+.c*

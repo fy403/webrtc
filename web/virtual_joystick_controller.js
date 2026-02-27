@@ -28,7 +28,7 @@
         const normX = distance ? dx / this.radius : 0;
         const normY = distance ? dy / this.radius : 0;
 
-        handle.style.transform = `translate(${normX * 50}%, ${normY * 50}%)`;
+        handle.style.transform = `translate(calc(-50% + ${normX * 50}%), calc(-50% + ${normY * 50}%))`;
         // Y is inverted: up is negative screen delta
         this.onChange?.({ forward: -normY, turn: normX, active: true });
       };
@@ -105,7 +105,7 @@
         const normX = distance ? dx / centerData.radius : 0;
         const normY = distance ? dy / centerData.radius : 0;
 
-        handle.style.transform = `translate(${normX * 50}%, ${normY * 50}%)`;
+        handle.style.transform = `translate(calc(-50% + ${normX * 50}%), calc(-50% + ${normY * 50}%))`;
 
         // Update joystick state for speed curve
         const state = this.joystickStates[axis];
