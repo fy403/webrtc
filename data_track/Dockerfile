@@ -42,6 +42,8 @@ ENV TTY_BAUDRATE=115200
 ENV GSM_PORT=/dev/ttyACM0
 ENV GSM_BAUDRATE=115200
 ENV MOTOR_DRIVER_TYPE=uart
+ENV GPS_PORT=/dev/ttyUSB1
+ENV GPS_BAUDRATE=115200
 ENV FONT_FILE="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 # Health check

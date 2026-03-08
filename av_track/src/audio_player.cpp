@@ -70,8 +70,6 @@ void AudioPlayer::stop() {
   }
 
   cleanup();
-  SDL_Quit();
-
   // 输出最终统计
   std::cout << "Audio player stopped. Final stats - "
             << "Packets received: " << packets_received_.load()
@@ -95,6 +93,9 @@ void AudioPlayer::cleanup() {
     swr_free(&swr_ctx_);
     swr_ctx_ = nullptr;
   }
+
+  // 清理 SDL
+  SDL_Quit();
 }
 
 bool AudioPlayer::initSDLAudio(int sample_rate, int channels,
@@ -312,12 +313,15 @@ void AudioPlayer::decodeThread() {
         av_packet_free(&packet);
       break;
     }
+
     if (!decoder_initialized) {
       if (!opus_decoder_->open_decoder()) {
         std::cerr << "Failed to initialize Opus decoder" << std::endl;
-        SDL_Quit();
-        exit(-100);
+        if (packet)
+          av_packet_free(&packet);
+        break;
       }
+      decoder_initialized = true;
     }
 
     packets_processed_++;
@@ -333,7 +337,8 @@ void AudioPlayer::decodeThread() {
         if (!initSDLAudio(out_sample_rate, out_channels, out_sample_fmt_sdl,
                           decoded_frame->nb_samples)) {
           std::cerr << "Failed to initialize SDL audio" << std::endl;
-          av_packet_free(&packet);
+          if (packet)
+            av_packet_free(&packet);
           break;
         }
         sdl_initialized = true;
@@ -438,7 +443,7 @@ void AudioPlayer::decodeThread() {
                     << err_str << ")" << std::endl;
         } else {
           // 将重采样后的帧放入队列
-          DebugUtils::save_raw_audio_frame2(resampled_frame, wav_filename);
+          // DebugUtils::save_raw_audio_frame2(resampled_frame, wav_filename);
           AVFrame *queue_frame = av_frame_alloc();
           if (queue_frame) {
             av_frame_move_ref(queue_frame, resampled_frame);
@@ -448,6 +453,8 @@ void AudioPlayer::decodeThread() {
               // 队列满时丢弃帧以降低延迟
               av_frame_free(&queue_frame);
             }
+          } else {
+            std::cerr << "Failed to allocate queue frame" << std::endl;
           }
         }
       } else {
@@ -468,7 +475,7 @@ void AudioPlayer::decodeThread() {
     //    }
   }
 
-  DebugUtils::finalize_raw_audio_frame_file2();
+  // DebugUtils::finalize_raw_audio_frame_file2();
   //  DebugUtils::finalize_opus_ogg_file();
   av_frame_free(&decoded_frame);
   av_frame_free(&resampled_frame);

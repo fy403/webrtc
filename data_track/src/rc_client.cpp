@@ -231,7 +231,7 @@ void RCClient::sendSystemStatus() {
     // statusData["gps_lon_dir"] = std::string(1, gps_lon_dir);
     statusData["gps_altitude"] = std::to_string(gps_altitude);
     statusData["gps_quality"] = std::to_string(gps_quality);
-    // statusData["gps_satellites"] = std::to_string(gps_satellites);
+    statusData["gps_satellites"] = std::to_string(gps_satellites);
     // statusData["gps_course"] = std::to_string(gps_course_true);
     statusData["gps_speed_kmh"] = std::to_string(gps_speed_kmh);
 

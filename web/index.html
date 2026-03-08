@@ -47,6 +47,74 @@
                     <div class="corner-decoration bottom-left"></div>
                     <div class="corner-decoration bottom-right"></div>
 
+
+
+                    <!-- 左上角 - GPS雷达圆圈和音频状态指示器 -->
+                    <div class="top-left-indicators">
+                        <!-- GPS雷达圆圈 -->
+                        <div class="gps-radar" id="gpsRadar" title="GPS方位">
+                            <svg class="radar-svg" viewBox="0 0 80 80">
+                                <!-- 雷达圆圈背景 -->
+                                <circle class="radar-circle-outer" cx="40" cy="40" r="35" fill="none" stroke="rgba(0, 165, 0, 0.3)" stroke-width="1"/>
+                                <circle class="radar-circle-middle" cx="40" cy="40" r="25" fill="none" stroke="rgba(0, 165, 0, 0.5)" stroke-width="1"/>
+                                <circle class="radar-circle-inner" cx="40" cy="40" r="15" fill="none" stroke="rgba(0, 165, 0, 0.8)" stroke-width="1"/>
+                                <!-- 方向箭头 -->
+                                <g class="radar-arrow" id="radarArrow" transform="translate(40, 40)">
+                                    <polygon points="0,-10 -6,6 0,2 6,6" fill="#FF4500"/>
+                                </g>
+                                <!-- H标记（起点） -->
+                                <g class="radar-home" id="radarHome" transform="translate(40, 40)" style="display: none;">
+                                    <text x="0" y="-30" text-anchor="middle" fill="var(--titan-primary)" font-size="14" font-weight="900">H</text>
+                                </g>
+                                <!-- 中心点 -->
+                                <circle cx="40" cy="40" r="3" fill="var(--titan-primary)"/>
+                                <!-- 刻度线 -->
+                                <line x1="40" y1="5" x2="40" y2="12" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1"/>
+                                <line x1="40" y1="68" x2="40" y2="75" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1"/>
+                                <line x1="5" y1="40" x2="12" y2="40" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1"/>
+                                <line x1="68" y1="40" x2="75" y2="40" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1"/>
+                            </svg>
+                        </div>
+
+                        <!-- 状态指示器组 -->
+                        <div class="status-indicators-group">
+                            <!-- 卫星数量指示器 -->
+                            <div class="status-indicator mic-indicator" id="satelliteIndicator" title="卫星数量">
+                                <div class="satellite-count" id="satelliteCount">0</div>
+                            </div>
+                            <!-- 麦克风发送状态 -->
+                            <div class="status-indicator mic-indicator" id="micIndicator" title="麦克风发送">
+                                <div class="status-indicator-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                                        <line x1="12" x2="12" y1="19" y2="23" />
+                                        <line x1="8" x2="16" y1="23" y2="23" />
+                                    </svg>
+                                </div>
+                                <div class="mic-waves">
+                                    <div class="mic-wave wave-1"></div>
+                                    <div class="mic-wave wave-2"></div>
+                                    <div class="mic-wave wave-3"></div>
+                                </div>
+                            </div>
+                            <!-- 扬声器接收状态 -->
+                            <div class="status-indicator speaker-indicator" id="speakerIndicator" title="扬声器接收">
+                                <div class="status-indicator-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                                    </svg>
+                                </div>
+                                <div class="speaker-waves">
+                                    <div class="speaker-wave wave-1"></div>
+                                    <div class="speaker-wave wave-2"></div>
+                                    <div class="speaker-wave wave-3"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- 右上角 - 视频参数面板 -->
                     <div class="video-stats-panel" id="videoStatsPanel">
                         <div class="video-stats-header">
@@ -72,40 +140,6 @@
                             <div class="video-stat-item">
                                 <span class="video-stat-label">CODEC</span>
                                 <span class="video-stat-value" id="videoCodec">--</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 左上角 - 音频状态指示器 -->
-                    <div class="audio-status-indicators">
-                        <!-- 麦克风发送状态 -->
-                        <div class="audio-indicator mic-indicator" id="micIndicator" title="麦克风发送">
-                            <div class="audio-indicator-icon">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                                    <line x1="12" x2="12" y1="19" y2="23" />
-                                    <line x1="8" x2="16" y1="23" y2="23" />
-                                </svg>
-                            </div>
-                            <div class="mic-waves">
-                                <div class="mic-wave wave-1"></div>
-                                <div class="mic-wave wave-2"></div>
-                                <div class="mic-wave wave-3"></div>
-                            </div>
-                        </div>
-                        <!-- 扬声器接收状态 -->
-                        <div class="audio-indicator speaker-indicator" id="speakerIndicator" title="扬声器接收">
-                            <div class="audio-indicator-icon">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                                </svg>
-                            </div>
-                            <div class="speaker-waves">
-                                <div class="speaker-wave wave-1"></div>
-                                <div class="speaker-wave wave-2"></div>
-                                <div class="speaker-wave wave-3"></div>
                             </div>
                         </div>
                     </div>
@@ -330,6 +364,8 @@
                     <div class="control-buttons">
                         <button class="btn" id="reconnectBtn">RECONNECT</button>
                         <button class="btn" id="stopAllBtn">STOP ALL (Space)</button>
+                        <button class="btn" id="muteMicBtn" title="MUTE MICROPHONE">🎤</button>
+                        <button class="btn" id="muteSpeakerBtn" title="MUTE SPEAKER">🔊</button>
                         <button class="btn" id="helperLinesBtn" title="TOGGLE HELPER LINES">📐</button>
                         <button class="btn" id="curveBtn" title="SPEED CURVE">📈</button>
                         <button class="btn" id="configBtn" title="CONFIG">⚙️</button>

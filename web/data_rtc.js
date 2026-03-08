@@ -100,6 +100,14 @@ window.addEventListener('load', () => {
         connectionCount: 0,
         vehicleSpeed: 0,
         lastUpdate: null,
+        // GPS data
+        gpsLatitude: 0,
+        gpsLongitude: 0,
+        gpsAltitude: 0,
+        gpsQuality: 0,
+        gpsSatellites: 0,
+        homeLatitude: null,
+        homeLongitude: null,
     };
 
     let uiSpeed = 0;
@@ -413,6 +421,9 @@ window.addEventListener('load', () => {
         // 更新车辆速度表盘 (使用statusData中的vehicleSpeed)
         updateVehicleSpeedGauge(dataSystemStatus.vehicleSpeed);
 
+        // 更新GPS雷达（包含卫星数量更新）
+        updateGpsRadar();
+
         if (dataElements.lastUpdate) dataElements.lastUpdate.textContent = lastUpdate ? lastUpdate.toLocaleTimeString() : '--';
     }
 
@@ -515,8 +526,35 @@ window.addEventListener('load', () => {
         }
 
         // 车辆速度
-        if (statusData.vehicle_speed !== undefined) {
-            dataSystemStatus.vehicleSpeed = parseFloat(statusData.vehicle_speed);
+        if (statusData.gps_speed_kmh !== undefined) {
+            dataSystemStatus.vehicleSpeed = parseFloat(statusData.gps_speed_kmh);
+        }
+
+        // GPS数据
+        if (statusData.gps_latitude !== undefined) {
+            dataSystemStatus.gpsLatitude = parseFloat(statusData.gps_latitude);
+        }
+        if (statusData.gps_longitude !== undefined) {
+            dataSystemStatus.gpsLongitude = parseFloat(statusData.gps_longitude);
+        }
+        if (statusData.gps_altitude !== undefined) {
+            dataSystemStatus.gpsAltitude = parseFloat(statusData.gps_altitude);
+        }
+        if (statusData.gps_quality !== undefined) {
+            dataSystemStatus.gpsQuality = parseInt(statusData.gps_quality);
+        }
+        if (statusData.gps_satellites !== undefined) {
+            dataSystemStatus.gpsSatellites = parseInt(statusData.gps_satellites);
+        }
+
+        // 第一次收到有效GPS数据时，设置为起始位置
+        if (dataSystemStatus.homeLatitude === null &&
+            dataSystemStatus.gpsLatitude !== 0 &&
+            dataSystemStatus.gpsLongitude !== 0 &&
+            dataSystemStatus.gpsSatellites >= 4) { // 至少4颗卫星才有效
+            dataSystemStatus.homeLatitude = dataSystemStatus.gpsLatitude;
+            dataSystemStatus.homeLongitude = dataSystemStatus.gpsLongitude;
+            console.log('Home position set:', dataSystemStatus.homeLatitude, dataSystemStatus.homeLongitude);
         }
 
         dataSystemStatus.lastUpdate = new Date();
@@ -564,6 +602,69 @@ window.addEventListener('load', () => {
 
             vehicleSpeedValue.textContent = Math.round(clampedSpeed);
         }
+    }
+
+    function updateGpsRadar() {
+        const radarArrow = document.getElementById('radarArrow');
+        const radarHome = document.getElementById('radarHome');
+        const satelliteCount = document.getElementById('satelliteCount');
+        const satelliteIndicator = document.getElementById('satelliteIndicator');
+
+        if (!radarArrow || !radarHome) return;
+
+        // 更新卫星数量显示
+        if (satelliteCount) {
+            satelliteCount.textContent = dataSystemStatus.gpsSatellites || 0;
+        }
+
+        // 更新卫星指示器激活状态
+        if (satelliteIndicator) {
+            const satellites = dataSystemStatus.gpsSatellites || 0;
+            if (satellites >= 4) {
+                satelliteIndicator.classList.add('active');
+            } else {
+                satelliteIndicator.classList.remove('active');
+            }
+        }
+
+        // 计算当前方向角度（相对于起点的方位角）
+        let bearing = 0;
+
+        if (dataSystemStatus.homeLatitude !== null && dataSystemStatus.homeLongitude !== null &&
+            dataSystemStatus.gpsLatitude !== 0 && dataSystemStatus.gpsLongitude !== 0) {
+            // 计算从起点到当前位置的方位角
+            const lat1 = dataSystemStatus.homeLatitude * Math.PI / 180;
+            const lat2 = dataSystemStatus.gpsLatitude * Math.PI / 180;
+            const lon1 = dataSystemStatus.homeLongitude * Math.PI / 180;
+            const lon2 = dataSystemStatus.gpsLongitude * Math.PI / 180;
+
+            const dLon = lon2 - lon1;
+            const x = Math.sin(dLon) * Math.cos(lat2);
+            const y = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+
+            bearing = Math.atan2(x, y) * 180 / Math.PI;
+            bearing = (bearing + 360) % 360; // 转换为 0-360 度
+
+            // 显示H标记
+            radarHome.style.display = 'block';
+
+            // 计算H在圆圈边缘的位置（相对于起点的相反方向）
+            const homeAngle = (bearing + 180) % 360;
+            const homeRadius = 30; // H标记距离中心的距离
+            const homeRad = (homeAngle - 90) * Math.PI / 180; // 调整角度以匹配SVG坐标系
+            const homeX = Math.cos(homeRad) * homeRadius;
+            const homeY = Math.sin(homeRad) * homeRadius;
+
+            radarHome.setAttribute('transform', `translate(40, 40) translate(${homeX}, ${homeY})`);
+        } else {
+            // 没有GPS数据或没有起始位置时，箭头指向上方，H隐藏
+            bearing = 0;
+            radarHome.style.display = 'none';
+        }
+
+        // 转换为SVG旋转角度（0度指向上方，顺时针旋转）
+        const svgAngle = bearing - 90;
+        radarArrow.setAttribute('transform', `translate(40, 40) rotate(${svgAngle})`);
     }
 
     // 初始化速度表盘刻度

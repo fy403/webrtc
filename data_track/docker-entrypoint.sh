@@ -12,6 +12,7 @@ display_config() {
     echo "Motor Driver: $MOTOR_DRIVER_TYPE"
     echo "Motor Port: $TTY_PORT ($TTY_BAUDRATE baud)"
     echo "GSM Port: $GSM_PORT ($GSM_BAUDRATE baud)"
+    echo "GPS Port: $GPS_PORT ($GPS_BAUDRATE baud)"
     echo "STUN Server: $STUN_SERVER:$STUN_SERVER_PORT"
     echo "TURN Server: $TURN_SERVER:$TURN_SERVER_PORT"
     echo "========================================"
@@ -40,6 +41,7 @@ main() {
             -I "$TTY_PORT" -T "$TTY_BAUDRATE" \
             -g "$GSM_PORT" -G "$GSM_BAUDRATE" \
             -M "$MOTOR_DRIVER_TYPE" \
+            -a "$GPS_PORT" -A "$GPS_BAUDRATE" \
             -c "$CLIENT_ID"
 
         exit_code=$?

@@ -422,6 +422,14 @@ body.mobile-layout {
     text-shadow: 0 0 10px var(--titan-primary) !important;
 }
 
+.btn-muted {
+    background: linear-gradient(180deg, rgba(255, 69, 0, 0.3) 0%, rgba(255, 69, 0, 0.15) 100%) !important;
+    border-color: var(--titan-warning) !important;
+    color: var(--titan-warning) !important;
+    box-shadow: 0 0 15px rgba(255, 69, 0, 0.6) !important;
+    text-shadow: 0 0 10px var(--titan-warning) !important;
+}
+
 .video-layer {
     position: relative;
     width: 100%;
@@ -2400,23 +2408,109 @@ body.mobile-layout {
     .video-stat-value {
         font-size: 10px;
     }
+
+    .top-left-indicators {
+        top: 10px;
+        left: 10px;
+        gap: 8px;
+    }
+
+    .gps-radar {
+        width: 70px;
+        height: 70px;
+    }
+
+    .status-indicators-group {
+        gap: 8px;
+    }
+
+    .status-indicator {
+        width: 32px;
+        height: 32px;
+    }
+
+    .status-indicator-icon {
+        width: 16px;
+        height: 16px;
+    }
+
+    .satellite-icon-bg svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .satellite-count {
+        font-size: 12px;
+    }
+
+    .audio-indicator {
+        width: 32px;
+        height: 32px;
+    }
+
+    .audio-indicator-icon {
+        width: 16px;
+        height: 16px;
+    }
 }
 
-/* 音频状态指示器 - 左上角 */
-.audio-status-indicators {
+/* 左上角指示器容器 - 包含GPS雷达和状态指示器 */
+.top-left-indicators {
     position: absolute;
     top: 15px;
     left: 15px;
     display: flex;
-    flex-direction: column;
+    align-items: flex-start;
     gap: 10px;
     z-index: 25;
 }
 
-.audio-indicator {
+/* GPS雷达圆圈 */
+.gps-radar {
     position: relative;
-    width: 36px;
-    height: 36px;
+    width: 140px;
+    height: 140px;
+    background: rgba(10, 14, 26, 0.9);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--titan-border);
+    border-radius: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.gps-radar:hover {
+    border-color: var(--titan-primary);
+    box-shadow: var(--titan-glow);
+}
+
+.radar-svg {
+    width: 100%;
+    height: 100%;
+}
+
+.radar-arrow {
+    transition: transform 0.3s ease;
+    filter: drop-shadow(0 0 4px rgba(255, 69, 0, 0.8));
+}
+
+.radar-home text {
+    text-shadow: 0 0 6px var(--titan-primary);
+}
+
+/* 状态指示器组 - 罗盘右边垂直排列 */
+.status-indicators-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* 状态指示器通用样式 */
+.status-indicator {
+    position: relative;
+    width: 40px;
+    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2427,11 +2521,66 @@ body.mobile-layout {
     transition: all 0.3s ease;
 }
 
-.audio-indicator:hover {
+.status-indicator:hover {
     border-color: var(--titan-primary);
     box-shadow: var(--titan-glow);
 }
 
+.status-indicator-icon {
+    width: 20px;
+    height: 20px;
+    color: var(--titan-text-dim);
+    transition: color 0.3s ease;
+}
+
+.status-indicator.active .status-indicator-icon {
+    color: var(--titan-success);
+}
+
+/* 卫星指示器激活状态 - 使用蓝色表示GPS信号 */
+.satellite-indicator.active .satellite-icon-bg {
+    color: var(--titan-primary);
+    opacity: 0.3;
+}
+
+.satellite-indicator.active .satellite-count {
+    color: var(--titan-primary);
+}
+
+/* 卫星图标背景 - 底层，透明 */
+.satellite-icon-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.2;
+    z-index: 1;
+}
+
+.satellite-icon-bg svg {
+    width: 24px;
+    height: 24px;
+    color: var(--titan-text-dim);
+}
+
+/* 卫星数量显示 - 高层，居中 */
+.satellite-count {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--titan-text-dim);
+    transition: color 0.3s ease;
+    z-index: 2;
+}
+
+/* 音频指示器图标兼容 */
 .audio-indicator-icon {
     width: 20px;
     height: 20px;
@@ -2439,6 +2588,7 @@ body.mobile-layout {
     transition: color 0.3s ease;
 }
 
+.status-indicator.active .audio-indicator-icon,
 .audio-indicator.active .audio-indicator-icon {
     color: var(--titan-success);
 }
@@ -2543,21 +2693,47 @@ body.mobile-layout {
     }
 }
 
-@media (max-width: 768px) {
-    .audio-status-indicators {
-        top: 10px;
-        left: 10px;
-        gap: 8px;
-    }
-
-    .audio-indicator {
-        width: 32px;
-        height: 32px;
-    }
-
-    .audio-indicator-icon {
-        width: 16px;
-        height: 16px;
-    }
+/* 右上角面板容器 - 包含视频统计和卫星图标 */
+.top-right-panel {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 25;
 }
+
+/* 卫星图标指示器 */
+.satellite-indicator {
+    position: relative;
+    background: rgba(10, 14, 26, 0.9);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--titan-border);
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 80px;
+    clip-path: polygon(
+        0 0,
+        calc(100% - 10px) 0,
+        100% 50%,
+        calc(100% - 10px) 100%,
+        0 100%,
+        10px 50%
+    );
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    transition: all 0.3s ease;
+}
+
+.satellite-indicator:hover {
+    border-color: var(--titan-primary);
+    box-shadow: var(--titan-glow);
+}
+
+
+
+
+
 

@@ -15,6 +15,8 @@ TTY_BAUDRATE=115200 # 电机驱动板串口波特率
 GSM_PORT=/dev/ttyACM0 # 4g模块usb端口
 GSM_BAUDRATE=115200 # 4g模块串口波特率
 MOTOR_DRIVER_TYPE=uart # 电机驱动类型: uart, crsf
+GPS_PORT=/dev/ttyUSB1 # gps串口
+GPS_BAUDRATE=115200 # gps串口波特率
 
 # Path to font file - adjust according to your system
 FONT_FILE="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -24,12 +26,13 @@ run_rtc() {
     
     ./build/webrtc_publisher \
     -s $STUN_SERVER -t $STUN_SERVER_PORT \
-    -u $TURN_SERVER -p $TURN_SERVER_PORT -U $USER \
-    -P $PASSWD \
+    -u $TURN_SERVER -p $TURN_SERVER_PORT \
+    -U $USER -P $PASSWD \
     -w $TARGET_HOST -x $TARGET_PORT \
     -I $TTY_PORT -T $TTY_BAUDRATE \
     -g $GSM_PORT -G $GSM_BAUDRATE \
     -M $MOTOR_DRIVER_TYPE \
+    -a $GPS_PORT -A $GPS_BAUDRATE \
     -c $CLIENT_ID
     
     local exit_code=$?

@@ -10,6 +10,7 @@ NETWORK_MODE="${NETWORK_MODE:-host}"
 # Device configuration
 TTY_PORT="/dev/ttyUSB0"
 GSM_PORT="/dev/ttyACM0"
+GPS_PORT="/dev/ttyUSB1"
 
 # Auto-detect devices
 echo "Checking devices..."
@@ -31,6 +32,14 @@ else
     echo "Warning: $GSM_PORT not found"
 fi
 
+# Check GPS_PORT
+if [ -e "$GPS_PORT" ]; then
+    DEVICE_ARGS="$DEVICE_ARGS --device=$GPS_PORT"
+    echo "Found: $GPS_PORT"
+else
+    echo "Warning: $GPS_PORT not found"
+fi
+
 # Parse command line arguments (for override)
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -40,6 +49,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --gsm-port)
             GSM_PORT="$2"
+            shift 2
+            ;;
+        --gps-port)
+            GPS_PORT="$2"
             shift 2
             ;;
         --name)
@@ -77,6 +90,7 @@ docker run -d \
   $DEVICE_ARGS \
   -e TTY_PORT=$TTY_PORT \
   -e GSM_PORT=$GSM_PORT \
+  -e GPS_PORT=$GPS_PORT \
   -e CLIENT_ID=$CLIENT_ID \
   --network $NETWORK_MODE \
   $IMAGE_NAME

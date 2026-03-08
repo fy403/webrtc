@@ -35,11 +35,17 @@ window.addEventListener('load', () => {
     let wsReconnectInterval = null; // WebSocket 重连定时器
     let isReconnecting = false; // 全局标记：是否正在重连中（用于避免并发连接）
 
+    // 音频控制状态
+    let isMicMuted = false;
+    let isSpeakerMuted = false;
+
     const offerId = document.getElementById('offerId');
     const offerBtn = document.getElementById('offerBtn');
     const _localId = document.getElementById('localId');
     const remoteVideo = document.getElementById('remoteVideo');
     const statusDiv = document.getElementById('status');
+    const muteMicBtn = document.getElementById('muteMicBtn');
+    const muteSpeakerBtn = document.getElementById('muteSpeakerBtn');
     _localId.textContent = localId;
 
     // 从配置加载远程ID
@@ -344,6 +350,60 @@ window.addEventListener('load', () => {
     // 每秒更新视频统计
     setInterval(updateVideoStats, 1000);
 
+    // ========== 音频控制模块 ==========
+    // 初始化音频控制按钮
+    function initAudioControls() {
+        // 麦克风静音按钮
+        if (muteMicBtn) {
+            muteMicBtn.addEventListener('click', () => {
+                if (!localStream) {
+                    updateStatus('No audio stream available');
+                    return;
+                }
+
+                const audioTracks = localStream.getAudioTracks();
+                if (audioTracks.length === 0) {
+                    updateStatus('No microphone track found');
+                    return;
+                }
+
+                isMicMuted = !isMicMuted;
+                audioTracks.forEach(track => {
+                    track.enabled = !isMicMuted;
+                });
+
+                muteMicBtn.classList.toggle('btn-muted', isMicMuted);
+                muteMicBtn.textContent = isMicMuted ? '🎤 (MUTED)' : '🎤';
+                updateStatus(isMicMuted ? 'Microphone muted' : 'Microphone unmuted');
+
+                // 如果麦克风静音,立即停止啸叫
+                if (isMicMuted && isSpeakerMuted === false) {
+                    updateStatus('Microphone muted - echo feedback suppressed');
+                }
+            });
+        }
+
+        // 扬声器静音按钮
+        if (muteSpeakerBtn) {
+            muteSpeakerBtn.addEventListener('click', () => {
+                isSpeakerMuted = !isSpeakerMuted;
+                remoteVideo.muted = isSpeakerMuted;
+
+                muteSpeakerBtn.classList.toggle('btn-muted', isSpeakerMuted);
+                muteSpeakerBtn.textContent = isSpeakerMuted ? '🔊 (MUTED)' : '🔊';
+                updateStatus(isSpeakerMuted ? 'Speaker muted' : 'Speaker unmuted');
+
+                // 如果扬声器静音,立即停止啸叫
+                if (isSpeakerMuted && isMicMuted === false) {
+                    updateStatus('Speaker muted - echo feedback suppressed');
+                }
+            });
+        }
+    }
+
+    // 初始化音频控制
+    initAudioControls();
+
     // ========== 音频发送检测模块 ==========
     let audioContext = null;
     let analyser = null;
@@ -483,16 +543,35 @@ window.addEventListener('load', () => {
         }
     });
 
-    // Get local audio stream
+    // Get local audio stream with echo cancellation enabled
     async function getLocalStream() {
         try {
+            // 使用回声消除和噪声抑制
+            const audioConstraints = {
+                echoCancellation: true,    // 启用回声消除
+                noiseSuppression: true,    // 启用噪声抑制
+                autoGainControl: true,     // 启用自动增益控制
+                sampleRate: 48000,         // 使用48kHz采样率(更好的AEC效果)
+                channelCount: 1,           // 单声道(AEC效果更好)
+            };
+
             localStream = await navigator.mediaDevices.getUserMedia({
-                audio: true,
+                audio: audioConstraints,
                 video: true,
             });
-            console.log('获取本地音频流成功');
+            console.log('获取本地音频流成功(回声消除已启用)');
         } catch (error) {
             console.error('获取本地音频流失败:', error);
+            // 如果带约束的失败,尝试回退到基础设置
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: true,
+                });
+                console.log('获取本地音频流成功(使用基础设置)');
+            } catch (fallbackError) {
+                console.error('获取本地音频流失败(回退):', fallbackError);
+            }
         }
     }
 
