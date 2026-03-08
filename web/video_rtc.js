@@ -546,11 +546,10 @@ window.addEventListener('load', () => {
     // Get local audio stream with echo cancellation enabled
     async function getLocalStream() {
         try {
-            // 使用回声消除和噪声抑制
             const audioConstraints = {
-                echoCancellation: true,    // 启用回声消除
-                noiseSuppression: true,    // 启用噪声抑制
-                autoGainControl: true,     // 启用自动增益控制
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: false,
                 sampleRate: 48000,         // 使用48kHz采样率(更好的AEC效果)
                 channelCount: 1,           // 单声道(AEC效果更好)
             };
@@ -559,7 +558,7 @@ window.addEventListener('load', () => {
                 audio: audioConstraints,
                 video: true,
             });
-            console.log('获取本地音频流成功(回声消除已启用)');
+            console.log('获取本地音频流成功');
         } catch (error) {
             console.error('获取本地音频流失败:', error);
             // 如果带约束的失败,尝试回退到基础设置
