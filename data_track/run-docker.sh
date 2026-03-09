@@ -83,6 +83,8 @@ else
     echo "No devices attached"
 fi
 
+# Stop existing container
+docker rm -f $CONTAINER_NAME >/dev/null 2>&1
 # Run container
 docker run -d \
   --name $CONTAINER_NAME \
@@ -95,5 +97,7 @@ docker run -d \
   --network $NETWORK_MODE \
   $IMAGE_NAME
 
+# Show running containers
+docker logs -f $CONTAINER_NAME
 echo "Container $CONTAINER_NAME started"
 echo "View logs: docker logs -f $CONTAINER_NAME"

@@ -11,6 +11,11 @@ NETWORK_MODE="${NETWORK_MODE:-host}"
 # Optional: add additional device mappings
 DEVICES="--device=$VIDEO_DEVICE"
 
+# Audio device mappings for ALSA/PulseAudio
+if [ -d /dev/snd ]; then
+    DEVICES="$DEVICES --device=/dev/snd"
+fi
+
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -38,6 +43,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Stop existing container
+docker rm -f $CONTAINER_NAME >/dev/null 2>&1
 # Run container
 docker run -d \
   --name $CONTAINER_NAME \
@@ -45,8 +52,11 @@ docker run -d \
   $DEVICES \
   -e VIDEO_DEVICE=$VIDEO_DEVICE \
   -e CLIENT_ID=$CLIENT_ID \
+  -v /run/user/$(id -u)/pulse:/run/user/1000/pulse:ro \
   --network $NETWORK_MODE \
   $IMAGE_NAME
 
+# Show running containers
+docker logs -f $CONTAINER_NAME
 echo "Container $CONTAINER_NAME started"
 echo "View logs: docker logs -f $CONTAINER_NAME"

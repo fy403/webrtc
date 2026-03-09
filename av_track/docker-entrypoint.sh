@@ -26,6 +26,10 @@ display_config() {
     echo "FPS: $FPS"
     echo "Video Codec: $VIDEO_CODEC"
     echo "Input Format: $INPUT_FORMAT"
+    echo "Audio Player Device: $AUDIO_PLAYER_DEVICE"
+    echo "Audio Sample Rate: $AUDIO_PLAYER_SAMPLE_RATE"
+    echo "Audio Channels: $AUDIO_PLAYER_CHANNELS"
+    echo "Audio Volume: $AUDIO_PLAYER_VOLUME"
     echo "STUN Server: $STUN_SERVER:$STUN_SERVER_PORT"
     echo "TURN Server: $TURN_SERVER:$TURN_SERVER_PORT"
     echo "========================================"
@@ -59,7 +63,11 @@ main() {
             -R "$RESOLUTION" -F "$FPS" \
             -V "$INPUT_FORMAT" \
             -E "$VIDEO_CODEC" \
-            -c "$CLIENT_ID" -i "$VIDEO_DEVICE"
+            -c "$CLIENT_ID" -i "$VIDEO_DEVICE" \
+            -S "$AUDIO_PLAYER_DEVICE" \
+            -O "$AUDIO_PLAYER_SAMPLE_RATE" \
+            -H "$AUDIO_PLAYER_CHANNELS" \
+            -v "$AUDIO_PLAYER_VOLUME"
 
         exit_code=$?
         echo "$(date): RTC exited with code $exit_code"

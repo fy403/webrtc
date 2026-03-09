@@ -17,61 +17,10 @@
 **项目主要面向RC遥控车改造，希望在遥控车基础上开发低延时、点对点、可远程控制、可捕获画面和声音的遥控车。采用的技术方案是通过RTP将采集的音视频或者是监控数据传输到控制端；将控制信号也通过RTP传输到被控遥控车，遥控车通过解析协议，转换为命令控制遥控车。技术方案尽可能减少服务器的参与，流量直接点对点传输。**
 
 ## 演示效果
+屏幕OSD信息；数据通道实时数据变化；连接状态情况；实时视频参数调整；加速度曲线；GPS定位；速度仪表盘；共享连接数。
 
------------
-
-屏幕OSD信息；数据通道实时数据变化；连接状态情况；实时视频参数调整。
-
-<img src="README.assets\image-20260128185224269.png" alt="image-20260128185224269" style="zoom: 54%;" />
-
-<img src="README.assets\image-20260128185304740.png" alt="image-20260128185304740" style="zoom: 50%;" />
-
-<img src="README.assets\image-20260128185324642.png" alt="image-20260128185324642" style="zoom:50%;" />
-
-------
-<iframe src="//player.bilibili.com/player.html?isOutside=true&aid=115489808323280&bvid=BV1VA1kBnEAx&cid=33681311377&page=1&high_quality=1&danmaku=0" allowfullscreen="allowfullscreen" width="100%" height="500" scrolling="no" frameborder="0" sandbox="allow-top-navigation allow-same-origin allow-forms allow-scripts"></iframe>
-
+[在线体验地址](http://car.fy403.cn/)
 [B站视频](https://www.bilibili.com/video/BV1VA1kBnEAx?share_source=copy_web)
--------
-
-## 项目Q&A
-
-### Q1：如果我用的电机驱动方案不存在本项目中，如何驱动电机工作？
-
-A1: 可以自己实现电机驱动方案，比如使用PWM控制电机，或者使用GPIO控制电机。如果不会编写代码，可以使用CodeBuddy或者Cursor，或者VSCODE的Lingma插件，开启Agent模式。输入以下提示词，替换掉`<your_method>`为实际电机驱动方法。
-
-```txt
-假如你是本项目的C++开发工程师，帮我添加一个新的motor_driver：(<your_method>)，你可以查看已有的驱动编写模板代码：@include/uart_motor_driver.h @include/motor_driver.h 。
-驱动编写完成后，将其加入到@src/MotorController的构造函数中。你可以阅读整体代码，实现该功能编写。
-```
-
-例如：使用pwm控制电调：
-
-```markdown
-
-假如你是本项目的C++开发工程师，需要新增一个电机驱动模块。该模块通过**GPIO引脚22**输出**PWM信号**控制**电调**，其**工作频率**为**50Hz（周期20ms）**。
-
-电调初始化流程如下：
-1. 发送**中立位脉冲（1500μs）**，使舵机归中。
-2. 保持该信号**2秒**，完成电调校准（校准成功后会发出**滴滴提示音**）。
-3. 校准完成后，控制量程为 **900μs 至 +2100μs**（以1500μs为零点）。
-
-你可参考以下现有驱动的代码结构进行实现：
-- 接口定义：`@include/motor_driver.h`
-- 示例实现：`@include/uart_motor_driver.h`
-
-驱动开发完成后，请将其集成到 **`@src/MotorController` 的构造函数**中，并确保与现有系统兼容。建议先理解整体代码架构，再进行模块化开发。
-```
-
-### Q2：:需要全部购买配件吗？
-
-A2：不需要，每个部分都是非常强可扩展的。开发板只要能够上网，且能够编译运行ffmpeg以及C++代码就行，无论什么系统。如果只需要图传部分，可用单独运行av_track。如果只需要数字控制部分可只运行data_track。电机驱动器支持两种高可扩展方案（将文档后面说明），支持RC遥控车无损话改造。
-
-### Q3：图传延时怎么样？
-
-A3: 目前最新的图传延时能够在内网环境下达到110ms，且没有使用编码芯片支持。纯使用CPU的软编码，如果开发板硬件比较好，理论可以降低到100ms以下。
-
------
 
 ## 快速运行
 
@@ -170,4 +119,4 @@ popd
 
 ## QQ群交流
 
-<img src="README.assets\qrcode_1764133405428.jpg" alt="qrcode_1764133405428" style="zoom: 50%;" />
+<img src="README.assets\qrcode_1764133405428.jpg" alt="qrcode_1764133405428" style="zoom: 30%;" />

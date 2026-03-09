@@ -44,6 +44,10 @@ ENV INPUT_FORMAT="yuyv422"
 ENV FPS=30
 ENV VIDEO_CODEC="h264"
 ENV FONT_FILE="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+ENV AUDIO_PLAYER_DEVICE="USB2.0 Device, USB Audio"
+ENV AUDIO_PLAYER_SAMPLE_RATE=48000
+ENV AUDIO_PLAYER_CHANNELS=2
+ENV AUDIO_PLAYER_VOLUME=1.0
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

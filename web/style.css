@@ -1270,7 +1270,7 @@ body.mobile-layout {
 .gauge-value-container {
     position: absolute;
     bottom: 8px;
-    left: 50%;
+    left: 55%;
     transform: translateX(-50%);
     display: flex;
     align-items: baseline;

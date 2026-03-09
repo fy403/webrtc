@@ -158,15 +158,21 @@ void RCClient::sendSystemStatus() {
     double mem_total_mb = 0.0, mem_used_mb = 0.0, mem_free_mb = 0.0, mem_usage = 0.0;
     system_monitor_.getNetworkStats(rx_speed, tx_speed);
     system_monitor_.getMemoryInfo(mem_total_mb, mem_used_mb, mem_free_mb, mem_usage);
+    std::cout << "[SystemStatus] 网络监控: RX=" << rx_speed << " Mbps, TX=" << tx_speed << " Mbps" << std::endl;
+    std::cout << "[SystemStatus] 内存监控: 总量=" << mem_total_mb << " MB, 使用=" << mem_used_mb << " MB, 利用率=" << (mem_usage * 100) << "%" << std::endl;
 
     // 获取详细CPU信息
     CPUMonitor::CPUInfo cpu_info;
     system_monitor_.getCPUInfo(cpu_info);
+    std::cout << "[SystemStatus] CPU监控: 总利用率=" << (cpu_info.total_usage * 100) << "%, 核心数=" << cpu_info.core_count << std::endl;
 
     // 获取4G模块信息
     std::string signal = "N/A", simStatus = "N/A", network = "N/A", moduleInfo = "N/A";
     if (system_monitor_.is4gInitialized()) {
         system_monitor_.getGsmInfo(signal, simStatus, network, moduleInfo);
+        std::cout << "[SystemStatus] 4G模块: 信号=" << signal << ", SIM=" << simStatus << ", 网络=" << network << std::endl;
+    } else {
+        std::cout << "[SystemStatus] 4G模块: 未初始化" << std::endl;
     }
 
     // 获取GPS NMEA数据
@@ -181,6 +187,12 @@ void RCClient::sendSystemStatus() {
                                       gps_longitude, gps_lon_dir, gps_quality,
                                       gps_satellites, gps_altitude);
         system_monitor_.getGpsVTGInfo(gps_course_true, gps_speed_knots, gps_speed_kmh);
+        std::cout << "[SystemStatus] GPS模块: 经度=" << gps_longitude << gps_lon_dir
+                  << ", 纬度=" << gps_latitude << gps_lat_dir
+                  << ", 卫星=" << gps_satellites
+                  << ", 速度=" << gps_speed_kmh << " km/h" << std::endl;
+    } else {
+        std::cout << "[SystemStatus] GPS模块: 未初始化" << std::endl;
     }
 
     // 构建状态数据
