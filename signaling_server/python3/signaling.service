@@ -9,7 +9,7 @@ Type=simple
 # User=root
 # Group=video
 WorkingDirectory=/home/pi/signaling
-ExecStart=python3 signaling_server.py
+ExecStart=python3 signaling_server.py 0.0.0.0:8000
 Restart=always
 RestartSec=3
 

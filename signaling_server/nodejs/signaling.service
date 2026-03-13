@@ -9,7 +9,7 @@ Type=simple
 # User=root
 # Group=video
 WorkingDirectory=/home/pi/signaling
-ExecStart=npm start
+ExecStart=env PORT=0.0.0.0:8000 npm start
 Restart=always
 RestartSec=3
 
