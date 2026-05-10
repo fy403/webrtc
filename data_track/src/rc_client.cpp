@@ -269,9 +269,12 @@ void RCClient::parseFrame(const std::string &peer_id, const uint8_t *frame, size
     if (msg_type == RCProtocolV2::CONTROL_MSG) {
         uint32_t current_seq = control_frame.sequence;
         uint32_t last_seq = last_control_sequence_.load();
-        // 序列号检查：
-        if (last_seq != 0 && current_seq != last_seq+1) {
-            // 检测到乱序
+        // 序列号检查：严格递增，只允许 last_seq+1 或首次为0
+        if (last_seq != 0 && current_seq < last_seq) {
+            // 序号递减，拒绝该帧
+            std::cout << "拒绝递减的序列号: 当前=" << current_seq << ", 上次=" << last_seq << std::endl;
+        } else if (last_seq != 0 && current_seq != last_seq + 1) {
+            // 检测到乱序（跳号），停止所有电机并接受新序列号
             std::cout << "检测到序列号乱序: 当前=" << current_seq << ", 上次=" << last_seq
                      << ", 停止所有电机并接受新序列号" << std::endl;
             motor_controller_->stopAll();

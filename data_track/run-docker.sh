@@ -4,19 +4,22 @@
 # Default values
 IMAGE_NAME="${IMAGE_NAME:-webrtc/data-track:latest}"
 CONTAINER_NAME="${CONTAINER_NAME:-webrtc_data_track}"
-CLIENT_ID="${CLIENT_ID:-data_Dd8fgkoKo90}"
 NETWORK_MODE="${NETWORK_MODE:-host}"
 
+# Default configuration file
+CONFIG_FILE="${CONFIG_FILE:-./config.txt}"
+
 # Device configuration
-TTY_PORT="/dev/ttyUSB0"
-GSM_PORT="/dev/ttyACM0"
-GPS_PORT="/dev/ttyUSB1"
+DEFAULT_TTY_PORT="/dev/ttyUSB0"
+DEFAULT_GSM_PORT="/dev/ttyACM0"
+DEFAULT_GPS_PORT="/dev/ttyUSB1"
 
 # Auto-detect devices
 echo "Checking devices..."
 DEVICE_ARGS=""
 
 # Check TTY_PORT
+TTY_PORT="$DEFAULT_TTY_PORT"
 if [ -e "$TTY_PORT" ]; then
     DEVICE_ARGS="$DEVICE_ARGS --device=$TTY_PORT"
     echo "Found: $TTY_PORT"
@@ -25,6 +28,7 @@ else
 fi
 
 # Check GSM_PORT
+GSM_PORT="$DEFAULT_GSM_PORT"
 if [ -e "$GSM_PORT" ]; then
     DEVICE_ARGS="$DEVICE_ARGS --device=$GSM_PORT"
     echo "Found: $GSM_PORT"
@@ -33,6 +37,7 @@ else
 fi
 
 # Check GPS_PORT
+GPS_PORT="$DEFAULT_GPS_PORT"
 if [ -e "$GPS_PORT" ]; then
     DEVICE_ARGS="$DEVICE_ARGS --device=$GPS_PORT"
     echo "Found: $GPS_PORT"
@@ -55,12 +60,12 @@ while [[ $# -gt 0 ]]; do
             GPS_PORT="$2"
             shift 2
             ;;
-        --name)
-            CONTAINER_NAME="$2"
+        --config)
+            CONFIG_FILE="$2"
             shift 2
             ;;
-        --client-id)
-            CLIENT_ID="$2"
+        --name)
+            CONTAINER_NAME="$2"
             shift 2
             ;;
         --network)
@@ -69,11 +74,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--motor-port /dev/xxx] [--gsm-port /dev/xxx] [--name container_name] [--client-id id] [--network mode]"
+            echo "Usage: $0 [--config config.txt.example] [--motor-port /dev/xxx] [--gsm-port /dev/xxx] [--gps-port /dev/xxx] [--name container_name] [--network mode]"
             exit 1
             ;;
     esac
-shift
 done
 
 echo "Starting container..."
@@ -83,21 +87,36 @@ else
     echo "No devices attached"
 fi
 
+# Check if configuration file exists
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Error: Configuration file not found: $CONFIG_FILE"
+    echo "Please create a config file or specify one with --config option"
+    echo "Example: $0 --config /path/to/config.txt"
+    exit 1
+fi
+
+echo "Using configuration file: $CONFIG_FILE"
+
+# Get absolute path of config file
+CONFIG_ABS_PATH=$(realpath "$CONFIG_FILE")
+
+# Get directory of config file for volume mount
+CONFIG_DIR=$(dirname "$CONFIG_ABS_PATH")
+CONFIG_FILENAME=$(basename "$CONFIG_ABS_PATH")
+
 # Stop existing container
 docker rm -f $CONTAINER_NAME >/dev/null 2>&1
+
 # Run container
 docker run -d \
   --name $CONTAINER_NAME \
   --restart unless-stopped \
   $DEVICE_ARGS \
-  -e TTY_PORT=$TTY_PORT \
-  -e GSM_PORT=$GSM_PORT \
-  -e GPS_PORT=$GPS_PORT \
-  -e CLIENT_ID=$CLIENT_ID \
+  -v "$CONFIG_DIR:/app/config" \
   --network $NETWORK_MODE \
-  $IMAGE_NAME
+  $IMAGE_NAME \
+  ./docker-entrypoint.sh "/app/config/$CONFIG_FILENAME"
 
 # Show running containers
-docker logs -f $CONTAINER_NAME
 echo "Container $CONTAINER_NAME started"
 echo "View logs: docker logs -f $CONTAINER_NAME"

@@ -2,63 +2,49 @@
 # Entrypoint script for data_track container
 set -e
 
-# Function to display configuration
-display_config() {
-    echo "========================================"
-    echo "WebRTC Data Track Configuration"
-    echo "========================================"
-    echo "Signaling Server: $TARGET_HOST:$TARGET_PORT"
-    echo "Client ID: $CLIENT_ID"
-    echo "Motor Driver: $MOTOR_DRIVER_TYPE"
-    echo "Motor Port: $TTY_PORT ($TTY_BAUDRATE baud)"
-    echo "GSM Port: $GSM_PORT ($GSM_BAUDRATE baud)"
-    echo "GPS Port: $GPS_PORT ($GPS_BAUDRATE baud)"
-    echo "STUN Server: $STUN_SERVER:$STUN_SERVER_PORT"
-    echo "TURN Server: $TURN_SERVER:$TURN_SERVER_PORT"
-    echo "========================================"
-}
+# Check for configuration file argument
+if [ $# -lt 1 ]; then
+    echo "Error: Configuration file path is required"
+    echo "Usage: $0 <config_file>"
+    echo "Example: $0 /app/config/config.txt"
+    exit 1
+fi
 
-# Main entrypoint
-main() {
-    echo "$(date): Starting data_track container..."
+CONFIG_FILE="$1"
 
-    # Wait for devices to be ready
-    echo "Waiting for devices to be ready..."
-    sleep 1
+# Check if configuration file exists
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Error: Configuration file not found: $CONFIG_FILE"
+    exit 1
+fi
 
-    # Display configuration
-    display_config
+echo "$(date): Starting data_track container..."
+echo "Configuration file: $CONFIG_FILE"
 
-    # Start RTC stream in loop
-    while true; do
-        echo "$(date): Starting RTC stream..."
+# Wait for devices to be ready
+echo "Waiting for devices to be ready..."
+sleep 1
 
-        ./build/webrtc_publisher \
-            -s "$STUN_SERVER" -t "$STUN_SERVER_PORT" \
-            -u "$TURN_SERVER" -p "$TURN_SERVER_PORT" -U "$USER" \
-            -P "$PASSWD" \
-            -w "$TARGET_HOST" -x "$TARGET_PORT" \
-            -I "$TTY_PORT" -T "$TTY_BAUDRATE" \
-            -g "$GSM_PORT" -G "$GSM_BAUDRATE" \
-            -M "$MOTOR_DRIVER_TYPE" \
-            -a "$GPS_PORT" -A "$GPS_BAUDRATE" \
-            -c "$CLIENT_ID"
+# Start RTC stream in loop
+while true; do
+    echo "$(date): Starting RTC stream..."
 
-        exit_code=$?
-        echo "$(date): RTC exited with code $exit_code"
+    ./build/webrtc_publisher "$CONFIG_FILE"
 
-        # Wait before restart
-        if [ "$exit_code" -eq 0 ]; then
-            echo "$(date): Stream completed normally, waiting before restart..."
-        else
-            echo "$(date): Stream failed with code $exit_code, waiting before retry..."
-        fi
-        sleep "${CHECK_INTERVAL:-2}"
-    done
-}
+    exit_code=$?
+    echo "$(date): RTC exited with code $exit_code"
+
+    # Wait before restart
+    CHECK_INTERVAL=$(grep -E "^CHECK_INTERVAL=" "$CONFIG_FILE" | cut -d'=' -f2)
+    CHECK_INTERVAL=${CHECK_INTERVAL:-2}
+
+    if [ "$exit_code" -eq 0 ]; then
+        echo "$(date): Stream completed normally, waiting ${CHECK_INTERVAL}s before restart..."
+    else
+        echo "$(date): Stream failed with code $exit_code, waiting ${CHECK_INTERVAL}s before retry..."
+    fi
+    sleep "$CHECK_INTERVAL"
+done
 
 # Handle shutdown signals
 trap 'echo "$(date): Shutdown signal received, exiting..."; exit 0' SIGTERM SIGINT
-
-# Run main function
-main

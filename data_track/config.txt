@@ -1,0 +1,38 @@
+# WebRTC Data Track Configuration File
+# This file uses key=value format
+# Lines starting with # are comments
+
+# Signaling Server Configuration
+webSocketServer=fy403.cn
+webSocketPort=8000
+client_id=data_Dd8fgkoKo90
+
+# STUN/TURN Configuration
+stunServer=stun.l.google.com
+stunPort=19302
+turnServer=tx.fy403.cn
+turnPort=3478
+turnUser=fy403
+turnPass=qwertyuiop
+
+# ICE Options
+noStun=false
+udpMux=false
+
+# Motor Controller Configuration
+usbDevice=/dev/ttyUSB0
+ttyBaudrate=115200
+motorDriverType=uart
+
+# GSM Module Configuration
+gsmPort=/dev/ttyACM0
+gsmBaudrate=115200
+
+# GPS Module Configuration
+gpsPort=/dev/ttyUSB1
+gpsBaudrate=115200
+
+# Restart Configuration
+CHECK_INTERVAL=2
+
+# Boolean values can be: true/false, 1/0, yes/no (case-insensitive)

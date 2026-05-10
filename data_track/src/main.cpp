@@ -1,6 +1,6 @@
 
 #include "rtc/rtc.hpp"
-#include "parse_cl.h"
+#include "config_parser.h"
 #include "rc_client.h"
 #include "rc_client_config.h"
 
@@ -30,7 +30,7 @@ std::shared_ptr<std::thread> g_ws_reconnect_thread;
 std::atomic<bool> g_ws_reconnect_running{false};
 std::shared_ptr<rtc::WebSocket> g_current_ws;
 std::string g_client_id;
-Cmdline *g_params = nullptr;
+std::shared_ptr<Config> g_config = nullptr;
 
 // WebSocket 心跳和超时检测
 std::shared_ptr<std::thread> g_ws_heartbeat_thread;
@@ -94,26 +94,37 @@ int main(int argc, char **argv) {
     try {
         setup_signal_handlers(); // 设置信号处理器
 
-        Cmdline params(argc, argv);
-        g_params = &params; // 保存参数指针供重连使用
+        // Check for configuration file argument
+        if (argc != 2) {
+            std::cerr << "Usage: " << argv[0] << " <config_file>" << std::endl;
+            std::cerr << "Example: " << argv[0] << " config.txt" << std::endl;
+            return 1;
+        }
 
-        // Use command line parameters or generate random ID
-        std::string client_id = params.clientId(); // Use new client_id parameter
+        // Load configuration from file
+        std::string configFile = argv[1];
+        g_config = std::make_shared<Config>(configFile);
+        g_config->load();
+        g_config->display();
+
+        // Use configuration parameters or generate random ID
+        std::string client_id = config.get("client_id");
         if (client_id.empty()) {
             client_id = randomId(4);
             std::cout << "Generated client ID: " << client_id << std::endl;
         } else {
             std::cout << "Using specified client ID: " << client_id << std::endl;
         }
+
         // 构建 RCClient 配置对象
         RCClientConfig rcClientConfig(
-            params.usbDevice(), // MotorController.MotorDriver: 串口设备
-            params.motorDriverType(), // MotorController.MotorDriver: 驱动类型
-            params.ttyBaudrate(), // MotorController.MotorDriver: 串口波特率
-            params.gsmPort(), // SystemMonitor: 4G模块串口设备
-            params.gsmBaudrate(), // SystemMonitor: 4G模块串口波特率
-            params.gpsPort(), // SystemMonitor: GPS模块串口设备
-            params.gpsBaudrate() // SystemMonitor: GPS模块串口波特率
+            config.get("usbDevice"), // MotorController.MotorDriver: 串口设备
+            config.get("motorDriverType"), // MotorController.MotorDriver: 驱动类型
+            config.getAsInt("ttyBaudrate"), // MotorController.MotorDriver: 串口波特率
+            config.get("gsmPort"), // SystemMonitor: 4G模块串口设备
+            config.getAsInt("gsmBaudrate"), // SystemMonitor: 4G模块串口波特率
+            config.get("gpsPort"), // SystemMonitor: GPS模块串口设备
+            config.getAsInt("gpsBaudrate") // SystemMonitor: GPS模块串口波特率
         );
 
         // 创建局部的 RCClient 实例，使用智能指针管理
@@ -121,33 +132,35 @@ int main(int argc, char **argv) {
         client->stopAll();
         // rtc 初始化
         rtc::InitLogger(rtc::LogLevel::Info);
-        rtc::Configuration config;
+        rtc::Configuration iceConfig;
         std::string stunServer = "";
-        if (params.noStun()) {
+        if (config.getAsBool("noStun")) {
             std::cout << "No STUN server is configured. Only local hosts and public IP "
                     "addresses supported."
                     << std::endl;
         } else {
-            if (params.stunServer().substr(0, 5).compare("stun:") != 0) {
+            std::string stunHost = config.get("stunServer", "stun.l.google.com");
+            int stunPort = config.getAsInt("stunPort", 19302);
+            if (stunHost.substr(0, 5).compare("stun:") != 0) {
                 stunServer = "stun:";
             }
-            stunServer += params.stunServer() + ":" + std::to_string(params.stunPort());
+            stunServer += stunHost + ":" + std::to_string(stunPort);
             std::cout << "STUN server is " << stunServer << std::endl;
-            config.iceServers.emplace_back(stunServer);
+            iceConfig.iceServers.emplace_back(stunServer);
         }
 
         // 添加 TURN 服务器配置支持
-        std::string turnServer = params.turnServer();
+        std::string turnServer = config.get("turnServer");
         if (!turnServer.empty()) {
-            std::string turnUser = params.turnUser();
-            std::string turnPass = params.turnPass();
-            int turnPort = params.turnPort();
+            std::string turnUser = config.get("turnUser");
+            std::string turnPass = config.get("turnPass");
+            int turnPort = config.getAsInt("turnPort", 3478);
 
             std::cout << "TURN server is " << turnServer << ":" << turnPort
                     << std::endl;
 
             // TURN 服务器 - 使用带参数的构造函数
-            config.iceServers.push_back(
+            iceConfig.iceServers.push_back(
                 rtc::IceServer(turnServer, // hostname
                                turnPort, // port
                                turnUser, // username
@@ -177,11 +190,10 @@ int main(int argc, char **argv) {
         setupWebSocketCallbacks(ws, wsPromise, client);
 
         // 连接服务器
-        const std::string wsPrefix =
-                params.webSocketServer().find("://") == std::string::npos ? "ws://" : "";
-        const std::string url = wsPrefix + params.webSocketServer() + ":" +
-                                std::to_string(params.webSocketPort()) + "/" +
-                                client_id;
+        std::string wsHost = config.get("webSocketServer", "localhost");
+        int wsPort = config.getAsInt("webSocketPort", 8000);
+        const std::string wsPrefix = wsHost.find("://") == std::string::npos ? "ws://" : "";
+        const std::string url = wsPrefix + wsHost + ":" + std::to_string(wsPort) + "/" + client_id;
 
         std::cout << "WebSocket URL is " << url << std::endl;
         ws->open(url);
@@ -345,25 +357,27 @@ rtc::Configuration createIceConfig() {
     rtc::Configuration config;
 
     std::string stunServer = "";
-    if (g_params->noStun()) {
+    if (g_config->getAsBool("noStun")) {
         std::cout << "No STUN server is configured. Only local hosts and public IP "
                 "addresses supported."
                 << std::endl;
     } else {
-        if (g_params->stunServer().substr(0, 5).compare("stun:") != 0) {
+        std::string stunHost = g_config->get("stunServer", "stun.l.google.com");
+        int stunPort = g_config->getAsInt("stunPort", 19302);
+        if (stunHost.substr(0, 5).compare("stun:") != 0) {
             stunServer = "stun:";
         }
-        stunServer += g_params->stunServer() + ":" + std::to_string(g_params->stunPort());
+        stunServer += stunHost + ":" + std::to_string(stunPort);
         std::cout << "STUN server is " << stunServer << std::endl;
         config.iceServers.emplace_back(stunServer);
     }
 
     // 添加 TURN 服务器配置支持
-    std::string turnServer = g_params->turnServer();
+    std::string turnServer = g_config->get("turnServer");
     if (!turnServer.empty()) {
-        std::string turnUser = g_params->turnUser();
-        std::string turnPass = g_params->turnPass();
-        int turnPort = g_params->turnPort();
+        std::string turnUser = g_config->get("turnUser");
+        std::string turnPass = g_config->get("turnPass");
+        int turnPort = g_config->getAsInt("turnPort", 3478);
 
         std::cout << "TURN server is " << turnServer << ":" << turnPort
                 << std::endl;
@@ -378,7 +392,7 @@ rtc::Configuration createIceConfig() {
             ));
     }
 
-    if (g_params->udpMux()) {
+    if (g_config->getAsBool("udpMux", false)) {
         std::cout << "ICE UDP mux enabled" << std::endl;
         config.enableIceUdpMux = true;
     }
@@ -540,13 +554,13 @@ void startWsReconnect() {
 
                 // 重新创建 RCClient
                 RCClientConfig rcClientConfig(
-                    g_params->usbDevice(),
-                    g_params->motorDriverType(),
-                    g_params->ttyBaudrate(),
-                    g_params->gsmPort(),
-                    g_params->gsmBaudrate(),
-                    g_params->gpsPort(),
-                    g_params->gpsBaudrate()
+                    g_config->get("usbDevice"),
+                    g_config->get("motorDriverType"),
+                    g_config->getAsInt("ttyBaudrate"),
+                    g_config->get("gsmPort"),
+                    g_config->getAsInt("gsmBaudrate"),
+                    g_config->get("gpsPort"),
+                    g_config->getAsInt("gpsBaudrate")
                 );
                 std::shared_ptr<RCClient> client = std::make_shared<RCClient>(rcClientConfig);
                 client->stopAll();
@@ -555,11 +569,10 @@ void startWsReconnect() {
                 setupWebSocketCallbacks(newWs, wsPromise, client);
 
                 // 连接服务器
-                const std::string wsPrefix =
-                        g_params->webSocketServer().find("://") == std::string::npos ? "ws://" : "";
-                const std::string url = wsPrefix + g_params->webSocketServer() + ":" +
-                                        std::to_string(g_params->webSocketPort()) + "/" +
-                                        g_client_id;
+                std::string wsHost = g_config->get("webSocketServer", "localhost");
+                int wsPort = g_config->getAsInt("webSocketPort", 8000);
+                const std::string wsPrefix = wsHost.find("://") == std::string::npos ? "ws://" : "";
+                const std::string url = wsPrefix + wsHost + ":" + std::to_string(wsPort) + "/" + g_client_id;
 
                 std::cout << "Attempting to reconnect to: " << url << std::endl;
                 newWs->open(url);
@@ -670,8 +683,6 @@ void startWsHeartbeat() {
             }
         }
     });
-
-    g_ws_heartbeat_thread->detach();
 }
 
 void stopWsHeartbeat() {

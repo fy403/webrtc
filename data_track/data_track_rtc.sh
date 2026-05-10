@@ -1,40 +1,33 @@
 #!/bin/bash
-TARGET_HOST="fy403.cn" 
-TARGET_PORT=8000
-IP_TYPE=4
-CHECK_INTERVAL=2  # Health check interval (seconds)
-CLIENT_ID="data_Dd8fgkoKo90"
-STUN_SERVER="stun.l.google.com"
-STUN_SERVER_PORT=19302
-TURN_SERVER="tx.fy403.cn"
-TURN_SERVER_PORT=3478
-USER="fy403"
-PASSWD="qwertyuiop"
-TTY_PORT=/dev/ttyUSB0 # 电机驱动板usb端口
-TTY_BAUDRATE=115200 # 电机驱动板串口波特率
-GSM_PORT=/dev/ttyACM0 # 4g模块usb端口
-GSM_BAUDRATE=115200 # 4g模块串口波特率
-MOTOR_DRIVER_TYPE=uart # 电机驱动类型: uart, crsf
-GPS_PORT=/dev/ttyUSB1 # gps串口
-GPS_BAUDRATE=115200 # gps串口波特率
+# WebRTC Data Track startup script with configuration file support
+# Usage: ./data_track_rtc.sh [config_file]
+# If no config file is specified, defaults to config.txt
 
-# Path to font file - adjust according to your system
-FONT_FILE="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+# Default configuration file
+CONFIG_FILE="${1:-./config.txt}"
+
+# Check if configuration file exists
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Error: Configuration file not found: $CONFIG_FILE"
+    echo "Usage: $0 [config_file]"
+    echo "Example: $0 config.txt"
+    exit 1
+fi
+
+echo "Using configuration file: $CONFIG_FILE"
+
+# Read CHECK_INTERVAL from config file
+CHECK_INTERVAL=$(grep "^CHECK_INTERVAL=" "$CONFIG_FILE" | cut -d'=' -f2)
+if [ -z "$CHECK_INTERVAL" ]; then
+    CHECK_INTERVAL=2  # Default value
+    echo "Warning: CHECK_INTERVAL not found in config, using default: 2 seconds"
+fi
 
 run_rtc() {
     echo "$(date): Starting RTC stream..."
-    
-    ./build/webrtc_publisher \
-    -s $STUN_SERVER -t $STUN_SERVER_PORT \
-    -u $TURN_SERVER -p $TURN_SERVER_PORT \
-    -U $USER -P $PASSWD \
-    -w $TARGET_HOST -x $TARGET_PORT \
-    -I $TTY_PORT -T $TTY_BAUDRATE \
-    -g $GSM_PORT -G $GSM_BAUDRATE \
-    -M $MOTOR_DRIVER_TYPE \
-    -a $GPS_PORT -A $GPS_BAUDRATE \
-    -c $CLIENT_ID
-    
+
+    ./build/webrtc_publisher "$CONFIG_FILE"
+
     local exit_code=$?
     echo "$(date): RTC exited with code $exit_code"
     return $exit_code
