@@ -12,21 +12,20 @@
 #include "audio_capturer.h"
 #include "audio_player.h"
 #include "nlohmann/json.hpp"
-#include "parse_cl.h"
 #include "rtc/rtc.hpp"
 #include "video_capturer.h"
+#include "config_parser.h"
 
 using std::shared_ptr;
 using std::weak_ptr;
 
 using nlohmann::json;
 
-// Helper function to generate a random ID
 std::string randomId(size_t length);
 
 class WebRTCPublisher {
 public:
-  WebRTCPublisher(const std::string &client_id, Cmdline params);
+  WebRTCPublisher(const std::string &client_id, Config *config);
   ~WebRTCPublisher();
   
   void start();
@@ -48,7 +47,7 @@ public:
 
 private:
   std::string client_id_;
-  Cmdline params_;
+  Config *config_;
   std::shared_ptr<rtc::WebSocket> ws_;
 
   // 全局状态管理

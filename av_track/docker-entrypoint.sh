@@ -2,6 +2,9 @@
 # Entrypoint script for av_track container
 set -e
 
+# Configuration file path (can be passed as argument)
+CONFIG_FILE="${1:-./config.txt}"
+
 # Function to check if device exists
 check_device() {
     local device=$1
@@ -14,31 +17,28 @@ check_device() {
     echo "Device $device found"
 }
 
-# Function to display configuration
-display_config() {
-    echo "========================================"
-    echo "WebRTC AV Track Configuration"
-    echo "========================================"
-    echo "Signaling Server: $TARGET_HOST:$TARGET_PORT"
-    echo "Client ID: $CLIENT_ID"
-    echo "Video Device: $VIDEO_DEVICE"
-    echo "Resolution: $RESOLUTION"
-    echo "FPS: $FPS"
-    echo "Video Codec: $VIDEO_CODEC"
-    echo "Input Format: $INPUT_FORMAT"
-    echo "Audio Player Device: $AUDIO_PLAYER_DEVICE"
-    echo "Audio Sample Rate: $AUDIO_PLAYER_SAMPLE_RATE"
-    echo "Audio Channels: $AUDIO_PLAYER_CHANNELS"
-    echo "Audio Volume: $AUDIO_PLAYER_VOLUME"
-    echo "STUN Server: $STUN_SERVER:$STUN_SERVER_PORT"
-    echo "TURN Server: $TURN_SERVER:$TURN_SERVER_PORT"
-    echo "========================================"
+# Function to read config value
+get_config() {
+    local key=$1
+    local default=$2
+    grep "^${key}=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || echo "$default"
 }
 
 # Main entrypoint
 main() {
     echo "$(date): Starting av_track container..."
 
+    # Check if configuration file exists
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo "ERROR: Configuration file not found: $CONFIG_FILE"
+        exit 1
+    fi
+    
+    echo "Using configuration file: $CONFIG_FILE"
+
+    # Read video device from config
+    VIDEO_DEVICE=$(get_config "videoDevice" "")
+    
     # Check if video device exists (if not RTSP/UDP stream)
     if [[ "$VIDEO_DEVICE" == /dev/* ]]; then
         check_device "$VIDEO_DEVICE"
@@ -48,29 +48,17 @@ main() {
         sleep 1
     fi
 
-    # Display configuration
-    display_config
-
-    # Start RTC stream in loop
+    # Start RTC stream with config file
     while true; do
         echo "$(date): Starting RTC stream..."
 
-        ./build/webrtc_publisher \
-            -s "$STUN_SERVER" -t "$STUN_SERVER_PORT" \
-            -u "$TURN_SERVER" -p "$TURN_SERVER_PORT" -U "$USER" \
-            -P "$PASSWD" \
-            -w "$TARGET_HOST" -x "$TARGET_PORT" \
-            -R "$RESOLUTION" -F "$FPS" \
-            -V "$INPUT_FORMAT" \
-            -E "$VIDEO_CODEC" \
-            -c "$CLIENT_ID" -i "$VIDEO_DEVICE" \
-            -S "$AUDIO_PLAYER_DEVICE" \
-            -O "$AUDIO_PLAYER_SAMPLE_RATE" \
-            -H "$AUDIO_PLAYER_CHANNELS" \
-            -v "$AUDIO_PLAYER_VOLUME"
+        ./build/webrtc_publisher "$CONFIG_FILE"
 
         exit_code=$?
         echo "$(date): RTC exited with code $exit_code"
+
+        # Read CHECK_INTERVAL from config
+        CHECK_INTERVAL=$(get_config "CHECK_INTERVAL" "2")
 
         # Wait before restart
         if [ "$exit_code" -eq 0 ]; then
@@ -78,7 +66,7 @@ main() {
         else
             echo "$(date): Stream failed with code $exit_code, waiting before retry..."
         fi
-        sleep "${CHECK_INTERVAL:-2}"
+        sleep "$CHECK_INTERVAL"
     done
 }
 

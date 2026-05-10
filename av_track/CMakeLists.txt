@@ -58,6 +58,7 @@ add_executable(webrtc_publisher
         src/h264_encoder.cpp
         src/h265_encoder.cpp
         src/safe_queue.cpp
+        src/config_parser.cpp
 )
 
 # Include directories

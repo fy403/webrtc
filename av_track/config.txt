@@ -1,0 +1,130 @@
+# WebRTC AV Track Configuration File
+# This file uses key=value format
+# Lines starting with # are comments
+# Boolean values can be: true/false, 1/0, yes/no (case-insensitive)
+
+# =============================================================================
+# Signaling Server Configuration (信令服务器配置)
+# =============================================================================
+
+# WebSocket signaling server address (WebSocket信令服务器地址)
+webSocketServer=localhost
+
+# WebSocket signaling server port (WebSocket信令服务器端口)
+webSocketPort=8000
+
+# Client ID for this publisher (发布者客户端ID)
+# If empty, a random ID will be generated (如果为空，将生成随机ID)
+client_id=
+
+# =============================================================================
+# STUN/TURN Configuration (STUN/TURN服务器配置)
+# =============================================================================
+
+# STUN server address for NAT traversal (STUN服务器地址，用于NAT穿透)
+stunServer=stun.l.google.com
+
+# STUN server port (STUN服务器端口)
+stunPort=19302
+
+# TURN server address for relay (TURN中继服务器地址)
+# Leave empty to disable TURN (留空则禁用TURN)
+turnServer=
+
+# TURN server port (TURN服务器端口)
+turnPort=3478
+
+# TURN server username (TURN服务器用户名)
+turnUser=fy403
+# TURN server password (TURN服务器密码)
+turnPass=qwertyuiop
+
+# Disable STUN server (禁用STUN服务器)
+# If true, only local hosts and public IP addresses supported
+noStun=false
+
+# Enable ICE UDP multiplexing (启用ICE UDP多路复用)
+udpMux=false
+
+# =============================================================================
+# Video Configuration (视频配置)
+# =============================================================================
+
+# Video capture device path (视频采集设备路径)
+# Linux: /dev/video0, /dev/video1, etc. (Linux系统)
+# Windows: Use device name or index (Windows系统使用设备名称或索引)
+# Leave empty to disable video capture (留空则禁用视频采集)
+videoDevice=/dev/video0
+
+# Video input format (视频输入格式)
+# Common formats: YUYV, MJPG, H264, etc. (常见格式：YUYV, MJPG, H264等)
+# Leave empty for auto-detection (留空则自动检测)
+videoFormat=
+
+# Video codec for encoding (视频编码编解码器)
+# Options: h264, h265 (选项：h264, h265)
+videoCodec=h264
+
+# Video resolution (视频分辨率)
+# Format: WIDTHxHEIGHT (格式：宽度x高度)
+# Common resolutions: 640x480, 1280x720, 1920x1080
+resolution=640x480
+
+# Video frame rate (视频帧率)
+# Common values: 15, 30, 60 (常见值：15, 30, 60)
+framerate=30
+
+# =============================================================================
+# Audio Input Configuration (音频输入配置)
+# =============================================================================
+
+# Audio input device (音频输入设备)
+# Linux: Use ALSA device (e.g., default, plughw:1,0) (Linux使用ALSA设备)
+# Windows: Use DirectShow device name (Windows使用DirectShow设备名)
+# Leave empty to disable audio capture (留空则禁用音频采集)
+audioDevice=
+
+# Audio input format (音频输入格式)
+# Common formats: S16LE, S32LE, FLOAT32LE, etc. (常见格式：S16LE, S32LE, FLOAT32LE等)
+# Leave empty for default format (留空则使用默认格式)
+audioFormat=
+
+# Audio sample rate (音频采样率)
+# Common values: 44100, 48000, 96000 (常见值：44100, 48000, 96000)
+sampleRate=44100
+
+# Audio channels (音频声道数)
+# 1 = mono (单声道), 2 = stereo (立体声)
+channels=2
+
+# =============================================================================
+# Audio Output Configuration (音频输出配置)
+# =============================================================================
+
+# Audio output device for playback (音频播放输出设备)
+# Linux: Use ALSA device (e.g., default, plughw:0,0) (Linux使用ALSA设备)
+# Windows: Use DirectShow device name (Windows使用DirectShow设备名)
+# Leave empty to disable audio playback (留空则禁用音频播放)
+speakerDevice=
+
+# Audio output sample rate (音频输出采样率)
+# Should match input sample rate for best quality (最好与输入采样率匹配以获得最佳质量)
+outSampleRate=44100
+
+# Audio output channels (音频输出声道数)
+# 1 = mono (单声道), 2 = stereo (立体声)
+outChannels=2
+
+# Audio output volume (音频输出音量)
+# Range: 0.0 to 2.0 (范围：0.0到2.0)
+# 0.0 = mute (静音), 1.0 = normal (正常), 2.0 = double (双倍)
+volume=1.0
+
+# =============================================================================
+# Debug Configuration (调试配置)
+# =============================================================================
+
+# Enable debug mode (启用调试模式)
+# If true, additional debug information will be printed (如果为true，将打印额外的调试信息)
+debug=false
+

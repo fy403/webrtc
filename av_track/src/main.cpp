@@ -1,9 +1,12 @@
 #include "webrtc_publisher.h"
+#include "config_parser.h"
 #include <atomic>
 #include <csignal>
 #include <iostream>
 #include <string>
 #include <thread>
+#include <memory>
+#include <stdexcept>
 
 // 全局原子标志位，用于信号处理
 std::atomic<bool> g_shutdown_requested{false};
@@ -19,19 +22,25 @@ void signal_handler(int signal) {
 void setup_signal_handlers() {
   std::signal(SIGINT, signal_handler);  // Ctrl+C
   std::signal(SIGTERM, signal_handler); // 终止信号
-  // 忽略 SIGPIPE 信号，防止网络连接断开时程序异常退出
   std::signal(SIGPIPE, SIG_IGN);
 }
 
 int main(int argc, char *argv[]) {
   try {
-    // 设置信号处理器
     setup_signal_handlers();
 
-    Cmdline params(argc, argv);
+    // 配置文件路径，可通过命令行第一个参数指定
+    std::string config_file = "config.txt";
+    if (argc > 1) {
+      config_file = argv[1];
+    }
 
-    // 使用命令行参数或生成随机 ID
-    std::string client_id = params.clientId(); // 使用新的client_id参数
+    // 加载配置文件
+    Config config(config_file);
+    config.load();
+    
+    // 获取client_id
+    std::string client_id = config.get("client_id", "");
     if (client_id.empty()) {
       client_id = randomId(4);
       std::cout << "Generated client ID: " << client_id << std::endl;
@@ -39,17 +48,17 @@ int main(int argc, char *argv[]) {
       std::cout << "Using specified client ID: " << client_id << std::endl;
     }
 
-    WebRTCPublisher publisher(client_id, params);
+    // 使用配置文件创建发布者
+    WebRTCPublisher publisher(client_id, &config);
 
     std::cout << "Starting WebRTC publisher..." << std::endl;
     publisher.start();
     std::cout << "WebRTC publisher started successfully. Press Ctrl+C to stop."
               << std::endl;
 
-    // 主循环，检查关闭标志位
-    while (!g_shutdown_requested.load()) {
-      std::this_thread::sleep_for(
-          std::chrono::milliseconds(100)); // 更短的睡眠时间以便快速响应
+    // 主循环
+    while (!g_shutdown_requested) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     std::cout << "Stopping WebRTC publisher..." << std::endl;

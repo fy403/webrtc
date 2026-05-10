@@ -1,67 +1,30 @@
 #!/bin/bash
-# ===========小车服务器参数===========
-TARGET_HOST="fy403.cn" # 信令服务器地址
-TARGET_PORT=8000 # 信令服务器端口
-IP_TYPE=4 # ipv4 or ipv6
-CHECK_INTERVAL=2  # Health check interval (seconds)
-CLIENT_ID="cam_dYFh3H3kf" # 客户端ID：不填写使用随机值
-STUN_SERVER="stun.l.google.com" # STUN服务器地址
-STUN_SERVER_PORT=19302 # STUN服务器端口
-TURN_SERVER="tx.fy403.cn"
-TURN_SERVER_PORT=3478
-USER="fy403"
-PASSWD="qwertyuiop"
-FONT_FILE="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+# WebRTC AV Track startup script with configuration file support
+# Usage: ./av_track_rtc.sh [config_file]
+# If no config file is specified, defaults to config.txt
 
+# Default configuration file
+CONFIG_FILE="${1:-./config.txt}"
 
-# ===========小车摄像头设备配置===========
-# 普通摄像头：/dev/video1 或 /dev/video0
-# RTSP流：rtsp://user:password@ip:port/path (例如: rtsp://192.168.0.110:554/stream)
-# UDP流：udp://ip:port (例如: udp://192.168.0.110:5600)
-# SDP文件：stream.sdp (必须使用 .sdp 文件格式)
-# 注意：网络流模式（RTSP/UDP/SDP）目前只支持H.264, H.265编码的视频流
-VIDEO_DEVICE="/dev/video1" # RTSP流（网络摄像头）
-RESOLUTION="640x480" # 画面分辨率
-INPUT_FORMAT="yuyv422" # mjpeg, yuyv422
-FPS=30 # 画面帧率
-VIDEO_CODEC="h264" # 视频编码器: h264 或 h265
+# Check if configuration file exists
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Error: Configuration file not found: $CONFIG_FILE"
+    echo "Usage: $0 [config_file]"
+    echo "Example: $0 config.txt"
+    exit 1
+fi
 
+echo "Using configuration file: $CONFIG_FILE"
 
-# ===========小车扬声器参数===========
-AUDIO_PLAYER_DEVICE="USB2.0 Device, USB Audio" # 音频播放设备
-AUDIO_PLAYER_SAMPLE_RATE=48000 # 音频采样率
-AUDIO_PLAYER_CHANNELS=2 # 音频通道数
-AUDIO_PLAYER_VOLUME=1.0 # 音频播放音量
+# Read CHECK_INTERVAL from config file
+CHECK_INTERVAL=$(grep "^CHECK_INTERVAL=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || echo "2")
 
-
-# ===========小车麦克风参数===========
-#AUDIO_DEVICE="hw:CARD=Audio,DEV=0" # 音频设备
-#AUDIO_SAMPLE_RATE=48000 # 音频采样率
-#AUDIO_CHANNELS=1 # 音频通道数
-#AUDIO_FORMAT="alsa" # 音频输入格式
-
+# Function to run RTC stream
 run_rtc() {
     echo "$(date): Starting RTC stream..."
-
-    ./build/webrtc_publisher \
-    -s $STUN_SERVER -t $STUN_SERVER_PORT \
-    -u $TURN_SERVER -p $TURN_SERVER_PORT -U $USER \
-    -P $PASSWD \
-    -w $TARGET_HOST -x $TARGET_PORT \
-    -R $RESOLUTION -F $FPS \
-    -V $INPUT_FORMAT \
-    -E $VIDEO_CODEC \
-    -c $CLIENT_ID -i $VIDEO_DEVICE \
-    -S "$AUDIO_PLAYER_DEVICE" \
-    -O $AUDIO_PLAYER_SAMPLE_RATE \
-    -H $AUDIO_PLAYER_CHANNELS \
-    -v $AUDIO_PLAYER_VOLUME
-#    -a $AUDIO_DEVICE \
-#    -r $AUDIO_SAMPLE_RATE \
-#    -C $AUDIO_CHANNELS \
-#    -f $AUDIO_FORMAT
-
-
+    
+    ./build/webrtc_publisher "$CONFIG_FILE"
+    
     local exit_code=$?
     echo "$(date): RTC exited with code $exit_code"
     return $exit_code
@@ -74,7 +37,7 @@ main() {
     while true; do
         echo "$(date): All checks passed, starting stream..."
         run_rtc
-
+        
         # If RTC exits normally or with error, wait before restart
         if [ $? -eq 0 ]; then
             echo "$(date): Stream completed normally, waiting before restart..."

@@ -383,50 +383,65 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
   return pc;
 }
 
-WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Cmdline params)
-    : client_id_(client_id), params_(params) {
+WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Config *config)
+    : client_id_(client_id), config_(config) {
   rtc::InitLogger(rtc::LogLevel::Info);
   localId_ = client_id;
-  size_t queue_size = params.framerate()*2;
+  
+  if (config_ == nullptr) {
+    throw std::runtime_error("Config object is null");
+  }
+  
+  config_->display();
+  
+  int framerate = config_->getAsInt("framerate", 30);
+  size_t queue_size = framerate * 2;
+  
   // Initialize video capturer
-  if (!params.inputDevice().empty()) {
-    video_capturer_ = new VideoCapturer(params.inputDevice(), params.debug(),
-                                        params.resolution(), params.framerate(),
-                                        params.videoFormat(), queue_size,
+  std::string videoDevice = config_->get("videoDevice", "");
+  if (!videoDevice.empty()) {
+    video_capturer_ = new VideoCapturer(videoDevice, 
+                                        config_->getAsBool("debug", false),
+                                        config_->get("resolution", "640x480"),
+                                        framerate,
+                                        config_->get("videoFormat", ""), 
+                                        queue_size,
                                         queue_size, queue_size);
     // 设置视频编码器类型
-    video_capturer_->set_video_codec(params.videoCodec());
+    video_capturer_->set_video_codec(config_->get("videoCodec", "h264"));
   } else {
     video_capturer_ = nullptr;
   }
 
   // Initialize audio capturer if audio device is specified
-  if (!params.audioDevice().empty()) {
+  std::string audioDevice = config_->get("audioDevice", "");
+  if (!audioDevice.empty()) {
     AudioDeviceParams audio_params;
-    audio_params.device = params.audioDevice();
-    audio_params.channels = params.channels();
-    audio_params.input_format = params.audioFormat();
-    audio_params.sample_rate = params.sampleRate();
+    audio_params.device = audioDevice;
+    audio_params.channels = config_->getAsInt("channels", 2);
+    audio_params.input_format = config_->get("audioFormat", "");
+    audio_params.sample_rate = config_->getAsInt("sampleRate", 44100);
     audio_capturer_ =
-        new AudioCapturer(audio_params, params.debug(), queue_size,
-            queue_size, queue_size);
+        new AudioCapturer(audio_params, config_->getAsBool("debug", false), 
+                          queue_size, queue_size, queue_size);
   } else {
     audio_capturer_ = nullptr;
   }
 
   // Initialize audio player with the specified playback device
-  if (!params.speakerDevice().empty()) {
+  std::string speakerDevice = config_->get("speakerDevice", "");
+  if (!speakerDevice.empty()) {
     AudioPlayerDeviceParams audio_params;
-    audio_params.out_channels = params.outChannels();
-    audio_params.out_device = params.speakerDevice();
-    audio_params.out_sample_rate = params.outSampleRate();
-    audio_params.volume = params.volume();
+    audio_params.out_channels = config_->getAsInt("outChannels", 2);
+    audio_params.out_device = speakerDevice;
+    audio_params.out_sample_rate = config_->getAsInt("outSampleRate", 44100);
+    audio_params.volume = config_->getAsFloat("volume", 1.0f);
     audio_player_ = new AudioPlayer(audio_params);
   } else {
     audio_player_ = nullptr;
   }
 
-  std::cout << "WebRTCPublisher init..." << std::endl;
+  std::cout << "WebRTCPublisher init from config file..." << std::endl;
 }
 
 // 析构函数
@@ -473,9 +488,9 @@ void WebRTCPublisher::start() {
   // 设置 WebSocket 回调和消息处理
   setupWebSocketCallbacks(ws_, wsPromise);
 
-  // 连接服务器
-  std::string webSocketServer = params_.webSocketServer();
-  int webSocketPort = params_.webSocketPort();
+  // 连接服务器 - 从配置文件读取
+  std::string webSocketServer = config_->get("webSocketServer", "localhost");
+  int webSocketPort = config_->getAsInt("webSocketPort", 8000);
 
   const std::string wsPrefix =
       webSocketServer.find("://") == std::string::npos ? "ws://" : "";
@@ -514,10 +529,17 @@ void WebRTCPublisher::start() {
 rtc::Configuration WebRTCPublisher::createIceConfig() {
   rtc::Configuration config;
 
-  if (!params_.noStun()) {
-    std::string stunServer = params_.stunServer();
-    int stunPort = params_.stunPort();
+  // 从配置文件读取ICE配置
+  bool noStun = config_->getAsBool("noStun", false);
+  std::string stunServer = config_->get("stunServer", "stun.l.google.com");
+  int stunPort = config_->getAsInt("stunPort", 19302);
+  std::string turnServer = config_->get("turnServer", "");
+  std::string turnUser = config_->get("turnUser", "");
+  std::string turnPass = config_->get("turnPass", "");
+  int turnPort = config_->getAsInt("turnPort", 3478);
+  bool udpMux = config_->getAsBool("udpMux", false);
 
+  if (!noStun) {
     std::string stunUrl = "stun:";
     if (stunServer.substr(0, 5) == "stun:") {
       stunUrl = stunServer;
@@ -535,12 +557,7 @@ rtc::Configuration WebRTCPublisher::createIceConfig() {
   }
 
   // 添加 TURN 服务器配置支持
-  if (!params_.turnServer().empty()) {
-    std::string turnServer = params_.turnServer();
-    std::string turnUser = params_.turnUser();
-    std::string turnPass = params_.turnPass();
-    int turnPort = params_.turnPort();
-
+  if (!turnServer.empty()) {
     std::cout << "TURN server is " << turnServer << ":" << turnPort
               << std::endl;
 
@@ -554,7 +571,7 @@ rtc::Configuration WebRTCPublisher::createIceConfig() {
                        ));
   }
 
-  if (params_.udpMux()) {
+  if (udpMux) {
     std::cout << "ICE UDP mux enabled" << std::endl;
     config.enableIceUdpMux = true;
   }
