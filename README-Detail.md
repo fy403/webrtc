@@ -303,8 +303,8 @@ turnPass=qwertyuiop               # TURN服务器密码
 # =============================================================================
 # Video Configuration (视频配置)
 # =============================================================================
-videoDevice=/dev/video1            # 摄像头设备（主）
-videoFormat=                       # 视频输入格式（留空则自动检测，如MJPG/YUYV）
+videoDevice=/dev/video1           # 摄像头设备（主）
+videoFormat=yuyv422               # 视频输入格式（留空则自动检测，如mjpeg/yuyv422）
 videoCodec=h264                   # 视频编码格式：h264 或 h265
 resolution=640x480                # 视频分辨率
 framerate=30                      # 视频帧率
@@ -312,7 +312,7 @@ framerate=30                      # 视频帧率
 # =============================================================================
 # Audio Input Configuration (音频输入配置)
 # =============================================================================
-audioDevice=hw:CARD=Audio,DEV=0  # 音频输入设备（留空则禁用音频采集）
+audioDevice=hw:CARD=Audio,DEV=0   # 音频输入设备（留空则禁用音频采集）
 audioFormat=S16_LE                # 音频输入格式
 sampleRate=48000                  # 音频采样率
 channels=1                        # 音频声道数：1=单声道，2=立体声
@@ -323,7 +323,7 @@ channels=1                        # 音频声道数：1=单声道，2=立体声
 speakerDevice=                    # 音频播放设备（留空则禁用音频播放）
 outSampleRate=48000               # 音频输出采样率
 outChannels=2                     # 音频输出声道数
-volume=1.0                        # 音频输出音量（0.0~2.0）
+volume=1.0                        # 音频输出音量（0.0~1.0）
 
 # =============================================================================
 # Debug Configuration (调试配置)
@@ -358,7 +358,7 @@ turnPass=qwertyuiop               # TURN服务器密码
 # =============================================================================
 usbDevice=/dev/ttyUSB0            # 电机驱动板串口设备
 ttyBaudrate=115200                # 串口波特率
-motorDriverType=uart              # 电机驱动类型：uart 或 crsf
+motorDriverType=uart              # 电机驱动类型：uart 或 crsf 或dummy(调试用)
 
 # =============================================================================
 # GSM Module Configuration (4G模块配置)

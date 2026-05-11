@@ -1,41 +1,40 @@
-# WebRTC Data Track Configuration File
-# This file uses key=value format
-# Lines starting with # are comments
+# =============================================================================
+# Signaling Server Configuration (信令服务器配置)
+# =============================================================================
+webSocketServer=fy403.cn          # 信令服务器地址
+webSocketPort=8000                # 信令服务器端口
+client_id=dataTrack               # ⚠️ 必须全局唯一
 
-# Signaling Server Configuration
-webSocketServer=fy403.cn
-webSocketPort=8000
-client_id=data_Dd8fgkoKo90
+# =============================================================================
+# STUN/TURN Configuration (STUN/TURN服务器配置)
+# =============================================================================
+stunServer=stun.l.google.com      # STUN服务器地址
+stunPort=19302                    # STUN服务器端口
+turnServer=tx.fy403.cn            # TURN中继服务器地址
+turnPort=3478                     # TURN服务器端口
+turnUser=fy403                    # TURN服务器用户名
+turnPass=qwertyuiop               # TURN服务器密码
 
-# STUN/TURN Configuration
-stunServer=stun.l.google.com
-stunPort=19302
-turnServer=tx.fy403.cn
-turnPort=3478
-turnUser=fy403
-turnPass=qwertyuiop
+# =============================================================================
+# Motor Controller Configuration (电机控制器配置)
+# =============================================================================
+usbDevice=/dev/ttyUSB0            # 电机驱动板串口设备
+ttyBaudrate=115200                # 串口波特率
+motorDriverType=uart              # 电机驱动类型：uart 或 crsf 或dummy(调试用)
 
-# ICE Options
-noStun=false
-udpMux=false
+# =============================================================================
+# GSM Module Configuration (4G模块配置)
+# =============================================================================
+gsmPort=/dev/ttyACM0              # 4G模块串口设备
+gsmBaudrate=115200                # 4G模块波特率
 
-# Motor Controller Configuration
-# 电机驱动类型: uart, crsf, dummy、
-# dummy 表示不使用电机驱动，仅用于测试
-motorDriverType=uart
-usbDevice=/dev/ttyUSB0
-ttyBaudrate=115200
+# =============================================================================
+# GPS Module Configuration (GPS模块配置) 必须支持NMEA协议
+# =============================================================================
+gpsPort=/dev/ttyUSB1              # GPS模块串口设备（可选）
+gpsBaudrate=115200                # GPS模块波特率
 
-
-# 4G模块配置状态读取串口
-gsmPort=/dev/ttyACM0
-gsmBaudrate=115200
-
-# GPS Module Configuration，必须是NMEA协议
-gpsPort=/dev/ttyUSB1
-gpsBaudrate=115200
-
-# Restart Configuration
-CHECK_INTERVAL=2
-
-# Boolean values can be: true/false, 1/0, yes/no (case-insensitive)
+# =============================================================================
+# Restart Configuration (重启配置)
+# =============================================================================
+CHECK_INTERVAL=2                  # 健康检查间隔（秒）
