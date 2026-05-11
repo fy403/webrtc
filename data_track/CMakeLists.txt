@@ -40,6 +40,7 @@ add_executable(webrtc_publisher
         src/system_monitor.cpp
         src/uart_motor_driver.cpp
         src/crsf_motor_driver.cpp
+        src/dummy_motor_driver.cpp
         src/gps_nmea_monitor.cpp
         src/async_monitor.cpp
         src/memory_monitor.cpp

@@ -1,6 +1,7 @@
 #include "motor_controller.h"
 #include "uart_motor_driver.h"
 #include "crsf_motor_driver.h"
+#include "dummy_motor_driver.h"
 #include "rc_protocol_v2.h"
 #include <algorithm>
 #include <cmath>
@@ -47,6 +48,14 @@ MotorController::MotorController(const MotorControllerConfig &config)
             throw std::runtime_error("Failed to connect to CRSF serial port");
         }
         std::cout << "CRSF 驱动初始化成功" << std::endl;
+    } else if (config.motor_driver_type == "dummy") {
+        // 创建虚拟电机驱动器（用于调试，只打印信号不执行）
+        motor_driver = new DummyMotorDriver("DummyMotor-" + config.motor_driver_port);
+        
+        if (!motor_driver->connect()) {
+            throw std::runtime_error("Failed to connect dummy motor driver");
+        }
+        std::cout << "Dummy 驱动初始化成功（调试模式，只打印信号）" << std::endl;
     } else {
         std::cerr << "Unknown motor driver type: " << config.motor_driver_type << std::endl;
         throw std::runtime_error("Unknown motor driver type");

@@ -14,8 +14,7 @@ webSocketServer=localhost
 webSocketPort=8000
 
 # Client ID for this publisher (发布者客户端ID)
-# If empty, a random ID will be generated (如果为空，将生成随机ID)
-client_id=
+client_id=cam_dYFh3H3kf
 
 # =============================================================================
 # STUN/TURN Configuration (STUN/TURN服务器配置)
@@ -29,7 +28,7 @@ stunPort=19302
 
 # TURN server address for relay (TURN中继服务器地址)
 # Leave empty to disable TURN (留空则禁用TURN)
-turnServer=
+turnServer=tx.fy403.cn
 
 # TURN server port (TURN服务器端口)
 turnPort=3478
@@ -57,9 +56,8 @@ udpMux=false
 videoDevice=/dev/video0
 
 # Video input format (视频输入格式)
-# Common formats: YUYV, MJPG, H264, etc. (常见格式：YUYV, MJPG, H264等)
-# Leave empty for auto-detection (留空则自动检测)
-videoFormat=
+# Common formats: mjpeg, yuyv422
+videoFormat=yuyv422
 
 # Video codec for encoding (视频编码编解码器)
 # Options: h264, h265 (选项：h264, h265)

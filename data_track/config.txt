@@ -20,15 +20,18 @@ noStun=false
 udpMux=false
 
 # Motor Controller Configuration
+# 电机驱动类型: uart, crsf, dummy、
+# dummy 表示不使用电机驱动，仅用于测试
+motorDriverType=uart
 usbDevice=/dev/ttyUSB0
 ttyBaudrate=115200
-motorDriverType=uart
 
-# GSM Module Configuration
+
+# 4G模块配置状态读取串口
 gsmPort=/dev/ttyACM0
 gsmBaudrate=115200
 
-# GPS Module Configuration
+# GPS Module Configuration，必须是NMEA协议
 gpsPort=/dev/ttyUSB1
 gpsBaudrate=115200
 
