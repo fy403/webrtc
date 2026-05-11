@@ -6,20 +6,43 @@
 
 ## 目录
 
-- [系统架构](#系统架构)
-- [快速开始](#快速开始)
-  - [前置依赖说明](#前置依赖说明)
-  - [Step 1：部署信令服务器](#step-1部署信令服务器)
-  - [Step 2：配置 STUN / TURN 服务器](#step-2配置-stun--turn-服务器)
-  - [Step 3：安装开发板依赖](#step-3安装开发板依赖)
-  - [Step 4：查找设备参数](#step-4查找设备参数)
-  - [Step 5：编译 & 配置](#step-5编译--配置)
-  - [Step 6：启动服务](#step-6启动服务)
-  - [Step 7：打开控制端网页](#step-7打开控制端网页)
-- [材料清单](#材料清单)
-- [硬件选型指南](#硬件选型指南)
-- [项目 Q&A](#项目-qa)
-- [后续计划](#后续计划)
+- [详细文档 · WebRTC 远程遥控车系统](#详细文档--webrtc-远程遥控车系统)
+  - [目录](#目录)
+  - [系统架构](#系统架构)
+    - [连接建立流程](#连接建立流程)
+    - [音视频数据流](#音视频数据流)
+  - [快速开始](#快速开始)
+    - [前置依赖说明](#前置依赖说明)
+    - [Step 1：部署信令服务器](#step-1部署信令服务器)
+    - [Step 2：配置 STUN / TURN 服务器](#step-2配置-stun--turn-服务器)
+    - [Step 3：安装开发板依赖](#step-3安装开发板依赖)
+    - [Step 4：查找设备参数](#step-4查找设备参数)
+      - [4.1 摄像头参数获取](#41-摄像头参数获取)
+      - [4.2 麦克风参数获取](#42-麦克风参数获取)
+      - [4.3 扬声器参数获取](#43-扬声器参数获取)
+      - [4.4 电机驱动器接口获取](#44-电机驱动器接口获取)
+      - [4.5 4G 网络模块接口获取](#45-4g-网络模块接口获取)
+    - [Step 5：编译 \& 配置](#step-5编译--配置)
+      - [5.1 编译程序](#51-编译程序)
+      - [5.2 配置音视频采集端（av\_track）](#52-配置音视频采集端av_track)
+      - [5.3 配置控制信号端（data\_track）](#53-配置控制信号端data_track)
+      - [5.4 电机控制参数（可选）](#54-电机控制参数可选)
+      - [5.5 快速重置 CLIENT\_ID](#55-快速重置-client_id)
+      - [5.6 查看所有可用参数](#56-查看所有可用参数)
+    - [Step 6：启动服务](#step-6启动服务)
+    - [Step 7：打开控制端网页](#step-7打开控制端网页)
+  - [材料清单](#材料清单)
+  - [硬件选型指南](#硬件选型指南)
+    - [开发板](#开发板)
+    - [电机驱动方案](#电机驱动方案)
+    - [网络模块](#网络模块)
+    - [摄像头模块](#摄像头模块)
+    - [声音模块](#声音模块)
+  - [项目 Q\&A](#项目-qa)
+    - [Q1：如何添加自定义的电机驱动方案？](#q1如何添加自定义的电机驱动方案)
+    - [Q2：必须购买所有配件吗？](#q2必须购买所有配件吗)
+    - [Q3：图传延时能达到多少？](#q3图传延时能达到多少)
+  - [后续计划](#后续计划)
 
 ---
 
@@ -255,61 +278,104 @@ cd av_track   && chmod +x build.sh install.sh && ./build.sh
 cd data_track && chmod +x build.sh install.sh && ./build.sh
 ```
 
-#### 5.2 配置音视频采集端
+#### 5.2 配置音视频采集端（av_track）
 
-修改 `av_track/av_track_rtc.sh`：
+编辑 `av_track/config.txt` 配置文件（使用 `key=value` 格式，支持 `#` 注释）：
 
-```shell
-#!/bin/bash
-TARGET_HOST="fy403.cn"          # 信令服务器地址
-TARGET_PORT=8000                # 信令服务器端口
-IP_TYPE=4                       # ipv4 or ipv6
-VIDEO_DEVICE="/dev/video1"      # 摄像头设备（主）
-VIDEO_DEVICE_BAK="/dev/video0"  # 摄像头设备（备）
-#AUDIO_DEVICE="hw:CARD=Audio,DEV=0"
-#SAMPLE_RATE=48000
-#CHANNELS=1
-AUDIO_FORMAT="alsa"
-CHECK_INTERVAL=2                # 健康检查间隔（秒）
-CLIENT_ID="usbcam"              # ⚠️ 必须全局唯一
-STUN_SERVER="stun.l.google.com"
-STUN_SERVER_PORT=19302
-TURN_SERVER="tx.fy403.cn"
-TURN_SERVER_PORT=3478
-USER="fy403"
-PASSWD="qwertyuiop"
-RESOLUTION="640x480"
-FPS=60
-#RESOLUTION="1280x720"
-#FPS=10
-#ADUIO_PLAYER_DEVICE="USB2.0 Device, USB Audio"
-#ADUIO_PLAYER_SAMPLE_RATE=48000
-#AUDIO_PLAYER_CHANNELS=2
-#AUDIO_PLAYER_VOLUME=1
+```ini
+# =============================================================================
+# Signaling Server Configuration (信令服务器配置)
+# =============================================================================
+webSocketServer=fy403.cn          # 信令服务器地址
+webSocketPort=8000                # 信令服务器端口
+client_id=usbcam                  # ⚠️ 必须全局唯一
+
+# =============================================================================
+# STUN/TURN Configuration (STUN/TURN服务器配置)
+# =============================================================================
+stunServer=stun.l.google.com      # STUN服务器地址
+stunPort=19302                    # STUN服务器端口
+turnServer=tx.fy403.cn            # TURN中继服务器地址（留空则禁用）
+turnPort=3478                     # TURN服务器端口
+turnUser=fy403                    # TURN服务器用户名
+turnPass=qwertyuiop               # TURN服务器密码
+
+# =============================================================================
+# Video Configuration (视频配置)
+# =============================================================================
+videoDevice=/dev/video1            # 摄像头设备（主）
+videoFormat=                       # 视频输入格式（留空则自动检测，如MJPG/YUYV）
+videoCodec=h264                   # 视频编码格式：h264 或 h265
+resolution=640x480                # 视频分辨率
+framerate=30                      # 视频帧率
+
+# =============================================================================
+# Audio Input Configuration (音频输入配置)
+# =============================================================================
+audioDevice=hw:CARD=Audio,DEV=0  # 音频输入设备（留空则禁用音频采集）
+audioFormat=S16_LE                # 音频输入格式
+sampleRate=48000                  # 音频采样率
+channels=1                        # 音频声道数：1=单声道，2=立体声
+
+# =============================================================================
+# Audio Output Configuration (音频输出配置)
+# =============================================================================
+speakerDevice=                    # 音频播放设备（留空则禁用音频播放）
+outSampleRate=48000               # 音频输出采样率
+outChannels=2                     # 音频输出声道数
+volume=1.0                        # 音频输出音量（0.0~2.0）
+
+# =============================================================================
+# Debug Configuration (调试配置)
+# =============================================================================
+debug=false                       # 启用调试模式
 ```
 
-#### 5.3 配置控制信号端
+#### 5.3 配置控制信号端（data_track）
 
-修改 `data_track/data_track_rtc.sh`：
+编辑 `data_track/config.txt` 配置文件：
 
-```shell
-#!/bin/bash
-TARGET_HOST="fy403.cn"
-TARGET_PORT=8000
-IP_TYPE=4
-CHECK_INTERVAL=2
-CLIENT_ID="dataTrack"           # ⚠️ 必须全局唯一
-STUN_SERVER="stun.l.google.com"
-STUN_SERVER_PORT=19302
-TURN_SERVER="tx.fy403.cn"
-TURN_SERVER_PORT=3478
-USER="fy403"
-PASSWD="qwertyuiop"
-TTY_PORT=/dev/ttyUSB0           # 电机驱动板串口
-TTY_BAUDRATE=115200
-GSM_PORT=/dev/ttyACM0           # 4G 模块串口
-GSM_BAUDRATE=115200
-MOTOR_DRIVER_TYPE=uart          # 电机驱动类型: uart 或 crsf
+```ini
+# =============================================================================
+# Signaling Server Configuration (信令服务器配置)
+# =============================================================================
+webSocketServer=fy403.cn          # 信令服务器地址
+webSocketPort=8000                # 信令服务器端口
+client_id=dataTrack               # ⚠️ 必须全局唯一
+
+# =============================================================================
+# STUN/TURN Configuration (STUN/TURN服务器配置)
+# =============================================================================
+stunServer=stun.l.google.com      # STUN服务器地址
+stunPort=19302                    # STUN服务器端口
+turnServer=tx.fy403.cn            # TURN中继服务器地址
+turnPort=3478                     # TURN服务器端口
+turnUser=fy403                    # TURN服务器用户名
+turnPass=qwertyuiop               # TURN服务器密码
+
+# =============================================================================
+# Motor Controller Configuration (电机控制器配置)
+# =============================================================================
+usbDevice=/dev/ttyUSB0            # 电机驱动板串口设备
+ttyBaudrate=115200                # 串口波特率
+motorDriverType=uart              # 电机驱动类型：uart 或 crsf
+
+# =============================================================================
+# GSM Module Configuration (4G模块配置)
+# =============================================================================
+gsmPort=/dev/ttyACM0              # 4G模块串口设备
+gsmBaudrate=115200                # 4G模块波特率
+
+# =============================================================================
+# GPS Module Configuration (GPS模块配置) 必须支持NMEA协议
+# =============================================================================
+gpsPort=/dev/ttyUSB1              # GPS模块串口设备（可选）
+gpsBaudrate=115200                # GPS模块波特率
+
+# =============================================================================
+# Restart Configuration (重启配置)
+# =============================================================================
+CHECK_INTERVAL=2                  # 健康检查间隔（秒）
 ```
 
 #### 5.4 电机控制参数（可选）
@@ -327,22 +393,25 @@ const int16_t MAX_REVERSE_PWM  = -3500;
 
 #### 5.5 快速重置 CLIENT_ID
 
-在项目根目录运行以下脚本，自动为两个模块生成随机唯一 ID 并同步更新所有相关文件：
+在项目根目录运行以下脚本，自动为两个模块生成随机唯一 ID 并更新 `config.txt` 文件：
 
 ```shell
 #!/bin/bash
 RANDOM_CAM=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 8)
 RANDOM_DATA=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 8)
 
-DATA_CLIENT_ID=$(grep "^CLIENT_ID=" data_track/data_track_rtc.sh | cut -d'"' -f2)
-AV_CLIENT_ID=$(grep "^CLIENT_ID=" av_track/av_track_rtc.sh | cut -d'"' -f2)
+# 读取当前CLIENT_ID
+DATA_CLIENT_ID=$(grep "^client_id=" data_track/config.txt | cut -d'=' -f2)
+AV_CLIENT_ID=$(grep "^client_id=" av_track/config.txt | cut -d'=' -f2)
 
 echo "将 $DATA_CLIENT_ID 替换为: data_id_${RANDOM_DATA}"
 echo "将 $AV_CLIENT_ID 替换为: cam_id_${RANDOM_CAM}"
 
-sed -i "s/^CLIENT_ID=\"$DATA_CLIENT_ID\"/CLIENT_ID=\"data_id_${RANDOM_DATA}\"/" data_track/data_track_rtc.sh
-sed -i "s/^CLIENT_ID=\"$AV_CLIENT_ID\"/CLIENT_ID=\"cam_id_${RANDOM_CAM}\"/" av_track/av_track_rtc.sh
+# 更新config.txt
+sed -i "s/^client_id=$DATA_CLIENT_ID/client_id=data_id_${RANDOM_DATA}/" data_track/config.txt
+sed -i "s/^client_id=$AV_CLIENT_ID/client_id=cam_id_${RANDOM_CAM}/" av_track/config.txt
 
+# 更新其他引用了该ID的文件
 DIRS=("av_track" "data_track")
 for dir in "${DIRS[@]}"; do
     if [ -d "$dir" ]; then
@@ -366,7 +435,19 @@ cd av_track/build && ./webrtc_publisher -h
 
 ### Step 6：启动服务
 
-**方式一：直接运行安装脚本**
+**方式一：直接运行（使用 config.txt 配置）**
+
+```shell
+# 音视频采集端
+cd av_track/build
+./webrtc_publisher ../config.txt
+
+# 控制信号端
+cd data_track/build
+./webrtc_publisher ../config.txt
+```
+
+**方式二：使用安装脚本（自动读取 config.txt）**
 
 ```shell
 # 音视频采集端
@@ -376,28 +457,23 @@ cd av_track && ./install
 cd data_track && ./install
 ```
 
-**方式二：Docker 一键运行**
+**方式三：Docker 一键运行**
 
 ```shell
 # 配置 Docker 开机自启
 sudo systemctl enable docker
 
-# 导入 ARM64 镜像（网盘：https://pan.baidu.com/s/1KUMbif2980GnhZgIphmZ5g?pwd=fy43）
-gzip -d -c alifys_ubuntu_arm64.tar.gz > alifys_ubuntu_arm64.tar
-docker import alifys_ubuntu_arm64.tar alifys/ubuntu:arm64
+# 下载 ARM64 镜像
+docker pull alifys/ubuntu:arm64
 
 # 在根目录构建
 ./build-all.sh
 
-# 运行 av_track
-cd av_track && ./run-docker.sh
-# 自定义参数示例：
-./run-docker.sh --device /dev/video0 --name cam_001 --client-id cam_001
+# 运行 av_track（必须指定配置文件）
+cd av_track && ./run-docker.sh config.txt
 
-# 运行 data_track
-cd data_track && ./run-docker.sh
-# 自定义串口示例：
-./run-docker.sh --motor-port /dev/ttyUSB1 --gsm-port /dev/ttyACM1 --name data_001
+# 运行 data_track（必须指定配置文件）
+cd data_track && ./run-docker.sh config.txt
 ```
 
 ---

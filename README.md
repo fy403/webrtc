@@ -154,14 +154,14 @@ docker pull alifys/ubuntu:arm64
 pushd av_track
 ./run-docker.sh
 # 或使用自定义参数
-./run-docker.sh --device /dev/video0 --name cam_001 --client-id cam_001
+./run-docker.sh  config.txt
 
 # 3. 运行 data_track
 popd
 pushd data_track
 ./run-docker.sh
 # 或使用自定义串口
-./run-docker.sh --motor-port /dev/ttyUSB1 --gsm-port /dev/ttyACM1 --name data_001
+./run-docker.sh config.txt
 popd
 ```
 
