@@ -67,8 +67,8 @@ private:
   std::shared_ptr<std::thread> wsHeartbeatThread_;
   std::atomic<bool> wsHeartbeatRunning_{false};
   std::atomic<uint64_t> lastWsActivity_{0};
-  static constexpr uint64_t WS_HEARTBEAT_INTERVAL = 1;    // 心跳间隔
-  static constexpr uint64_t WS_TIMEOUT_SECONDS = 5;       // 超时时间
+  static constexpr uint64_t WS_HEARTBEAT_INTERVAL = 3;    // 心跳间隔（秒）
+  static constexpr uint64_t WS_TIMEOUT_SECONDS = 10;      // 超时阈值（秒）
 
   // WebSocket 自动重连
   void startWsReconnect();

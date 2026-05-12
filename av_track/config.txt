@@ -3,7 +3,7 @@
 # =============================================================================
 webSocketServer=fy403.cn          # 信令服务器地址
 webSocketPort=8000                # 信令服务器端口
-client_id=cam_dYFh3H3kf                  # ⚠️ 必须全局唯一
+client_id=cam_dYFh3H3kf           # ⚠️ 必须全局唯一
 
 # =============================================================================
 # STUN/TURN Configuration (STUN/TURN服务器配置)
@@ -22,10 +22,10 @@ turnPass=qwertyuiop               # TURN服务器密码
 #   - 真实设备: /dev/video0, /dev/video1 等
 #   - 模拟摄像头: 设置为 "fake" 启用 lavfi 虚拟设备（无摄像头时用于测试）
 #       模拟画面会显示彩色测试图案 + 毫秒时间戳
-videoDevice=fake         # 摄像头设备（设置为 "fake" 启用模拟摄像头）
+videoDevice=fake                  # 摄像头设备（设置为 "fake" 启用模拟摄像头）
 videoFormat=yuyv422               # 视频输入格式（留空则自动检测，如mjpeg/yuyv422）⚠️ 使用 fake 模拟摄像头时，此参数无效，留空即可
 videoCodec=h264                   # 视频编码格式：h264 或 h265
-resolution=1920x1080            # 视频分辨率（fake 模式也支持，如 1280x720）
+resolution=1920x1080              # 视频分辨率（fake 模式也支持，如 1280x720）
 framerate=30                      # 视频帧率（fake 模式也支持，如 30/60）
 
 # =============================================================================

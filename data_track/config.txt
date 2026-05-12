@@ -3,7 +3,7 @@
 # =============================================================================
 webSocketServer=fy403.cn          # 信令服务器地址
 webSocketPort=8000                # 信令服务器端口
-client_id=data_Dd8fgkoKo90               # ⚠️ 必须全局唯一
+client_id=data_Dd8fgkoKo90        # ⚠️ 必须全局唯一
 
 # =============================================================================
 # STUN/TURN Configuration (STUN/TURN服务器配置)
@@ -20,7 +20,7 @@ turnPass=qwertyuiop               # TURN服务器密码
 # =============================================================================
 usbDevice=/dev/ttyUSB0            # 电机驱动板串口设备
 ttyBaudrate=115200                # 串口波特率
-motorDriverType=dummy              # 电机驱动类型：uart 或 crsf 或dummy(调试用)
+motorDriverType=dummy             # 电机驱动类型：uart 或 crsf 或 dummy(调试用)
 
 # =============================================================================
 # GSM Module Configuration (4G模块配置)
