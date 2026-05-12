@@ -47,6 +47,7 @@ private:
   void clear_frame_pool();
 
   bool is_udp_stream_ = false;  // 是否为UDP流模式
+  bool is_fake_camera_ = false; // 是否为模拟摄像头模式(lavfi)
   std::string device_;
   std::string resolution_;
   int framerate_;

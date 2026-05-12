@@ -247,7 +247,8 @@ window.addEventListener('load', () => {
         fps: document.getElementById('videoFps'),
         bitrate: document.getElementById('videoBitrate'),
         latency: document.getElementById('videoLatency'),
-        codec: document.getElementById('videoCodec')
+        codec: document.getElementById('videoCodec'),
+        resolution: document.getElementById('videoResolution')
     };
 
     let lastBytesReceived = 0;
@@ -326,6 +327,11 @@ window.addEventListener('load', () => {
                         videoStatsElements.codec.textContent = codecName;
                     }
                 }
+            }
+
+            // 更新分辨率信息
+            if (videoStats.frameWidth && videoStats.frameHeight && videoStatsElements.resolution) {
+                videoStatsElements.resolution.textContent = `${videoStats.frameWidth}x${videoStats.frameHeight}`;
             }
 
             // 更新音频波纹效果 - 检测是否在接收音频

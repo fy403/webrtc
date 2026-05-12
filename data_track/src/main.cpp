@@ -108,7 +108,7 @@ int main(int argc, char **argv) {
         g_config->display();
 
         // Use configuration parameters or generate random ID
-        std::string client_id = config.get("client_id");
+        std::string client_id = g_config->get("client_id");
         if (client_id.empty()) {
             client_id = randomId(4);
             std::cout << "Generated client ID: " << client_id << std::endl;
@@ -118,13 +118,13 @@ int main(int argc, char **argv) {
 
         // 构建 RCClient 配置对象
         RCClientConfig rcClientConfig(
-            config.get("usbDevice"), // MotorController.MotorDriver: 串口设备
-            config.get("motorDriverType"), // MotorController.MotorDriver: 驱动类型
-            config.getAsInt("ttyBaudrate"), // MotorController.MotorDriver: 串口波特率
-            config.get("gsmPort"), // SystemMonitor: 4G模块串口设备
-            config.getAsInt("gsmBaudrate"), // SystemMonitor: 4G模块串口波特率
-            config.get("gpsPort"), // SystemMonitor: GPS模块串口设备
-            config.getAsInt("gpsBaudrate") // SystemMonitor: GPS模块串口波特率
+            g_config->get("usbDevice"), // MotorController.MotorDriver: 串口设备
+            g_config->get("motorDriverType"), // MotorController.MotorDriver: 驱动类型
+            g_config->getAsInt("ttyBaudrate"), // MotorController.MotorDriver: 串口波特率
+            g_config->get("gsmPort"), // SystemMonitor: 4G模块串口设备
+            g_config->getAsInt("gsmBaudrate"), // SystemMonitor: 4G模块串口波特率
+            g_config->get("gpsPort"), // SystemMonitor: GPS模块串口设备
+            g_config->getAsInt("gpsBaudrate") // SystemMonitor: GPS模块串口波特率
         );
 
         // 创建局部的 RCClient 实例，使用智能指针管理
@@ -134,13 +134,13 @@ int main(int argc, char **argv) {
         rtc::InitLogger(rtc::LogLevel::Info);
         rtc::Configuration iceConfig;
         std::string stunServer = "";
-        if (config.getAsBool("noStun")) {
+        if (g_config->getAsBool("noStun")) {
             std::cout << "No STUN server is configured. Only local hosts and public IP "
                     "addresses supported."
                     << std::endl;
         } else {
-            std::string stunHost = config.get("stunServer", "stun.l.google.com");
-            int stunPort = config.getAsInt("stunPort", 19302);
+            std::string stunHost = g_config->get("stunServer", "stun.l.google.com");
+            int stunPort = g_config->getAsInt("stunPort", 19302);
             if (stunHost.substr(0, 5).compare("stun:") != 0) {
                 stunServer = "stun:";
             }
@@ -150,11 +150,11 @@ int main(int argc, char **argv) {
         }
 
         // 添加 TURN 服务器配置支持
-        std::string turnServer = config.get("turnServer");
+        std::string turnServer = g_config->get("turnServer");
         if (!turnServer.empty()) {
-            std::string turnUser = config.get("turnUser");
-            std::string turnPass = config.get("turnPass");
-            int turnPort = config.getAsInt("turnPort", 3478);
+            std::string turnUser = g_config->get("turnUser");
+            std::string turnPass = g_config->get("turnPass");
+            int turnPort = g_config->getAsInt("turnPort", 3478);
 
             std::cout << "TURN server is " << turnServer << ":" << turnPort
                     << std::endl;
@@ -190,8 +190,8 @@ int main(int argc, char **argv) {
         setupWebSocketCallbacks(ws, wsPromise, client);
 
         // 连接服务器
-        std::string wsHost = config.get("webSocketServer", "localhost");
-        int wsPort = config.getAsInt("webSocketPort", 8000);
+        std::string wsHost = g_config->get("webSocketServer", "localhost");
+        int wsPort = g_config->getAsInt("webSocketPort", 8000);
         const std::string wsPrefix = wsHost.find("://") == std::string::npos ? "ws://" : "";
         const std::string url = wsPrefix + wsHost + ":" + std::to_string(wsPort) + "/" + client_id;
 

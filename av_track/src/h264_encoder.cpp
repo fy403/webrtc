@@ -36,40 +36,59 @@ bool H264Encoder::open_encoder(int width, int height, int fps, int64_t bit_rate)
   encoder_context_->time_base = {1, fps}; // 时间基：每帧持续时间
   encoder_context_->framerate = {fps, 1}; // 帧率
 
-  // 关键帧设置（优化）
-  // encoder_context_->gop_size = fps; // GOP等于帧率（1秒一个关键帧）
-  // 最小关键帧间隔改为半秒，提高随机访问性
-  // encoder_context_->keyint_min = fps / 2;
+  // ==================== 关键帧/GOP 配置（优化丢帧率）====================
+  // GOP = fps * 2：每2秒一个关键帧，平衡压缩率和随机访问能力
+  encoder_context_->gop_size = fps * 2;
+  // keyint_min = fps：最小关键帧间隔1秒
+  encoder_context_->keyint_min = fps;
 
   // ==================== B帧配置 ====================
   // 完全禁用B帧以减少编码延迟和提高兼容性
   encoder_context_->max_b_frames = 0; // 最大连续B帧数为0
   encoder_context_->has_b_frames = 0; // 标记流中无B帧
 
-  // 码率控制：VBR运行较大波动
-    if (bit_rate>0) {
-        encoder_context_->bit_rate = bit_rate;
-        encoder_context_->rc_max_rate = bit_rate;
-        encoder_context_->rc_buffer_size = bit_rate;
-    }
+  // ==================== 码率控制 ====================
+  // 优先使用指定码率；若未指定则根据分辨率自动计算
+  if (bit_rate > 0) {
+    // 用户指定了码率
+    encoder_context_->bit_rate = bit_rate;
+    encoder_context_->rc_max_rate = bit_rate * 2;     // 最大码率为目标值的2倍
+    encoder_context_->rc_buffer_size = bit_rate / 4;  // 缓冲区大小
+    // 使用 ABR 模式替代 CRF，更稳定的码率输出
+    av_opt_set(encoder_context_->priv_data, "preset", "ultrafast", 0);
+    av_opt_set(encoder_context_->priv_data, "tune", "zerolatency", 0);
+    av_opt_set(encoder_context_->priv_data, "profile", "baseline", 0);
+  } else {
+    // 未指定码率 → 自动计算合理码率 + CRF 模式
+    // 经验公式：640x480@30fps ≈ 800kbps, 1280x720@30fps ≈ 2000kbps
+    int auto_bitrate = (width * height * fps) / 20;  // 自适应码率计算
+    if (auto_bitrate < 200000) auto_bitrate = 200000;  // 最低 200kbps
+    if (auto_bitrate > 5000000) auto_bitrate = 5000000;  // 最高 5Mbps
+    encoder_context_->bit_rate = auto_bitrate;
+    encoder_context_->rc_max_rate = auto_bitrate * 2;
+    encoder_context_->rc_buffer_size = auto_bitrate / 4;
+
+    // CRF 模式用于自适应质量
+    av_opt_set(encoder_context_->priv_data, "preset", "ultrafast", 0);
+    av_opt_set(encoder_context_->priv_data, "tune", "zerolatency", 0);
+    av_opt_set(encoder_context_->priv_data, "crf", "23", 0);
+    av_opt_set(encoder_context_->priv_data, "profile", "baseline", 0);
+
+    std::cout << "Auto bitrate calculated: " << auto_bitrate / 1000 << " kbps" << std::endl;
+  }
+  encoder_context_->level = 31;
 
   // 软编码配置
   encoder_context_->pix_fmt = AV_PIX_FMT_YUV420P; // 像素格式：YUV420平面格式
-
-  // 设置编码器参数
-  av_opt_set(encoder_context_->priv_data, "preset", "ultrafast", 0);
-  av_opt_set(encoder_context_->priv_data, "tune", "zerolatency", 0);
-  av_opt_set(encoder_context_->priv_data, "crf", "23", 0);
-  av_opt_set(encoder_context_->priv_data, "profile", "baseline", 0);
-  encoder_context_->level = 31;
 
   // 设置线程用于并行编码
   encoder_context_->thread_count = 2;
   std::cout << "H264 Encoder Using " << encoder_context_->thread_count
             << " threads" << std::endl;
 
-  std::cout << "Encoder configured with GOP size: " << encoder_context_->gop_size
-            << std::endl;
+  std::cout << "Encoder configured with GOP=" << encoder_context_->gop_size
+            << ", keyint_min=" << encoder_context_->keyint_min
+            << ", bitrate=" << encoder_context_->bit_rate << " bps" << std::endl;
 
   int ret = avcodec_open2(encoder_context_, codec_, nullptr);
   if (ret < 0) {

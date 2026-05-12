@@ -38,6 +38,9 @@ VideoCapturer::VideoCapturer(const std::string &device, bool debug_enabled,
       video_format_(video_format) {
   avdevice_register_all();
 
+  // 检测是否为模拟摄像头模式（lavfi）
+  is_fake_camera_ = (device_ == "fake" || device_.substr(0, 5) == "lavfi");
+
   // 检测是否为网络流输入（UDP/RTSP/SDP）
   is_udp_stream_ = (device_.substr(0, 6) == "udp://" ||
                     device_.substr(0, 7) == "rtsp://" ||
@@ -53,7 +56,51 @@ bool VideoCapturer::start() {
   AVInputFormat *input_format = nullptr;
   std::string device_path = device_;
 
-  if (is_udp_stream_) {
+  // 检测是否为模拟摄像头模式 (lavfi)
+  bool is_fake_camera = (device_ == "fake" || device_.substr(0, 5) == "lavfi");
+
+  if (is_fake_camera) {
+    std::cout << "Fake camera mode (lavfi) enabled" << std::endl;
+
+    // 解析分辨率
+    int width = 640, height = 480;
+    sscanf(resolution_.c_str(), "%dx%d", &width, &height);
+    std::cout << "Fake camera resolution: " << width << "x" << height << std::endl;
+
+    // 构建 lavfi 描述符：testsrc 生成测试图案 + drawtext 叠加居中时间戳
+    // testsrc:   生成彩色测试图案
+    // format:    指定像素格式为 yuv420p（编码器友好）
+    // drawtext:  显示本地机器实际时间，如 "May 12 17:42:25 .561"
+    //            %{localtime} = 默认本地时间格式（含 HH:MM:SS）
+    //            %{eif\:...} = 毫秒部分（3位补零）
+    //            x=(w-text_w)/2 水平居中, y=(h-text_h)/2 垂直居中
+    char lavfi_desc[1024];
+    snprintf(lavfi_desc, sizeof(lavfi_desc),
+             "testsrc=size=%dx%d:rate=%d,"
+             "format=pix_fmts=yuv420p,"
+             "drawtext=text='%%{localtime}.%%{eif\\:trunc(mod(t*1000\\,1000))\\:d\\:03d}':"
+             "fontsize=48:fontcolor=yellow:"
+             "box=1:boxcolor=black@0.7:boxborderw=10:"
+             "x=(w-text_w)/2:y=(h-text_h)/2",
+             width, height, framerate_);
+
+    std::cout << "lavfi desc: " << lavfi_desc << std::endl;
+
+    AVDictionary *options = nullptr;
+    av_dict_set(&options, "format_name", "lavfi", 0);
+
+    int ret = avformat_open_input(&format_context_, lavfi_desc,
+                                  av_find_input_format("lavfi"), &options);
+    if (ret < 0) {
+      std::cerr << "Cannot open lavfi device: " << av_error_string(ret) << std::endl;
+      std::cerr << "Please ensure FFmpeg is compiled with lavfi support" << std::endl;
+      return false;
+    }
+
+    // lavfi 输出原始帧，需要走 解码→编码 流程
+    // 不设置 is_udp_stream_，让代码继续走下面的摄像头分支
+    is_fake_camera_ = true;
+  } else if (is_udp_stream_) {
     // 网络流模式（UDP/RTSP/SDP）：直接接收H.264编码的视频流
     bool is_rtsp = (device_.substr(0, 7) == "rtsp://");
     bool is_sdp = (device_.find(".sdp") != std::string::npos);
@@ -320,6 +367,9 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
 
   std::cout << "Reconfiguring video capturer..." << std::endl;
 
+  // 检测是否为模拟摄像头模式 (lavfi)
+  bool is_fake_camera = (device_ == "fake" || device_.substr(0, 5) == "lavfi");
+
   // 暂停采集
   pause_capture();
 
@@ -356,36 +406,81 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
   video_format_ = format;
 
   // 重新打开输入设备
-  AVInputFormat *input_format = av_find_input_format("v4l2");
-  if (!input_format) {
-    std::cerr << "Cannot find V4L2 input format" << std::endl;
-    return;
+  if (is_fake_camera) {
+    // lavfi 模拟摄像头模式
+    std::cout << "Reconfiguring lavfi fake camera..." << std::endl;
+
+    // 解析分辨率
+    int width = 640, height = 480;
+    sscanf(resolution_.c_str(), "%dx%d", &width, &height);
+    std::cout << "New resolution: " << width << "x" << height << std::endl;
+
+    // 重新构建 lavfi 描述符（居中显示本地时间）
+    char lavfi_desc[1024];
+    snprintf(lavfi_desc, sizeof(lavfi_desc),
+             "testsrc=size=%dx%d:rate=%d,"
+             "format=pix_fmts=yuv420p,"
+             "drawtext=text='%%{localtime}.%%{eif\\:trunc(mod(t*1000\\,1000))\\:d\\:03d}':"
+             "fontsize=48:fontcolor=yellow:"
+             "box=1:boxcolor=black@0.7:boxborderw=10:"
+             "x=(w-text_w)/2:y=(h-text_h)/2",
+             width, height, framerate_);
+
+    std::cout << "New lavfi desc: " << lavfi_desc << std::endl;
+
+    AVDictionary *options = nullptr;
+    av_dict_set(&options, "format_name", "lavfi", 0);
+
+    int ret = avformat_open_input(&format_context_, lavfi_desc,
+                                  av_find_input_format("lavfi"), &options);
+    if (ret < 0) {
+      std::cerr << "Cannot open lavfi device: " << av_error_string(ret) << std::endl;
+      return;
+    }
+  } else {
+    // 真实摄像头或网络流模式
+    AVInputFormat *input_format = nullptr;
+    if (is_udp_stream_) {
+      // 网络流模式：不需要指定输入格式
+      std::cout << "Reconfiguring network stream..." << std::endl;
+    } else {
+      // V4L2 摄像头模式
+      input_format = av_find_input_format("v4l2");
+      if (!input_format) {
+        std::cerr << "Cannot find V4L2 input format" << std::endl;
+        return;
+      }
+    }
+
+    std::string device_path = device_;
+
+    // 解析分辨率
+    int width = 640, height = 480;
+    sscanf(resolution_.c_str(), "%dx%d", &width, &height);
+    if (width < height) {
+      resolution_ = std::to_string(height) + "x" + std::to_string(width);
+    }
+
+    AVDictionary *options = nullptr;
+
+    if (!is_udp_stream_) {
+      // 摄像头模式：设置视频参数
+      av_dict_set(&options, "video_size", resolution_.c_str(), 0);
+      av_dict_set(&options, "framerate", std::to_string(framerate_).c_str(), 0);
+      av_dict_set(&options, "input_format", video_format_.c_str(), 0);
+      std::cout << "Using video input format: " << video_format_ << std::endl;
+    }
+
+    int ret = avformat_open_input(&format_context_, device_path.c_str(),
+                                  input_format, &options);
+    if (ret < 0) {
+      std::cerr << "Cannot open video device: " << av_error_string(ret) << std::endl;
+      return;
+    }
   }
 
-  std::string device_path = device_;
-
-  // 解析分辨率
-  int width = 640, height = 480;
-  sscanf(resolution_.c_str(), "%dx%d", &width, &height);
-  if (width < height) {
-    resolution_ = std::to_string(height) + "x" + std::to_string(width);
-  }
-
-  AVDictionary *options = nullptr;
-  av_dict_set(&options, "video_size", resolution_.c_str(), 0);
-  av_dict_set(&options, "framerate", std::to_string(framerate_).c_str(), 0);
-  av_dict_set(&options, "input_format", video_format_.c_str(), 0);
-
-  std::cout << "Using video input format: " << video_format_ << std::endl;
-
-  int ret = avformat_open_input(&format_context_, device_path.c_str(),
-                                input_format, &options);
-  if (ret < 0) {
-    std::cerr << "Cannot open video device: " << av_error_string(ret) << std::endl;
-    return;
-  }
-
-  ret = avformat_find_stream_info(format_context_, nullptr);
+  // 查找流信息
+  int ret = avformat_find_stream_info(format_context_, nullptr);
   if (ret < 0) {
     std::cerr << "Cannot find stream info: " << av_error_string(ret) << std::endl;
     return;
@@ -404,48 +499,55 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
     return;
   }
 
-  AVCodecParameters *codec_params = format_context_->streams[video_stream_index_]->codecpar;
-  const AVCodec *codec = avcodec_find_decoder(codec_params->codec_id);
-  if (!codec) {
-    std::cerr << "Cannot find decoder" << std::endl;
-    return;
-  }
+  // 如果不是网络流，需要重新配置解码器和编码器
+  if (!is_udp_stream_) {
+    AVCodecParameters *codec_params = format_context_->streams[video_stream_index_]->codecpar;
+    const AVCodec *codec = avcodec_find_decoder(codec_params->codec_id);
+    if (!codec) {
+      std::cerr << "Cannot find decoder" << std::endl;
+      return;
+    }
 
-  codec_context_ = avcodec_alloc_context3(codec);
-  avcodec_parameters_to_context(codec_context_, codec_params);
+    codec_context_ = avcodec_alloc_context3(codec);
+    avcodec_parameters_to_context(codec_context_, codec_params);
 
-  ret = avcodec_open2(codec_context_, codec, nullptr);
-  if (ret < 0) {
-    std::cerr << "Cannot open codec: " << av_error_string(ret) << std::endl;
-    return;
-  }
+    ret = avcodec_open2(codec_context_, codec, nullptr);
+    if (ret < 0) {
+      std::cerr << "Cannot open codec: " << av_error_string(ret) << std::endl;
+      return;
+    }
 
-  codec_context_->thread_count = 2;
+    codec_context_->thread_count = 2;
 
-  // 使用新参数配置编码器
-  if (!encoder_->open_encoder(width, height, fps, bitrate)) {
-    std::cerr << "Failed to reconfigure encoder" << std::endl;
-    return;
-  }
+    // 解析分辨率
+    int width = 640, height = 480;
+    sscanf(resolution_.c_str(), "%dx%d", &width, &height);
 
-  AVCodecContext *encoder_context = encoder_->get_context();
-  if (!encoder_context) {
-    std::cerr << "Encoder context is null after reconfiguration" << std::endl;
-    return;
-  }
-  encoder_out_width_ = encoder_context->width;
-  encoder_out_height_ = encoder_context->height;
-  encoder_out_pix_fmt_ = encoder_context->pix_fmt;
+    // 使用新参数配置编码器
+    if (!encoder_->open_encoder(width, height, fps, bitrate)) {
+      std::cerr << "Failed to reconfigure encoder" << std::endl;
+      return;
+    }
 
-  // 重新创建 SwsContext
-  sws_context_ = sws_getContext(
-      codec_context_->width, codec_context_->height, codec_context_->pix_fmt,
-      encoder_out_width_, encoder_out_height_, encoder_out_pix_fmt_,
-      SWS_BILINEAR, nullptr, nullptr, nullptr);
+    AVCodecContext *encoder_context = encoder_->get_context();
+    if (!encoder_context) {
+      std::cerr << "Encoder context is null after reconfiguration" << std::endl;
+      return;
+    }
+    encoder_out_width_ = encoder_context->width;
+    encoder_out_height_ = encoder_context->height;
+    encoder_out_pix_fmt_ = encoder_context->pix_fmt;
 
-  if (!sws_context_) {
-    std::cerr << "Cannot recreate SwsContext after reconfigure" << std::endl;
-    return;
+    // 重新创建 SwsContext
+    sws_context_ = sws_getContext(
+        codec_context_->width, codec_context_->height, codec_context_->pix_fmt,
+        encoder_out_width_, encoder_out_height_, encoder_out_pix_fmt_,
+        SWS_BILINEAR, nullptr, nullptr, nullptr);
+
+    if (!sws_context_) {
+      std::cerr << "Cannot recreate SwsContext after reconfigure" << std::endl;
+      return;
+    }
   }
 
   // 恢复采集
@@ -570,10 +672,24 @@ void VideoCapturer::capture_loop() {
         continue;
       }
 
+      // ========== 帧率限速（Pacing）：控制采集节奏 ==========
+      // fake camera 模式下，lavfi 输出速度可能不稳定或不准确
+      // 需要手动节流以避免过快填满队列造成周期性丢帧/清空
+      static auto last_capture_time = std::chrono::steady_clock::now();
+      auto now = std::chrono::steady_clock::now();
+      int64_t frame_interval_us = 1000000 / capture_in_fps;  // 微秒/帧
+
+      auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - last_capture_time).count();
+      if (elapsed < frame_interval_us) {
+        // 还没到下一帧时间，短暂等待
+        std::this_thread::sleep_for(std::chrono::microseconds(frame_interval_us - elapsed));
+      }
+      last_capture_time = std::chrono::steady_clock::now();
+
       int ret = av_read_frame(format_context_, packet);
       if (ret < 0) {
         if (ret != AVERROR(EAGAIN)) {
-          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+          std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
         continue;
       }
@@ -762,6 +878,12 @@ void VideoCapturer::encode_loop() {
 }
 
 void VideoCapturer::send_loop() {
+  // 发送节流：控制发送节奏，避免网络突发
+  static auto last_send_time = std::chrono::steady_clock::now();
+  static int64_t bytes_sent_in_window = 0;
+  static constexpr int64_t kMaxBytesPerWindow = 150000; // 每 100ms 窗口最大发送量 (约 12Mbps)
+  static constexpr int64_t kWindowDurationUs = 100000;   // 窗口时长 100ms
+
   while (is_running_) {
     AVPacket *packet = nullptr;
 
@@ -780,6 +902,28 @@ void VideoCapturer::send_loop() {
       av_packet_free(&packet);
       break;
     }
+
+    // ========== 发送节流（Pacing）：平滑网络输出 ==========
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(now - last_send_time).count();
+
+    // 检查是否需要重置窗口或等待
+    if (elapsed_us >= kWindowDurationUs) {
+      // 新窗口开始，重置计数器
+      last_send_time = now;
+      bytes_sent_in_window = 0;
+    } else if (bytes_sent_in_window + packet->size > kMaxBytesPerWindow && !is_fake_camera_) {
+      // 本窗口剩余空间不足（仅对真实摄像头生效，fake camera 已有 capture pacing）
+      int64_t wait_time = kWindowDurationUs - elapsed_us;
+      if (wait_time > 0) {
+        std::this_thread::sleep_for(std::chrono::microseconds(wait_time));
+        // 重置窗口
+        last_send_time = std::chrono::steady_clock::now();
+        bytes_sent_in_window = 0;
+      }
+    }
+
+    bytes_sent_in_window += packet->size;
 
     // Send data to all registered callbacks (multiple peer support)
     auto data = reinterpret_cast<const std::byte *>(packet->data);

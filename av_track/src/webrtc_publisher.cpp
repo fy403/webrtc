@@ -744,9 +744,9 @@ void WebRTCPublisher::startWsReconnect() {
         // 设置 WebSocket 回调和消息处理（使用封装的函数）
         setupWebSocketCallbacks(newWs, wsPromise);
 
-        // 连接服务器
-        std::string webSocketServer = params_.webSocketServer();
-        int webSocketPort = params_.webSocketPort();
+        // 连接服务器 - 从配置文件读取
+        std::string webSocketServer = config_->get("webSocketServer", "localhost");
+        int webSocketPort = config_->getAsInt("webSocketPort", 8000);
         const std::string wsPrefix =
             webSocketServer.find("://") == std::string::npos ? "ws://" : "";
         const std::string url = wsPrefix + webSocketServer + ":" +

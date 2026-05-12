@@ -431,6 +431,72 @@ done
 cd av_track/build && ./webrtc_publisher -h
 ```
 
+#### 5.7 无摄像头调试模式（fake camera）
+
+如果没有物理摄像头，可使用 FFmpeg 的 `lavfi` 虚拟设备模拟摄像头，方便在无硬件环境下调试音视频采集和 WebRTC 传输流程。
+
+**配置方法：**
+
+编辑 `av_track/config.txt`，将 `videoDevice` 设置为 `fake`：
+
+```ini
+videoDevice=fake                  # 启用模拟摄像头
+videoFormat=                       # 留空即可，lavfi 不需要此参数
+videoCodec=h264
+resolution=640x480               # 模拟画面分辨率（可自定义）
+framerate=30                     # 模拟画面帧率（可自定义）
+```
+
+**效果：**
+
+启动后，WebRTC 观看端会看到：
+- 彩色测试图案（`testsrc` 生成）
+- 左上角显示毫秒时间戳（格式：`1230 ms`）
+
+**前置依赖：**
+
+Linux 环境下需确认 FFmpeg 支持 `lavfi` 设备和 `drawtext` 滤镜：
+
+```shell
+# 检查 lavfi 设备
+ffmpeg -devices 2>&1 | grep lavfi
+
+# 检查 drawtext 滤镜
+ffmpeg -filters 2>&1 | grep drawtext
+```
+
+若命令无输出，需安装完整版 FFmpeg：
+
+```shell
+sudo apt update
+sudo apt install ffmpeg libavfilter-dev libfreetype6-dev
+```
+
+**自定义模拟画面：**
+
+如需更换测试图案，修改 `av_track/src/video_capturer.cpp` 中的 lavfi 描述符即可。常用测试源：
+
+| 测试源 | 效果 | 适用场景 |
+|--------|------|----------|
+| `testsrc` | 彩色条纹 + 滚动圆点 | 通用测试（默认） |
+| `color=c=blue` | 纯色背景 | 突出时间戳 |
+| `mandelbrot` | 曼德博分形动画 | 动态复杂图案 |
+| `life` | 生命游戏 | 动态变化效果 |
+
+修改示例（改为纯蓝色背景）：
+
+```cpp
+// av_track/src/video_capturer.cpp 约第69行
+snprintf(lavfi_desc, sizeof(lavfi_desc),
+         "color=c=navy:size=%dx%d:rate=%d,"
+         "format=pix_fmts=yuv420p,"
+         "drawtext=text='%%{pts\\:ms} ms':"
+         "fontsize=24:fontcolor=yellow:x=10:y=10",
+         width, height, framerate_);
+```
+
+> 💡 **提示**：`resolution` 和 `framerate` 参数对 fake 模式完全生效，可按需调整。
+
 ---
 
 ### Step 6：启动服务

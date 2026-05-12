@@ -159,12 +159,14 @@ void RCClient::sendSystemStatus() {
     system_monitor_.getNetworkStats(rx_speed, tx_speed);
     system_monitor_.getMemoryInfo(mem_total_mb, mem_used_mb, mem_free_mb, mem_usage);
     std::cout << "[SystemStatus] 网络监控: RX=" << rx_speed << " Mbps, TX=" << tx_speed << " Mbps" << std::endl;
-    std::cout << "[SystemStatus] 内存监控: 总量=" << mem_total_mb << " MB, 使用=" << mem_used_mb << " MB, 利用率=" << (mem_usage * 100) << "%" << std::endl;
+    std::cout << "[SystemStatus] 内存监控: 总量=" << mem_total_mb << " MB, 使用=" << mem_used_mb << " MB, 利用率=" << (
+        mem_usage * 100) << "%" << std::endl;
 
     // 获取详细CPU信息
     CPUMonitor::CPUInfo cpu_info;
     system_monitor_.getCPUInfo(cpu_info);
-    std::cout << "[SystemStatus] CPU监控: 总利用率=" << (cpu_info.total_usage * 100) << "%, 核心数=" << cpu_info.core_count << std::endl;
+    std::cout << "[SystemStatus] CPU监控: 总利用率=" << (cpu_info.total_usage * 100) << "%, 核心数=" << cpu_info.core_count <<
+            std::endl;
 
     // 获取4G模块信息
     std::string signal = "N/A", simStatus = "N/A", network = "N/A", moduleInfo = "N/A";
@@ -188,9 +190,9 @@ void RCClient::sendSystemStatus() {
                                       gps_satellites, gps_altitude);
         system_monitor_.getGpsVTGInfo(gps_course_true, gps_speed_knots, gps_speed_kmh);
         std::cout << "[SystemStatus] GPS模块: 经度=" << gps_longitude << gps_lon_dir
-                  << ", 纬度=" << gps_latitude << gps_lat_dir
-                  << ", 卫星=" << gps_satellites
-                  << ", 速度=" << gps_speed_kmh << " km/h" << std::endl;
+                << ", 纬度=" << gps_latitude << gps_lat_dir
+                << ", 卫星=" << gps_satellites
+                << ", 速度=" << gps_speed_kmh << " km/h" << std::endl;
     } else {
         std::cout << "[SystemStatus] GPS模块: 未初始化" << std::endl;
     }
@@ -254,7 +256,6 @@ void RCClient::sendSystemStatus() {
     sendStatusFrame(statusData);
 }
 
-
 void RCClient::parseFrame(const std::string &peer_id, const uint8_t *frame, size_t length) {
     // 解析 RC Protocol v2，获取消息类型
     RCProtocolV2::ControlFrame control_frame;
@@ -269,14 +270,11 @@ void RCClient::parseFrame(const std::string &peer_id, const uint8_t *frame, size
     if (msg_type == RCProtocolV2::CONTROL_MSG) {
         uint32_t current_seq = control_frame.sequence;
         uint32_t last_seq = last_control_sequence_.load();
-        // 序列号检查：严格递增，只允许 last_seq+1 或首次为0
-        if (last_seq != 0 && current_seq < last_seq) {
-            // 序号递减，拒绝该帧
-            std::cout << "拒绝递减的序列号: 当前=" << current_seq << ", 上次=" << last_seq << std::endl;
-        } else if (last_seq != 0 && current_seq != last_seq + 1) {
-            // 检测到乱序（跳号），停止所有电机并接受新序列号
+        // 序列号检查：
+        if (last_seq != 0 && current_seq != last_seq + 1) {
+            // 检测到乱序
             std::cout << "检测到序列号乱序: 当前=" << current_seq << ", 上次=" << last_seq
-                     << ", 停止所有电机并接受新序列号" << std::endl;
+                    << ", 停止所有电机并接受新序列号" << std::endl;
             motor_controller_->stopAll();
             last_control_sequence_.store(current_seq);
         } else {
@@ -295,7 +293,7 @@ void RCClient::parseFrame(const std::string &peer_id, const uint8_t *frame, size
                 motor_controller_->applyControl(control_frame);
             }
         }
-    }else{
+    } else {
         // 更新特定DataChannel的健康状态（控制包和心跳包都更新）
         // std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
         DataChannelHealth &health = channel_health_[peer_id];

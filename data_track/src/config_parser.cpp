@@ -67,6 +67,12 @@ void Config::load()
         lineNumber++;
         line = trim(line);
 
+        // 剥离行内注释（# 后面的内容）
+        size_t commentPos = line.find('#');
+        if (commentPos != std::string::npos) {
+            line = trim(line.substr(0, commentPos));
+        }
+
         // Skip empty lines
         if (line.empty())
             continue;

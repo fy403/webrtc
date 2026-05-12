@@ -3,7 +3,7 @@
 #include <chrono>
 #include <iomanip>
 
-DummyMotorDriver::DummyMotorDriver(const std::string &name) 
+DummyMotorDriver::DummyMotorDriver(const std::string &name)
     : name_(name), connected_(false) {
     std::cout << "[DummyMotor] Created: " << name_ << std::endl;
 }
@@ -43,22 +43,22 @@ void DummyMotorDriver::setLeftRightPercent(int percent) {
 void DummyMotorDriver::printMotorCommand(const std::string &command, int motor_id, int percent) {
     auto now = std::chrono::system_clock::now();
     auto time = std::chrono::system_clock::to_time_t(now);
-    
-    std::cout << "[" << std::put_time(std::localtime(&time), "%H:%M:%S") << "] "
-              << "[DummyMotor] " << command 
-              << " - Motor ID: " << motor_id 
-              << ", Percent: " << percent 
-              << "%, Connected: " << (connected_ ? "Yes" : "No") 
-              << std::endl;
+
+    //     std::cout << "[" << std::put_time(std::localtime(&time), "%H:%M:%S") << "] "
+    //               << "[DummyMotor] " << command
+    //               << " - Motor ID: " << motor_id
+    //               << ", Percent: " << percent
+    //               << "%, Connected: " << (connected_ ? "Yes" : "No")
+    //               << std::endl;
 }
 
 void DummyMotorDriver::printControlCommand(const std::string &direction, int percent) {
     auto now = std::chrono::system_clock::now();
     auto time = std::chrono::system_clock::to_time_t(now);
-    
-    std::cout << "[" << std::put_time(std::localtime(&time), "%H:%M:%S") << "] "
-              << "[DummyMotor] " << direction 
-              << " control - Percent: " << percent 
-              << "%, Connected: " << (connected_ ? "Yes" : "No") 
-              << std::endl;
+
+    //     std::cout << "[" << std::put_time(std::localtime(&time), "%H:%M:%S") << "] "
+    //               << "[DummyMotor] " << direction
+    //               << " control - Percent: " << percent
+    //               << "%, Connected: " << (connected_ ? "Yes" : "No")
+    //               << std::endl;
 }
