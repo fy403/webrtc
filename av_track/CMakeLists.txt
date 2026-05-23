@@ -15,6 +15,7 @@ pkg_check_modules(LIBAV REQUIRED
         libswscale
         libavdevice
         libswresample
+        libavfilter
 )
 
 # Find libdatachannel

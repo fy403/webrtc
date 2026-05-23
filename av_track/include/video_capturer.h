@@ -13,6 +13,9 @@ extern "C" {
 #include <libavdevice/avdevice.h>
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
+#include <libavfilter/avfilter.h>
+#include <libavfilter/buffersink.h>
+#include <libavfilter/buffersrc.h>
 }
 
 namespace rtc {
@@ -66,6 +69,16 @@ private:
   // A small pool of reusable scaled frames
   std::vector<AVFrame *> scaled_frame_pool_;
   std::mutex frame_pool_mutex_;
+
+  // FPS 滤镜图：当摄像头实际帧率与目标帧率不一致时，
+  // 通过 vf=fps=N 实现帧补全（低→高）或丢帧（高→低）
+  AVFilterGraph *fps_filter_graph_ = nullptr;
+  AVFilterContext *fps_buffer_src_ = nullptr;
+  AVFilterContext *fps_buffer_sink_ = nullptr;
+  int target_fps_;  // 目标输出帧率
+
+  bool init_fps_filter(int width, int height, int fps);
+  void cleanup_fps_filter();
 
   std::shared_ptr<rtc::Track> track_;
 };
