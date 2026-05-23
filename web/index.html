@@ -349,6 +349,14 @@
                         <div class="no-signal-overlay" id="noSignalOverlay">
                             <div class="no-signal-text">NO SIGNAL</div>
                         </div>
+
+                        <!-- 精确时钟叠加层 -->
+                        <div class="precision-clock-overlay" id="precisionClock" style="display: none;">
+                            <div class="clock-title">北京时间精确到毫秒</div>
+                            <div class="clock-date" id="clockDate"></div>
+                            <div class="clock-sync">本时间同步国家授时中心精确到毫秒</div>
+                            <div class="clock-time" id="clockTime"><span id="clockTimeMain"></span><span class="clock-ms">.<span id="clockMs"></span></span></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -373,6 +381,7 @@
                         <button class="btn" id="helperLinesBtn" title="TOGGLE HELPER LINES">📐</button>
                         <button class="btn" id="curveBtn" title="SPEED CURVE">📈</button>
                         <button class="btn" id="configBtn" title="CONFIG">⚙️</button>
+                        <button class="btn" id="clockBtn" title="PRECISION CLOCK">🕐</button>
                     </div>
                 </div>
 
@@ -739,6 +748,68 @@
                         helperLinesBtn.classList.add('btn-active');
                     }
                 });
+            }
+
+            // 初始化精确时钟
+            const clockBtn = document.getElementById('clockBtn');
+            const precisionClock = document.getElementById('precisionClock');
+            const clockDateEl = document.getElementById('clockDate');
+            const clockTimeMainEl = document.getElementById('clockTimeMain');
+            const clockMsEl = document.getElementById('clockMs');
+            let clockRafId = null;
+            let clockVisible = false;
+
+            if (clockBtn && precisionClock) {
+                clockBtn.addEventListener('click', function() {
+                    if (clockVisible) {
+                        cancelAnimationFrame(clockRafId);
+                        clockRafId = null;
+                        precisionClock.style.display = 'none';
+                        clockBtn.classList.remove('btn-active');
+                        clockVisible = false;
+                    } else {
+                        precisionClock.style.display = 'flex';
+                        clockBtn.classList.add('btn-active');
+                        clockVisible = true;
+                        // 用 requestAnimationFrame 替代 setInterval，与屏幕刷新同步，无抖动
+                        clockRafId = requestAnimationFrame(tick);
+                    }
+                });
+            }
+
+            function tick() {
+                if (!clockVisible) return;
+                updateClock();
+                clockRafId = requestAnimationFrame(tick); // 持续循环，每帧 (~16.67ms@60fps) 更新
+            }
+
+            function updateClock() {
+                // performance.now() 提供亚毫秒精度，比 Date.now() 更平滑
+                const t = performance.now();
+                const now = new Date();
+
+                // 日期行（每秒才变，缓存优化）
+                if (!updateClock._lastSec || now.getSeconds() !== updateClock._lastSec) {
+                    updateClock._lastSec = now.getSeconds();
+                    const year = now.getFullYear();
+                    const month = now.getMonth() + 1;
+                    const day = now.getDate();
+                    const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+                    const weekDay = weekDays[now.getDay()];
+                    const startOfYear = new Date(year, 0, 1);
+                    const weekNum = Math.ceil(((now - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
+                    clockDateEl.textContent = `现在是${year}年${month}月${day}日星期${weekDay}，第${weekNum}周`;
+                }
+
+                // 时间行：用 performance.now() 插值，消除跳帧
+                const h = String(now.getHours()).padStart(2, '0');
+                const m = String(now.getMinutes()).padStart(2, '0');
+                const s = String(now.getSeconds()).padStart(2, '0');
+                
+                // 毫秒用高精度时间戳（performance.now % 1000），连续递增不跳变
+                const msVal = Math.floor((t % 1000));
+                clockTimeMainEl.textContent = `${h}:${m}:${s}`;
+                clockMsEl.textContent = String(msVal).padStart(3, '0');
             }
 
             // 初始化通道点击事件

@@ -3,7 +3,7 @@
 #define H264_ENCODER_H
 class H264Encoder : public Encoder {
 public:
-  H264Encoder(bool debug_enabled = false);
+  H264Encoder(bool debug_enabled = false, const std::string &codec_name = "libx264");
   ~H264Encoder();
 
   bool open_encoder(int width, int height, int fps, int64_t bit_rate) override;
@@ -15,6 +15,7 @@ public:
 
 private:
   bool debug_enabled_;
+  std::string codec_name_;    // 编码器名称 (libx264, h264_rkmpp 等)
   AVCodecContext *encoder_context_;
   const AVCodec *codec_;
 };

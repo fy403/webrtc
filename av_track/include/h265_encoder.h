@@ -5,7 +5,7 @@
 
 class H265Encoder : public Encoder {
 public:
-  H265Encoder(bool debug_enabled = false);
+  H265Encoder(bool debug_enabled = false, const std::string &codec_name = "libx265");
   ~H265Encoder();
 
   bool open_encoder(int width, int height, int fps, int64_t bit_rate) override;
@@ -17,6 +17,7 @@ public:
 
 private:
   bool debug_enabled_;
+  std::string codec_name_;    // 编码器名称 (libx265, hevc_rkmpp 等)
   AVCodecContext *encoder_context_;
   const AVCodec *codec_;
 };

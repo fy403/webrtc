@@ -11,22 +11,20 @@ extern "C" {
 
 extern std::string av_error_string(int errnum);
 
-H265Encoder::H265Encoder(bool debug_enabled)
-    : debug_enabled_(debug_enabled), encoder_context_(nullptr),
-      codec_(nullptr) {}
+H265Encoder::H265Encoder(bool debug_enabled, const std::string &codec_name)
+    : debug_enabled_(debug_enabled), codec_name_(codec_name),
+      encoder_context_(nullptr), codec_(nullptr) {}
 
 H265Encoder::~H265Encoder() { close_encoder(); }
 
 bool H265Encoder::open_encoder(int width, int height, int fps, int64_t bit_rate) {
-  // 使用 libx265 软件编码
-  codec_ = avcodec_find_encoder_by_name("libx265");
+  // 使用指定的编码器名称（支持 libx265, hevc_rkmpp 等）
+  codec_ = avcodec_find_encoder_by_name(codec_name_.c_str());
   if (!codec_) {
-    codec_ = avcodec_find_encoder(AV_CODEC_ID_H265);
-    if (!codec_) {
-      std::cerr << "Cannot find H.265 encoder" << std::endl;
-      return false;
-    }
+    std::cerr << "Cannot find H.265 encoder: " << codec_name_ << std::endl;
+    return false;
   }
+  std::cout << "Using H.265 encoder: " << codec_name_ << " (" << codec_->name << ")" << std::endl;
 
   encoder_context_ = avcodec_alloc_context3(codec_);
 

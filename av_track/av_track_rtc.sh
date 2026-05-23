@@ -34,19 +34,17 @@ run_rtc() {
 main() {
     echo "$(date): Starting streaming script"
     
-    while true; do
-        echo "$(date): All checks passed, starting stream..."
-        run_rtc
-        
-        # If RTC exits normally or with error, wait before restart
-        if [ $? -eq 0 ]; then
-            echo "$(date): Stream completed normally, waiting before restart..."
-            sleep $CHECK_INTERVAL
-        else
-            echo "$(date): Stream failed, waiting before retry..."
-            sleep $CHECK_INTERVAL
-        fi
-    done
+    echo "$(date): All checks passed, starting stream..."
+    run_rtc
+
+    # If RTC exits normally or with error, wait before restart
+    if [ $? -eq 0 ]; then
+        echo "$(date): Stream completed normally, waiting before restart..."
+        sleep $CHECK_INTERVAL
+    else
+        echo "$(date): Stream failed, waiting before retry..."
+        sleep $CHECK_INTERVAL
+    fi
 }
 
 # Handle shutdown signals properly for systemd

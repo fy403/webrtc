@@ -67,21 +67,13 @@ bool VideoCapturer::start() {
     sscanf(resolution_.c_str(), "%dx%d", &width, &height);
     std::cout << "Fake camera resolution: " << width << "x" << height << std::endl;
 
-    // 构建 lavfi 描述符：testsrc 生成测试图案 + drawtext 叠加居中时间戳
+    // 构建 lavfi 描述符：testsrc 生成测试图案
     // testsrc:   生成彩色测试图案
     // format:    指定像素格式为 yuv420p（编码器友好）
-    // drawtext:  显示本地机器实际时间，如 "May 12 17:42:25 .561"
-    //            %{localtime} = 默认本地时间格式（含 HH:MM:SS）
-    //            %{eif\:...} = 毫秒部分（3位补零）
-    //            x=(w-text_w)/2 水平居中, y=(h-text_h)/2 垂直居中
-    char lavfi_desc[1024];
+    char lavfi_desc[256];
     snprintf(lavfi_desc, sizeof(lavfi_desc),
              "testsrc=size=%dx%d:rate=%d,"
-             "format=pix_fmts=yuv420p,"
-             "drawtext=text='%%{localtime}.%%{eif\\:trunc(mod(t*1000\\,1000))\\:d\\:03d}':"
-             "fontsize=48:fontcolor=yellow:"
-             "box=1:boxcolor=black@0.7:boxborderw=10:"
-             "x=(w-text_w)/2:y=(h-text_h)/2",
+             "format=pix_fmts=yuv420p",
              width, height, framerate_);
 
     std::cout << "lavfi desc: " << lavfi_desc << std::endl;
@@ -254,16 +246,53 @@ bool VideoCapturer::start() {
     int width = 640, height = 480;
     sscanf(resolution_.c_str(), "%dx%d", &width, &height);
 
-    // 根据视频编码器类型创建编码器
-    if (video_codec_ == "h264") {
-      encoder_ = std::make_unique<H264Encoder>(debug_enabled_);
-      std::cout << "Using H.264 encoder" << std::endl;
+    // 根据视频编码器配置选择编码器
+    // 支持格式:
+    //   h264        -> libx264 软编码
+    //   h265        -> libx265 软编码
+    //   h264_rkmpp  -> Rockchip H.264 硬编码
+    //   hevc_rkmpp  -> Rockchip H.265(HEVC) 硬编码
+    //   fake        -> 使用 libx264 编码测试图案
+    //   其他        -> 直接作为 FFmpeg 编码器名称
+    std::string encoder_name = video_codec_;
+    if (video_codec_ == "h264" || video_codec_ == "fake") {
+      encoder_name = "libx264";
+      if (video_codec_ == "fake") {
+        std::cout << "Fake mode: using libx264 for test pattern encoding" << std::endl;
+      }
     } else if (video_codec_ == "h265") {
-      encoder_ = std::make_unique<H265Encoder>(debug_enabled_);
-      std::cout << "Using H.265 encoder" << std::endl;
+      encoder_name = "libx265";
+    }
+
+    // 通过编码器名称查找，自动判断 codec 类型
+    const AVCodec *probe_codec = avcodec_find_encoder_by_name(encoder_name.c_str());
+    if (!probe_codec) {
+      std::cerr << "Cannot find encoder: " << encoder_name << ", falling back to libx264" << std::endl;
+      encoder_name = "libx264";
+      probe_codec = avcodec_find_encoder_by_name(encoder_name.c_str());
+      if (!probe_codec) {
+        std::cerr << "Cannot find fallback encoder: libx264" << std::endl;
+        return false;
+      }
+    }
+
+    std::cout << "Probe encoder: " << encoder_name << " -> codec_id=" << probe_codec->id
+              << " (" << (probe_codec->id == AV_CODEC_ID_H264 ? "H.264" :
+                         probe_codec->id == AV_CODEC_ID_H265 ? "H.265" : "unknown") << ")"
+              << std::endl;
+
+    if (probe_codec->id == AV_CODEC_ID_H264 || probe_codec->id == AV_CODEC_ID_H263P ||
+        probe_codec->id == AV_CODEC_ID_MPEG4) {
+      encoder_ = std::make_unique<H264Encoder>(debug_enabled_, encoder_name);
+      video_codec_ = "h264";
+      std::cout << "Using H.264 encoder: " << encoder_name << std::endl;
+    } else if (probe_codec->id == AV_CODEC_ID_H265 || probe_codec->id == AV_CODEC_ID_HEVC) {
+      encoder_ = std::make_unique<H265Encoder>(debug_enabled_, encoder_name);
+      video_codec_ = "h265";
+      std::cout << "Using H.265 encoder: " << encoder_name << std::endl;
     } else {
-      std::cerr << "Unknown video codec: " << video_codec_ << ", falling back to H.264" << std::endl;
-      encoder_ = std::make_unique<H264Encoder>(debug_enabled_);
+      std::cerr << "Unsupported codec_id: " << probe_codec->id << ", falling back to libx264" << std::endl;
+      encoder_ = std::make_unique<H264Encoder>(debug_enabled_, "libx264");
       video_codec_ = "h264";
     }
 
@@ -417,15 +446,11 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
     sscanf(resolution_.c_str(), "%dx%d", &width, &height);
     std::cout << "New resolution: " << width << "x" << height << std::endl;
 
-    // 重新构建 lavfi 描述符（居中显示本地时间）
-    char lavfi_desc[1024];
+    // 重新构建 lavfi 描述符
+    char lavfi_desc[256];
     snprintf(lavfi_desc, sizeof(lavfi_desc),
              "testsrc=size=%dx%d:rate=%d,"
-             "format=pix_fmts=yuv420p,"
-             "drawtext=text='%%{localtime}.%%{eif\\:trunc(mod(t*1000\\,1000))\\:d\\:03d}':"
-             "fontsize=48:fontcolor=yellow:"
-             "box=1:boxcolor=black@0.7:boxborderw=10:"
-             "x=(w-text_w)/2:y=(h-text_h)/2",
+             "format=pix_fmts=yuv420p",
              width, height, framerate_);
 
     std::cout << "New lavfi desc: " << lavfi_desc << std::endl;

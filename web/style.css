@@ -545,6 +545,60 @@ body.mobile-layout {
     56% { opacity: 1; }
 }
 
+/* 精确时钟叠加层 */
+.precision-clock-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 15;
+    pointer-events: none;
+}
+
+.clock-title {
+    font-size: 14px;
+    color: var(--titan-primary-bright);
+    letter-spacing: 4px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.clock-date {
+    font-size: 16px;
+    color: var(--titan-text);
+    margin-bottom: 6px;
+    letter-spacing: 2px;
+}
+
+.clock-sync {
+    font-size: 12px;
+    color: var(--titan-text-dim);
+    margin-bottom: 20px;
+    letter-spacing: 1px;
+}
+
+.clock-time {
+    font-family: 'Impact', 'Arial Black', 'Microsoft YaHei', sans-serif;
+    font-size: 128px;
+    font-weight: 800;
+    font-stretch: expanded;
+    color: #FFFFFF;
+    letter-spacing: 20px;
+    text-shadow:
+        0 0 10px rgba(0, 0, 0, 0.8),
+        0 2px 4px rgba(0, 0, 0, 0.9);
+}
+
+.clock-ms {
+    font-size: 2em;          /* 毫秒部分3倍大小 */
+    color: #00ff00;
+    vertical-align: baseline;
+}
+
 .video-iframe {
     width: 100%;
     height: 500px;

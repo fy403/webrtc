@@ -11,22 +11,20 @@ extern "C" {
 
 extern std::string av_error_string(int errnum);
 
-H264Encoder::H264Encoder(bool debug_enabled)
-    : debug_enabled_(debug_enabled), encoder_context_(nullptr),
-      codec_(nullptr) {}
+H264Encoder::H264Encoder(bool debug_enabled, const std::string &codec_name)
+    : debug_enabled_(debug_enabled), codec_name_(codec_name),
+      encoder_context_(nullptr), codec_(nullptr) {}
 
 H264Encoder::~H264Encoder() { close_encoder(); }
 
 bool H264Encoder::open_encoder(int width, int height, int fps, int64_t bit_rate) {
-  // 使用 libx264 软件编码
-  codec_ = avcodec_find_encoder_by_name("libx264");
+  // 使用指定的编码器名称（支持 libx264, h264_rkmpp 等）
+  codec_ = avcodec_find_encoder_by_name(codec_name_.c_str());
   if (!codec_) {
-    codec_ = avcodec_find_encoder(AV_CODEC_ID_H264);
-    if (!codec_) {
-      std::cerr << "Cannot find H.264 encoder" << std::endl;
-      return false;
-    }
+    std::cerr << "Cannot find H.264 encoder: " << codec_name_ << std::endl;
+    return false;
   }
+  std::cout << "Using H.264 encoder: " << codec_name_ << " (" << codec_->name << ")" << std::endl;
 
   encoder_context_ = avcodec_alloc_context3(codec_);
 
