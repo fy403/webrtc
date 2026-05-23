@@ -36,7 +36,9 @@ public:
   void stop() override;
   void reconfigure(const std::string &resolution, int fps, int bitrate, const std::string &format);
   void set_video_codec(const std::string &codec); // 设置视频编码器类型 (h264 or h265)
+  void set_profile(const std::string &profile);   // 设置编码场景 (lowlatency / hd)
   std::string get_video_codec() const { return video_codec_; } // 获取当前视频编码器类型
+  std::string get_profile() const { return profile_; }          // 获取当前编码场景
 
 private:
   void capture_loop() override;
@@ -56,6 +58,7 @@ private:
   int framerate_;
   std::string video_format_;
   std::string video_codec_ = "h264"; // 视频编码器类型: h264 or h265
+  std::string profile_ = "lowlatency"; // 编码场景: lowlatency / hd
   AVFormatContext *format_context_ = nullptr;
   AVCodecContext *codec_context_ = nullptr;
   SwsContext *sws_context_ = nullptr;

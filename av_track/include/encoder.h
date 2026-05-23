@@ -15,14 +15,15 @@ public:
   virtual ~Encoder() = default;
 
   // 视频编码器接口
-  virtual bool open_encoder(int width, int height, int fps, int64_t bit_rate) {
+  virtual bool open_encoder(int width, int height, int fps, int64_t bit_rate,
+                           const std::string &profile = "lowlatency") {
     // 默认实现，对于视频编码器
     return false;
   }
 
   // 音频编码器接口
   virtual bool open_encoder(int sample_rate, int channels,
-                            AVSampleFormat format) {
+                           AVSampleFormat format) {
     // 默认实现，对于音频编码器
     return false;
   }

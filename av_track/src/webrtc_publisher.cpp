@@ -407,8 +407,9 @@ WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Config *config)
                                         config_->get("videoFormat", ""), 
                                         queue_size,
                                         queue_size, queue_size);
-    // 设置视频编码器类型
+    // 设置视频编码器类型和场景 profile
     video_capturer_->set_video_codec(config_->get("videoCodec", "h264"));
+    video_capturer_->set_profile(config_->get("profile", "lowlatency"));
   } else {
     video_capturer_ = nullptr;
   }

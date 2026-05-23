@@ -8,7 +8,8 @@ public:
   H265Encoder(bool debug_enabled = false, const std::string &codec_name = "libx265");
   ~H265Encoder();
 
-  bool open_encoder(int width, int height, int fps, int64_t bit_rate) override;
+  bool open_encoder(int width, int height, int fps, int64_t bit_rate,
+                   const std::string &profile = "lowlatency") override;
   void close_encoder() override;
 
   AVCodecContext *get_context() const override { return encoder_context_; }

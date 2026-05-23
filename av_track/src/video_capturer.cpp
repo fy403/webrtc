@@ -298,7 +298,7 @@ bool VideoCapturer::start() {
     }
 
     // Initialize encoder
-    if (!encoder_->open_encoder(width, height, framerate_, 0)) {
+    if (!encoder_->open_encoder(width, height, framerate_, 0, profile_)) {
       std::cerr << "Cannot open " << video_codec_ << " encoder" << std::endl;
       return false;
     }
@@ -398,6 +398,11 @@ void VideoCapturer::stop() {
 void VideoCapturer::set_video_codec(const std::string &codec) {
   video_codec_ = codec;
   std::cout << "Video codec set to: " << video_codec_ << std::endl;
+}
+
+void VideoCapturer::set_profile(const std::string &profile) {
+  profile_ = profile;
+  std::cout << "Video profile set to: " << profile_ << std::endl;
 }
 
 bool VideoCapturer::init_fps_filter(int width, int height, int fps) {
@@ -643,8 +648,8 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
     int width = 640, height = 480;
     sscanf(resolution_.c_str(), "%dx%d", &width, &height);
 
-    // 使用新参数配置编码器
-    if (!encoder_->open_encoder(width, height, fps, bitrate)) {
+    // 使用新参数配置编码器（传入当前 profile）
+    if (!encoder_->open_encoder(width, height, fps, bitrate, profile_)) {
       std::cerr << "Failed to reconfigure encoder" << std::endl;
       return;
     }
