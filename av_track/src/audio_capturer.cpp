@@ -44,7 +44,7 @@ bool AudioCapturer::start() {
     return false;
   }
 
-  AVInputFormat *input_format =
+  const AVInputFormat *input_format =
       av_find_input_format(audio_params_.input_format.c_str());
   if (!input_format) {
     std::cerr << "Cannot find ALSA input input_format" << std::endl;

@@ -53,7 +53,7 @@ VideoCapturer::~VideoCapturer() { stop(); }
 // void VideoCapturer::set_track_callback(TrackCallback callback)
 
 bool VideoCapturer::start() {
-  AVInputFormat *input_format = nullptr;
+  const AVInputFormat *input_format = nullptr;
   std::string device_path = device_;
 
   // 检测是否为模拟摄像头模式 (lavfi)
@@ -163,10 +163,12 @@ bool VideoCapturer::start() {
     AVDictionary *options = nullptr;
     av_dict_set(&options, "video_size", resolution_.c_str(), 0);
     av_dict_set(&options, "framerate", std::to_string(framerate_).c_str(), 0);
-    av_dict_set(&options, "input_format", video_format_.c_str(),
-                0); // 使用视频输入格式参数
-    // 移除 pixel_format 设置，让 ffmpeg 自动检测
-    std::cout << "Using video input format: " << video_format_ << std::endl;
+    if (!video_format_.empty()) {
+      av_dict_set(&options, "input_format", video_format_.c_str(), 0); // 使用视频输入格式参数
+      std::cout << "Using video input format: " << video_format_ << std::endl;
+    } else {
+      std::cout << "Using video input format: auto-detect" << std::endl;
+    }
     int ret = avformat_open_input(&format_context_, device_path.c_str(),
                                   input_format, &options);
     if (ret < 0) {
@@ -439,7 +441,7 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
     }
   } else {
     // 真实摄像头或网络流模式
-    AVInputFormat *input_format = nullptr;
+    const AVInputFormat *input_format = nullptr;
     if (is_udp_stream_) {
       // 网络流模式：不需要指定输入格式
       std::cout << "Reconfiguring network stream..." << std::endl;
@@ -467,8 +469,12 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
       // 摄像头模式：设置视频参数
       av_dict_set(&options, "video_size", resolution_.c_str(), 0);
       av_dict_set(&options, "framerate", std::to_string(framerate_).c_str(), 0);
-      av_dict_set(&options, "input_format", video_format_.c_str(), 0);
-      std::cout << "Using video input format: " << video_format_ << std::endl;
+      if (!video_format_.empty()) {
+        av_dict_set(&options, "input_format", video_format_.c_str(), 0);
+        std::cout << "Using video input format: " << video_format_ << std::endl;
+      } else {
+        std::cout << "Using video input format: auto-detect" << std::endl;
+      }
     }
 
     int ret = avformat_open_input(&format_context_, device_path.c_str(),
