@@ -757,33 +757,26 @@ void VideoCapturer::capture_loop() {
       encoder_out_fps = encoder_->get_context()->framerate.num /
                         encoder_->get_context()->framerate.den;
     }
-    AVRational avg_rate =
-        format_context_->streams[video_stream_index_]->avg_frame_rate;
-    int capture_in_fps = 0;
-    if (avg_rate.den != 0) {
-      capture_in_fps = avg_rate.num / avg_rate.den;
-    }
 
     if (encoder_out_fps <= 0) {
       encoder_out_fps = framerate_;
-    }
-    if (capture_in_fps <= 0) {
-      capture_in_fps = encoder_out_fps;
     }
 
     // 当 FPS 滤镜激活时，由滤镜负责帧率控制，
     // capture_loop 应尽快送入所有原始帧，不做丢帧和限速
     const bool use_fps_filter = (fps_buffer_src_ != nullptr);
     int frame_drop_factor = 1; // 默认值，可以根据需要调整
-    if (!use_fps_filter && encoder_out_fps < capture_in_fps) {
-      frame_drop_factor =
-          std::max(1, static_cast<int>(std::round(static_cast<double>(capture_in_fps) /
-                                                  static_cast<double>(encoder_out_fps))));
-    }
+    
+    // 实际采集 FPS 测量变量
+    int actual_capture_fps = 0;
+    int fps_calc_counter = 0;
+    auto fps_calc_start_time = std::chrono::steady_clock::now();
+    int total_captured_frames = 0;
+
     int frame_counter = 0;
-    std::cout << "Capture FPS: " << capture_in_fps
-              << ", Encode FPS: " << encoder_out_fps
+    std::cout << "Encode FPS: " << encoder_out_fps
               << ", Frame Drop Factor: " << frame_drop_factor << std::endl;
+    std::cout << "Measuring actual capture FPS..." << std::endl;
 
     // 等待 track_callbacks_ 被设置 (多peer支持)
     {
@@ -811,7 +804,14 @@ void VideoCapturer::capture_loop() {
       if (!use_fps_filter) {
         static auto last_capture_time = std::chrono::steady_clock::now();
         auto now = std::chrono::steady_clock::now();
-        int64_t frame_interval_us = 1000000 / capture_in_fps;  // 微秒/帧
+        
+        // 使用实际测量的 FPS，如果还没测量到则使用编码器输出 FPS 作为参考
+        int current_capture_fps = (actual_capture_fps > 0) ? actual_capture_fps : encoder_out_fps;
+        if (current_capture_fps <= 0) {
+          current_capture_fps = 30;  // 默认 30 FPS
+        }
+        
+        int64_t frame_interval_us = 1000000 / current_capture_fps;  // 微秒/帧
 
         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - last_capture_time).count();
         if (elapsed < frame_interval_us) {
@@ -830,6 +830,42 @@ void VideoCapturer::capture_loop() {
       }
 
       if (packet->stream_index == video_stream_index_) {
+        // 实际采集 FPS 测量（优化：只在需要时才获取时间戳）
+        total_captured_frames++;
+        
+        // 每秒计算一次实际采集 FPS（避免每帧都调用 steady_clock::now()）
+        if ((total_captured_frames & 31) == 0) {  // 每 32 帧检查一次（约 0.25 秒）
+          auto now = std::chrono::steady_clock::now();
+          auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+              now - fps_calc_start_time).count();
+          
+          if (elapsed_ms >= 1000) {
+            actual_capture_fps = static_cast<int>(
+                total_captured_frames * 1000 / elapsed_ms);
+            
+            // 根据实际采集 FPS 动态调整 frame_drop_factor
+            if (!use_fps_filter && encoder_out_fps > 0 && actual_capture_fps > 0) {
+              if (encoder_out_fps < actual_capture_fps) {
+                frame_drop_factor = std::max(1, static_cast<int>(
+                    std::round(static_cast<double>(actual_capture_fps) /
+                               static_cast<double>(encoder_out_fps))));
+              } else {
+                frame_drop_factor = 1;
+              }
+            }
+            
+            std::cout << "Actual Capture FPS: " << actual_capture_fps
+                      << ", Encode FPS: " << encoder_out_fps
+                      << ", Frame Drop Factor: " << frame_drop_factor
+                      << ", Total Captured: " << total_captured_frames
+                      << std::endl;
+            
+            // 重置计数器
+            fps_calc_start_time = now;
+            total_captured_frames = 0;
+          }
+        }
+
         // 帧率控制逻辑：根据frame_drop_factor决定是否丢弃帧
         frame_counter++;
         if (frame_drop_factor > 1 && (frame_counter % frame_drop_factor) != 1) {

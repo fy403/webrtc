@@ -1,0 +1,16 @@
+[Unit]
+Description=OV5647 Camera Configuration Service
+After=multi-user.target
+Wants=media-session.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ov5647-config-tool.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

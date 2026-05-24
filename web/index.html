@@ -379,9 +379,9 @@
                         <button class="btn" id="muteMicBtn" title="MUTE MICROPHONE">🎤</button>
                         <button class="btn" id="muteSpeakerBtn" title="MUTE SPEAKER">🔊</button>
                         <button class="btn" id="helperLinesBtn" title="TOGGLE HELPER LINES">📐</button>
+                        <button class="btn" id="clockBtn" title="PRECISION CLOCK">🕐</button>
                         <button class="btn" id="curveBtn" title="SPEED CURVE">📈</button>
                         <button class="btn" id="configBtn" title="CONFIG">⚙️</button>
-                        <button class="btn" id="clockBtn" title="PRECISION CLOCK">🕐</button>
                     </div>
                 </div>
 
@@ -735,9 +735,9 @@
             const helperLinesBtn = document.getElementById('helperLinesBtn');
             const helperLines = document.querySelector('.helper-lines');
             if (helperLinesBtn && helperLines) {
-                // 默认显示辅助线
-                helperLines.style.display = 'block';
-                helperLinesBtn.classList.add('btn-active');
+                // 默认不显示辅助线
+                helperLines.style.display = 'none';
+                helperLinesBtn.classList.remove('btn-active');
                 
                 helperLinesBtn.addEventListener('click', function() {
                     if (helperLines.style.display === 'block') {
