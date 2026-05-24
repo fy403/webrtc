@@ -134,8 +134,16 @@
                                 <span class="video-stat-value" id="videoBitrate">0 Kbps</span>
                             </div>
                             <div class="video-stat-item">
-                                <span class="video-stat-label">LATENCY</span>
-                                <span class="video-stat-value" id="videoLatency">0 ms</span>
+                                <span class="video-stat-label">DELAY</span>
+                                <span class="video-stat-value" id="videoDelay">0 ms</span>
+                            </div>
+                            <div class="video-stat-item">
+                                <span class="video-stat-label">JITTER</span>
+                                <span class="video-stat-value" id="videoJitter">0 ms</span>
+                            </div>
+                            <div class="video-stat-item">
+                                <span class="video-stat-label">DECODE</span>
+                                <span class="video-stat-value" id="videoDecode">0 ms</span>
                             </div>
                             <div class="video-stat-item">
                                 <span class="video-stat-label">CODEC</span>
@@ -546,6 +554,9 @@
                             <span class="ice-separator">|</span>
                             <span class="label">TYPE:</span>
                             <span class="value mono" id="connectionType">--</span>
+                            <span class="ice-separator">|</span>
+                            <span class="label">RTT:</span>
+                            <span class="value mono" id="videoRtt">--</span>
                         </div>
                         <div class="ice-info-row">
                             <span class="label">LOCAL:</span>
@@ -553,10 +564,6 @@
                             <span class="ice-arrow">→</span>
                             <span class="label">REMOTE:</span>
                             <span class="value mono" id="remoteCandidate" title="远程ICE候选地址">--</span>
-                        </div>
-                        <div class="ice-info-row">
-                            <span class="label">CANDIDATE:</span>
-                            <span class="value mono" id="selectedCandidatePair" title="选中的ICE候选对">--</span>
                         </div>
                     </div>
                 </div>
@@ -595,6 +602,9 @@
                             <span class="ice-separator">|</span>
                             <span class="label">TYPE:</span>
                             <span class="value mono" id="dataConnectionType">--</span>
+                            <span class="ice-separator">|</span>
+                            <span class="label">RTT:</span>
+                            <span class="value mono" id="dataRtt">--</span>
                         </div>
                         <div class="ice-info-row">
                             <span class="label">LOCAL:</span>
@@ -602,10 +612,6 @@
                             <span class="ice-arrow">→</span>
                             <span class="label">REMOTE:</span>
                             <span class="value mono" id="dataRemoteCandidate" title="远程ICE候选地址">--</span>
-                        </div>
-                        <div class="ice-info-row">
-                            <span class="label">CANDIDATE:</span>
-                            <span class="value mono" id="dataSelectedCandidatePair" title="选中的ICE候选对">--</span>
                         </div>
                     </div>
                 </div>

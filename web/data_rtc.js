@@ -55,6 +55,10 @@ window.addEventListener('load', () => {
                             const remoteCandidate = stats.get(remoteCandidateId);
                             
                             if (localCandidate && remoteCandidate) {
+                                // 计算RTT（在更大的作用域内定义，方便后面使用）
+                                const rttText = report.currentRoundTripTime ? (report.currentRoundTripTime * 1000).toFixed(0) + 'ms' : '--';
+                                const rttMs = report.currentRoundTripTime ? report.currentRoundTripTime * 1000 : 0;
+
                                 // 更新连接类型
                                 const connectionTypeEl = document.getElementById('dataConnectionType');
                                 if (connectionTypeEl) {
@@ -64,33 +68,45 @@ window.addEventListener('load', () => {
                                     connectionTypeEl.style.color = isRelay ? '#FFA500' : '#32CD32';
                                 }
 
-                                // 更新本地候选
+                                // 更新本地候选（尝试多种可能的字段名）
                                 const localCandidateEl = document.getElementById('dataLocalCandidate');
                                 if (localCandidateEl) {
-                                    const address = localCandidate.address || '--';
+                                    const address = localCandidate.address 
+                                        || localCandidate.ip 
+                                        || localCandidate.ipAddress 
+                                        || '(hidden)';
                                     const port = localCandidate.port || '--';
                                     const protocol = localCandidate.protocol || '--';
+                                    const candidateType = localCandidate.candidateType || 'unknown';
                                     localCandidateEl.textContent = `${address}:${port} (${protocol})`;
-                                    localCandidateEl.title = `Type: ${localCandidate.candidateType}\nPriority: ${localCandidate.priority}`;
+                                    localCandidateEl.title = `Type: ${candidateType}\nPriority: ${localCandidate.priority || '--'}\nFoundation: ${localCandidate.foundation || '--'}\nRTT: ${rttText}`;
                                 }
 
-                                // 更新远程候选
+                                // 更新RTT显示
+                                const rttEl = document.getElementById('dataRtt');
+                                if (rttEl) {
+                                    rttEl.textContent = rttText;
+                                    if (rttMs > 150) {
+                                        rttEl.style.color = '#FF4500'; // 高延迟：红色
+                                    } else if (rttMs > 50) {
+                                        rttEl.style.color = '#FFA500'; // 中等延迟：橙色
+                                    } else {
+                                        rttEl.style.color = '#32CD32'; // 低延迟：绿色
+                                    }
+                                }
+
+                                // 更新远程候选（尝试多种可能的字段名）
                                 const remoteCandidateEl = document.getElementById('dataRemoteCandidate');
                                 if (remoteCandidateEl) {
-                                    const address = remoteCandidate.address || '--';
+                                    const address = remoteCandidate.address 
+                                        || remoteCandidate.ip 
+                                        || remoteCandidate.ipAddress 
+                                        || '(hidden)';
                                     const port = remoteCandidate.port || '--';
                                     const protocol = remoteCandidate.protocol || '--';
+                                    const candidateType = remoteCandidate.candidateType || 'unknown';
                                     remoteCandidateEl.textContent = `${address}:${port} (${protocol})`;
-                                    remoteCandidateEl.title = `Type: ${remoteCandidate.candidateType}\nPriority: ${remoteCandidate.priority}`;
-                                }
-
-                                // 更新选中的候选对
-                                const selectedPairEl = document.getElementById('dataSelectedCandidatePair');
-                                if (selectedPairEl) {
-                                    const localAddr = localCandidate.address || '--';
-                                    const remoteAddr = remoteCandidate.address || '--';
-                                    selectedPairEl.textContent = `${localAddr} <-> ${remoteAddr}`;
-                                    selectedPairEl.title = `RTT: ${report.currentRoundTripTime ? (report.currentRoundTripTime * 1000).toFixed(0) + 'ms' : '--'}`;
+                                    remoteCandidateEl.title = `Type: ${candidateType}\nPriority: ${remoteCandidate.priority || '--'}\nFoundation: ${remoteCandidate.foundation || '--'}`;
                                 }
                             }
                         }

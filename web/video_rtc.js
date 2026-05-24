@@ -69,6 +69,10 @@ window.addEventListener('load', () => {
                             const remoteCandidate = stats.get(remoteCandidateId);
 
                             if (localCandidate && remoteCandidate) {
+                                // 计算RTT（在更大的作用域内定义，方便后面使用）
+                                const rttText = report.currentRoundTripTime ? (report.currentRoundTripTime * 1000).toFixed(0) + 'ms' : '--';
+                                const rttMs = report.currentRoundTripTime ? report.currentRoundTripTime * 1000 : 0;
+
                                 // 更新连接类型
                                 const connectionTypeEl = type === 'video' 
                                     ? document.getElementById('connectionType') 
@@ -80,39 +84,52 @@ window.addEventListener('load', () => {
                                     connectionTypeEl.style.color = isRelay ? '#FFA500' : '#32CD32';
                                 }
 
-                                // 更新本地候选
+                                // 更新本地候选（尝试多种可能的字段名）
                                 const localCandidateEl = type === 'video'
                                     ? document.getElementById('localCandidate')
                                     : document.getElementById('dataLocalCandidate');
                                 if (localCandidateEl) {
-                                    const address = localCandidate.address || '--';
+                                    // 尝试多种可能的地址字段名
+                                    const address = localCandidate.address 
+                                        || localCandidate.ip 
+                                        || localCandidate.ipAddress 
+                                        || '(hidden)';
                                     const port = localCandidate.port || '--';
                                     const protocol = localCandidate.protocol || '--';
+                                    const candidateType = localCandidate.candidateType || 'unknown';
                                     localCandidateEl.textContent = `${address}:${port} (${protocol})`;
-                                    localCandidateEl.title = `Type: ${localCandidate.candidateType}\nPriority: ${localCandidate.priority}`;
+                                    localCandidateEl.title = `Type: ${candidateType}\nPriority: ${localCandidate.priority || '--'}\nFoundation: ${localCandidate.foundation || '--'}\nRTT: ${rttText}`;
                                 }
 
-                                // 更新远程候选
+                                // 更新RTT显示
+                                const rttEl = type === 'video'
+                                    ? document.getElementById('videoRtt')
+                                    : document.getElementById('dataRtt');
+                                if (rttEl) {
+                                    rttEl.textContent = rttText;
+                                    if (rttMs > 150) {
+                                        rttEl.style.color = '#FF4500'; // 高延迟：红色
+                                    } else if (rttMs > 50) {
+                                        rttEl.style.color = '#FFA500'; // 中等延迟：橙色
+                                    } else {
+                                        rttEl.style.color = '#32CD32'; // 低延迟：绿色
+                                    }
+                                }
+
+                                // 更新远程候选（尝试多种可能的字段名）
                                 const remoteCandidateEl = type === 'video'
                                     ? document.getElementById('remoteCandidate')
                                     : document.getElementById('dataRemoteCandidate');
                                 if (remoteCandidateEl) {
-                                    const address = remoteCandidate.address || '--';
+                                    const address = remoteCandidate.address 
+                                        || remoteCandidate.ip 
+                                        || remoteCandidate.ipAddress 
+                                        || '(hidden)';
                                     const port = remoteCandidate.port || '--';
                                     const protocol = remoteCandidate.protocol || '--';
+                                    const candidateType = remoteCandidate.candidateType || 'unknown';
                                     remoteCandidateEl.textContent = `${address}:${port} (${protocol})`;
-                                    remoteCandidateEl.title = `Type: ${remoteCandidate.candidateType}\nPriority: ${remoteCandidate.priority}`;
-                                }
-
-                                // 更新选中的候选对
-                                const selectedPairEl = type === 'video'
-                                    ? document.getElementById('selectedCandidatePair')
-                                    : document.getElementById('dataSelectedCandidatePair');
-                                if (selectedPairEl) {
-                                    const localAddr = localCandidate.address || '--';
-                                    const remoteAddr = remoteCandidate.address || '--';
-                                    selectedPairEl.textContent = `${localAddr} <-> ${remoteAddr}`;
-                                    selectedPairEl.title = `RTT: ${report.currentRoundTripTime ? (report.currentRoundTripTime * 1000).toFixed(0) + 'ms' : '--'}`;
+                                    remoteCandidateEl.title = `Type: ${candidateType}\nPriority: ${remoteCandidate.priority || '--'}\nFoundation: ${remoteCandidate.foundation || '--'}`;
                                 }
                             }
                         }
@@ -353,7 +370,9 @@ window.addEventListener('load', () => {
     const videoStatsElements = {
         fps: document.getElementById('videoFps'),
         bitrate: document.getElementById('videoBitrate'),
-        latency: document.getElementById('videoLatency'),
+        delay: document.getElementById('videoDelay'),
+        jitter: document.getElementById('videoJitter'),
+        decode: document.getElementById('videoDecode'),
         codec: document.getElementById('videoCodec'),
         resolution: document.getElementById('videoResolution')
     };
@@ -449,16 +468,56 @@ window.addEventListener('load', () => {
             
             // 如果帧间延迟标准差过大，警告
             if (interFrameDelayStDev > 0.0001) {  // 阈值：0.0001秒 = 0.1ms
-                console.warn('⚠️ High inter-frame delay variation:', {
-                    '标准差': (interFrameDelayStDev * 1000).toFixed(2) + 'ms',
-                    '平均帧间隔': ((videoStats.totalInterFrameDelay / videoStats.framesDecoded) * 1000).toFixed(2) + 'ms',
-                    '预期帧间隔': (1000 / (videoStats.framesPerSecond || 30)).toFixed(2) + 'ms'
-                });
+                // console.warn('⚠️ High inter-frame delay variation:', {
+                //     '标准差': (interFrameDelayStDev * 1000).toFixed(2) + 'ms',
+                //     '平均帧间隔': ((videoStats.totalInterFrameDelay / videoStats.framesDecoded) * 1000).toFixed(2) + 'ms',
+                //     '预期帧间隔': (1000 / (videoStats.framesPerSecond || 30)).toFixed(2) + 'ms'
+                // });
             }
 
             // 更新分辨率信息
             if (videoStats.frameWidth && videoStats.frameHeight && videoStatsElements.resolution) {
                 videoStatsElements.resolution.textContent = `${videoStats.frameWidth}x${videoStats.frameHeight}`;
+            }
+
+            // 更新优化器延时指标
+            if (typeof PerformanceOptimizer !== 'undefined' && PerformanceOptimizer.metrics) {
+                const metrics = PerformanceOptimizer.metrics;
+
+                // 总延迟
+                if (videoStatsElements.delay) {
+                    const delayVal = metrics.totalPlaybackDelay || 0;
+                    videoStatsElements.delay.textContent = delayVal.toFixed(0) + ' ms';
+                    if (delayVal > 200) {
+                        videoStatsElements.delay.style.color = '#FF4500';
+                    } else if (delayVal > 100) {
+                        videoStatsElements.delay.style.color = '#FFA500';
+                    } else {
+                        videoStatsElements.delay.style.color = '#32CD32';
+                    }
+                }
+
+                // Jitter Buffer 延迟
+                if (videoStatsElements.jitter) {
+                    const jitterVal = metrics.avgJitterBufferDelay || 0;
+                    videoStatsElements.jitter.textContent = jitterVal.toFixed(0) + ' ms';
+                    if (jitterVal > 50) {
+                        videoStatsElements.jitter.style.color = '#FFA500';
+                    } else {
+                        videoStatsElements.jitter.style.color = '#32CD32';
+                    }
+                }
+
+                // 解码延迟
+                if (videoStatsElements.decode) {
+                    const decodeVal = metrics.avgDecodeTime || 0;
+                    videoStatsElements.decode.textContent = decodeVal.toFixed(0) + ' ms';
+                    if (decodeVal > 20) {
+                        videoStatsElements.decode.style.color = '#FFA500';
+                    } else {
+                        videoStatsElements.decode.style.color = '#32CD32';
+                    }
+                }
             }
 
             // ========== 关键帧请求监控 ==========
