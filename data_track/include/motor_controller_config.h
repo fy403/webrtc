@@ -13,7 +13,7 @@ public:
     // ========== 通用配置参数 ==========
     // 电机驱动串口设备路径（例如：/dev/ttyUSB0）
     std::string motor_driver_port = "/dev/ttyUSB0";
-    // 电机驱动类型（例如：uart,crsf 等）
+    // 电机驱动类型（例如：uart,crsf,pwm 等）
     std::string motor_driver_type = "uart";
     // 后退时是否反转转向方向（默认：true）
     bool reverse_turn_when_backward = true;
@@ -47,6 +47,22 @@ public:
     bool crsf_esc_reversible = true;          // 电调是否支持倒转
     uint8_t crsf_esc_channel = 1;             // CRSF 电调通道编号（1-16）
 
+    // ========== PWM Motor Driver 配置参数 ==========
+    // PWM 芯片编号（例如：0, 1, 2...）
+    // PWM8_M0 (Pin 15) 对应芯片编号（前后控制）
+    int pwm_front_back_chip = 0;
+    // PWM9_M0 (Pin 18) 对应芯片编号（左右转向）
+    int pwm_left_right_chip = 1;
+    // PWM 通道编号（每个 pwmchip 只有 1 个通道：通道 0）
+    int pwm_front_back_channel = 0;  // 前后控制通道（pwmchip0/pwm0 -> Pin 15）
+    int pwm_left_right_channel = 0;  // 左右转向通道（pwmchip1/pwm0 -> Pin 18）
+    // PWM 周期（纳秒），默认20000000ns = 50Hz（适合舵机/电调）
+    uint64_t pwm_period_ns = 20000000;
+    // 占空比范围（纳秒），与CRSF配置保持一致（900~2100us）
+    uint64_t pwm_duty_min_ns = 900000;        // 最小占空比（反向最大），900us
+    uint64_t pwm_duty_max_ns = 2100000;       // 最大占空比（正向最大），2100us
+    uint64_t pwm_duty_neutral_ns = 1500000;   // 中性位置占空比（停止），1500us
+
     /**
      * 构造函数 - 使用默认值
      */
@@ -77,4 +93,3 @@ public:
 };
 
 #endif // MOTOR_CONTROLLER_CONFIG_H
-

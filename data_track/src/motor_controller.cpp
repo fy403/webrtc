@@ -1,6 +1,7 @@
 #include "motor_controller.h"
 #include "uart_motor_driver.h"
 #include "crsf_motor_driver.h"
+#include "pwm_motor_driver.h"
 #include "dummy_motor_driver.h"
 #include "rc_protocol_v2.h"
 #include <algorithm>
@@ -56,6 +57,28 @@ MotorController::MotorController(const MotorControllerConfig &config)
             throw std::runtime_error("Failed to connect dummy motor driver");
         }
         std::cout << "Dummy 驱动初始化成功（调试模式，只打印信号）" << std::endl;
+    } else if (config.motor_driver_type == "pwm") {
+        // 创建 PWM 电机驱动器
+        // PWM8_M0 (Pin 15) 用于前后控制
+        // PWM9_M0 (Pin 18) 用于左右转向
+        motor_driver = new PwmMotorDriver(config.pwm_front_back_chip,  // 前后控制PWM芯片
+                                          config.pwm_left_right_chip,   // 左右转向PWM芯片
+                                          config.pwm_period_ns,
+                                          config.pwm_duty_min_ns,
+                                          config.pwm_duty_max_ns,
+                                          config.pwm_duty_neutral_ns,
+                                          config.pwm_front_back_channel,
+                                          config.pwm_left_right_channel);
+
+        // 尝试初始化 PWM 驱动
+        if (!motor_driver->connect()) {
+            throw std::runtime_error("Failed to connect to PWM motor driver");
+        }
+        std::cout << "PWM 驱动初始化成功" << std::endl;
+        std::cout << "  前后控制: pwmchip" << config.pwm_front_back_chip 
+                  << "/pwm" << config.pwm_front_back_channel << std::endl;
+        std::cout << "  左右转向: pwmchip" << config.pwm_left_right_chip 
+                  << "/pwm" << config.pwm_left_right_channel << std::endl;
     } else {
         std::cerr << "Unknown motor driver type: " << config.motor_driver_type << std::endl;
         throw std::runtime_error("Unknown motor driver type");
