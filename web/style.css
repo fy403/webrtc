@@ -2781,6 +2781,57 @@ body.mobile-layout {
     transition: all 0.3s ease;
 }
 
+
+/* ICE 连接信息样式 */
+.ice-info-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--titan-border);
+}
+
+.ice-info-section .ice-info-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(10, 14, 26, 0.5);
+    border: 1px solid rgba(255, 165, 0, 0.15);
+    border-radius: 4px;
+    padding: 4px 8px;
+    flex-wrap: wrap;
+}
+
+.ice-info-section .label {
+    font-size: 10px;
+    color: var(--titan-text-dim);
+    white-space: nowrap;
+}
+
+.ice-info-section .value {
+    font-size: 11px;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--titan-primary);
+}
+
+.ice-separator {
+    color: var(--titan-border);
+    margin: 0 4px;
+    font-size: 10px;
+}
+
+.ice-arrow {
+    color: var(--titan-primary);
+    margin: 0 4px;
+    font-size: 12px;
+}
+
+
+
 .satellite-indicator:hover {
     border-color: var(--titan-primary);
     box-shadow: var(--titan-glow);

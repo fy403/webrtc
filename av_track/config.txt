@@ -24,10 +24,10 @@ turnPass=qwertyuiop               # TURN服务器密码
 #       模拟画面会显示彩色测试图案 + 毫秒时间戳
 videoDevice=/dev/video0           # 摄像头设备
 videoFormat=          # 视频输入格式（留空则自动检测）⚠️ 使用 fake 模拟摄像头时，此参数无效，留空即可
-videoCodec=h264_rkmpp             # 视频编码格式：h264 或 h265
+videoCodec=h264_rkmpp              # 视频编码格式：h264, h265, h264_rkmpp, hevc_rkmpp
 resolution=1920x1080              # 视频分辨率（fake 模式也支持，如 1280x720）
 framerate=30                      # 视频帧率（fake 模式也支持，如 30/60）
-profile=hd                 # 编码场景：lowlatency（低延时）/ hd（高清）
+profile=lowlatency                 # 编码场景：lowlatency（低延时）/ hd（高清）
 
 # =============================================================================
 # Audio Input Configuration (音频输入配置)

@@ -798,28 +798,40 @@ void VideoCapturer::capture_loop() {
         continue;
       }
 
-      // ========== 帧率限速（Pacing）：控制采集节奏 ==========
-      // 当 FPS 滤镜激活时，由滤镜负责帧率转换，
-      // capture_loop 尽快读取所有原始帧送入解码队列
-      if (!use_fps_filter) {
-        static auto last_capture_time = std::chrono::steady_clock::now();
-        auto now = std::chrono::steady_clock::now();
-        
-        // 使用实际测量的 FPS，如果还没测量到则使用编码器输出 FPS 作为参考
-        int current_capture_fps = (actual_capture_fps > 0) ? actual_capture_fps : encoder_out_fps;
-        if (current_capture_fps <= 0) {
-          current_capture_fps = 30;  // 默认 30 FPS
+        // ========== 帧率限速（Pacing）：控制采集节奏 ==========
+        // 当 FPS 滤镜激活时，由滤镜负责帧率转换，
+        // capture_loop 尽快读取所有原始帧送入解码队列
+        if (!use_fps_filter) {
+          // 使用静态变量记录下一帧的期望时间（更精确的 pacing）
+          static auto next_frame_time = std::chrono::steady_clock::now();
+          
+          // 使用实际测量的 FPS，如果还没测量到则使用编码器输出 FPS 作为参考
+          int current_capture_fps = (actual_capture_fps > 0) ? actual_capture_fps : encoder_out_fps;
+          if (current_capture_fps <= 0) {
+            current_capture_fps = 30;  // 默认 30 FPS
+          }
+          
+          int64_t frame_interval_us = 1000000 / current_capture_fps;  // 微秒/帧
+          
+          auto now = std::chrono::steady_clock::now();
+          
+          // 如果还没到下一帧时间，等待
+          if (now < next_frame_time) {
+            std::this_thread::sleep_until(next_frame_time);
+          }
+          
+          // 更新下一帧时间（固定间隔，不考虑实际采集耗时）
+          next_frame_time += std::chrono::microseconds(frame_interval_us);
+          
+          // 如果落后太多（超过3帧），跳帧以避免累积延迟
+          auto now2 = std::chrono::steady_clock::now();
+          if (now2 > next_frame_time + std::chrono::microseconds(frame_interval_us * 3)) {
+            if (debug_enabled_) {
+              std::cout << "Pacing: skipping frames due to backlog" << std::endl;
+            }
+            next_frame_time = now2;
+          }
         }
-        
-        int64_t frame_interval_us = 1000000 / current_capture_fps;  // 微秒/帧
-
-        auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - last_capture_time).count();
-        if (elapsed < frame_interval_us) {
-          // 还没到下一帧时间，短暂等待
-          std::this_thread::sleep_for(std::chrono::microseconds(frame_interval_us - elapsed));
-        }
-        last_capture_time = std::chrono::steady_clock::now();
-      }
 
       int ret = av_read_frame(format_context_, packet);
       if (ret < 0) {

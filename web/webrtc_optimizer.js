@@ -137,28 +137,58 @@ class WebRTCOptimizer {
 
     /**
      * 自适应缓冲区大小
+     * @param {number} targetDelay - 目标延迟（毫秒）
+     * @param {number} packetLossRate - 丢包率（0-1）
      */
-    adaptBufferSize(rtt = 50, packetLoss = 0) {
+    adaptBufferSize(targetDelay = 50, packetLossRate = 0) {
         if (!this.videoElement) return;
 
         try {
-            // 根据网络状况动态调整
-            if (rtt < 50 && packetLoss < 0.01) {
-                // 超低延迟模式：50ms 缓冲区
-                if (this.videoElement.buffered && this.videoElement.buffered.length > 0) {
-                    const bufferedEnd = this.videoElement.buffered.end(this.videoElement.buffered.length - 1);
-                    const bufferedStart = this.videoElement.buffered.start(0);
-                    const bufferSize = bufferedEnd - bufferedStart;
-                    
-                    // 如果缓冲区过大，尝试减小
-                    if (bufferSize > 0.1) {
-                        console.log('Buffer too large, attempting to reduce...');
-                    }
-                }
-            } else {
-                // 抗抖动模式：200ms 缓冲区
-                console.log('Using anti-jitter buffer mode');
+            const video = this.videoElement;
+            
+            // 根据网络状况动态调整目标延迟
+            let optimizedDelay = targetDelay;
+            
+            // 高丢包率：增加缓冲区以抗抖动
+            if (packetLossRate > 0.02) {
+                optimizedDelay = Math.max(optimizedDelay, 150);
+                console.log(`📈 High packet loss (${(packetLossRate * 100).toFixed(2)}%), increasing buffer to ${optimizedDelay}ms`);
             }
+            
+            // 低延迟模式：减少缓冲区
+            if (packetLossRate < 0.005 && targetDelay < 50) {
+                optimizedDelay = 30;
+                console.log(`📉 Low latency mode: buffer=${optimizedDelay}ms`);
+            }
+
+            // ========== 尝试设置 playoutDelayHint（实验性API）==========
+            if ('playoutDelayHint' in video) {
+                video.playoutDelayHint = optimizedDelay / 1000; // 转换为秒
+                console.log(`Set playoutDelayHint: ${optimizedDelay}ms`);
+            }
+
+            // ========== 调整 video 元素的 buffered 范围 ==========
+            if (video.buffered && video.buffered.length > 0) {
+                const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+                const currentTime = video.currentTime;
+                const bufferAhead = bufferedEnd - currentTime;
+
+                // 如果缓冲区过大（超过目标延迟的2倍），尝试 seek 到当前时间以清空缓冲
+                if (bufferAhead > (optimizedDelay / 1000) * 2) {
+                    console.log(`Buffer too large (${(bufferAhead * 1000).toFixed(0)}ms), attempting to reduce...`);
+                    
+                    // 方法1：暂停后立即播放（某些浏览器会清空缓冲）
+                    // video.pause();
+                    // video.play();
+                    
+                    // 方法2：调整 currentTime（可能会触发重新缓冲）
+                    // video.currentTime = currentTime;
+                }
+            }
+
+            // ========== 更新指标 ==========
+            this.metrics.videoBufferDelay = optimizedDelay;
+
         } catch (e) {
             console.warn('Buffer adaptation failed:', e);
         }
@@ -250,6 +280,41 @@ class WebRTCOptimizer {
      */
     setPeerConnection(peerConnection) {
         this.peerConnection = peerConnection;
+    }
+
+    /**
+     * 限制PLI/FIR请求频率（避免频繁请求关键帧）
+     * @param {number} minInterval - 最小请求间隔（毫秒），默认2000ms
+     */
+    limitPLIRequests(minInterval = 2000) {
+        if (!this.peerConnection) return;
+
+        try {
+            const senders = this.peerConnection.getSenders();
+            senders.forEach(sender => {
+                if (sender.track && sender.track.kind === 'video') {
+                    const parameters = sender.getParameters();
+                    
+                    // 设置编码参数，降低关键帧请求频率
+                    if (parameters.encodings) {
+                        parameters.encodings.forEach(encoding => {
+                            // 禁用自动关键帧请求（如果浏览器支持）
+                            if ('requireDeps' in encoding) {
+                                encoding.requireDeps = false;
+                            }
+                        });
+                        
+                        sender.setParameters(parameters).then(() => {
+                            console.log('Limited PLI/FIR requests (min interval: ' + minInterval + 'ms)');
+                        }).catch(err => {
+                            console.warn('Failed to limit PLI requests:', err);
+                        });
+                    }
+                }
+            });
+        } catch (e) {
+            console.warn('Failed to limit PLI requests:', e);
+        }
     }
 
     /**

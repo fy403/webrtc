@@ -325,10 +325,10 @@
                         </div>
 
                         <div class="last-update">
-                            <div class="hint">LAST UPDATE: <span id="lastUpdate">--</span></div>
+                            <div class="hint">同步时间: <span id="lastUpdate">--</span></div>
                         </div>
                         <div class="last-update">
-                            <div class="hint">THROTTLE LIMIT: <span id="throttleLimitIndicator">UNLIMITED</span></div>
+                            <div class="hint">油门比例: <span id="throttleLimitIndicator">UNLIMITED</span></div>
                         </div>
                     </div>
 
@@ -538,6 +538,27 @@
                             value="" />
                         <button class="btn btn-compact" id="offerBtn">CONNECT</button>
                     </div>
+                    <!-- ICE 连接详细信息 -->
+                    <div class="ice-info-section">
+                        <div class="ice-info-row">
+                            <span class="label">ICE:</span>
+                            <span class="value mono" id="iceStatus">--</span>
+                            <span class="ice-separator">|</span>
+                            <span class="label">TYPE:</span>
+                            <span class="value mono" id="connectionType">--</span>
+                        </div>
+                        <div class="ice-info-row">
+                            <span class="label">LOCAL:</span>
+                            <span class="value mono" id="localCandidate" title="本地ICE候选地址">--</span>
+                            <span class="ice-arrow">→</span>
+                            <span class="label">REMOTE:</span>
+                            <span class="value mono" id="remoteCandidate" title="远程ICE候选地址">--</span>
+                        </div>
+                        <div class="ice-info-row">
+                            <span class="label">CANDIDATE:</span>
+                            <span class="value mono" id="selectedCandidatePair" title="选中的ICE候选对">--</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -565,6 +586,27 @@
                         <input class="input mono input-compact" id="dataOfferId" placeholder="remote ID"
                             value="" />
                         <button class="btn btn-compact" id="dataOfferBtn">CONNECT</button>
+                    </div>
+                    <!-- ICE 连接详细信息 -->
+                    <div class="ice-info-section">
+                        <div class="ice-info-row">
+                            <span class="label">ICE:</span>
+                            <span class="value mono" id="dataIceStatus">--</span>
+                            <span class="ice-separator">|</span>
+                            <span class="label">TYPE:</span>
+                            <span class="value mono" id="dataConnectionType">--</span>
+                        </div>
+                        <div class="ice-info-row">
+                            <span class="label">LOCAL:</span>
+                            <span class="value mono" id="dataLocalCandidate" title="本地ICE候选地址">--</span>
+                            <span class="ice-arrow">→</span>
+                            <span class="label">REMOTE:</span>
+                            <span class="value mono" id="dataRemoteCandidate" title="远程ICE候选地址">--</span>
+                        </div>
+                        <div class="ice-info-row">
+                            <span class="label">CANDIDATE:</span>
+                            <span class="value mono" id="dataSelectedCandidatePair" title="选中的ICE候选对">--</span>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -35,9 +35,116 @@ window.addEventListener('load', () => {
     let wsReconnectInterval = null; // WebSocket 重连定时器
     let isReconnecting = false; // 全局标记：是否正在重连中（用于避免并发连接）
 
+    // ICE 信息存储
+    const iceInfoMap = {};
+
     // 音频控制状态
     let isMicMuted = false;
     let isSpeakerMuted = false;
+
+    // 更新 ICE 信息展示
+    function updateIceInfoDisplay(id, type) {
+        const pc = peerConnectionMap[id];
+        if (!pc) return;
+
+        // 更新 ICE 状态
+        const iceStatusEl = type === 'video' ? document.getElementById('iceStatus') : document.getElementById('dataIceStatus');
+        if (iceStatusEl) {
+            iceStatusEl.textContent = pc.iceConnectionState || '--';
+        }
+
+        // 获取并展示选中的 ICE 候选对
+        if (pc.connectionState === 'connected' || pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+            pc.getStats().then(stats => {
+                let foundPair = false;
+                stats.forEach((report) => {
+                    // 查找选中的候选对（selected 或 state 为 succeeded）
+                    if (report.type === 'candidate-pair' && (report.selected || report.state === 'succeeded')) {
+                        foundPair = true;
+                        const localCandidateId = report.localCandidateId;
+                        const remoteCandidateId = report.remoteCandidateId;
+
+                        if (localCandidateId && remoteCandidateId) {
+                            const localCandidate = stats.get(localCandidateId);
+                            const remoteCandidate = stats.get(remoteCandidateId);
+
+                            if (localCandidate && remoteCandidate) {
+                                // 更新连接类型
+                                const connectionTypeEl = type === 'video' 
+                                    ? document.getElementById('connectionType') 
+                                    : document.getElementById('dataConnectionType');
+                                if (connectionTypeEl) {
+                                    const localType = localCandidate.candidateType || 'unknown';
+                                    const isRelay = localType === 'relay';
+                                    connectionTypeEl.textContent = isRelay ? 'TURN (Relay)' : 'P2P (Direct)';
+                                    connectionTypeEl.style.color = isRelay ? '#FFA500' : '#32CD32';
+                                }
+
+                                // 更新本地候选
+                                const localCandidateEl = type === 'video'
+                                    ? document.getElementById('localCandidate')
+                                    : document.getElementById('dataLocalCandidate');
+                                if (localCandidateEl) {
+                                    const address = localCandidate.address || '--';
+                                    const port = localCandidate.port || '--';
+                                    const protocol = localCandidate.protocol || '--';
+                                    localCandidateEl.textContent = `${address}:${port} (${protocol})`;
+                                    localCandidateEl.title = `Type: ${localCandidate.candidateType}\nPriority: ${localCandidate.priority}`;
+                                }
+
+                                // 更新远程候选
+                                const remoteCandidateEl = type === 'video'
+                                    ? document.getElementById('remoteCandidate')
+                                    : document.getElementById('dataRemoteCandidate');
+                                if (remoteCandidateEl) {
+                                    const address = remoteCandidate.address || '--';
+                                    const port = remoteCandidate.port || '--';
+                                    const protocol = remoteCandidate.protocol || '--';
+                                    remoteCandidateEl.textContent = `${address}:${port} (${protocol})`;
+                                    remoteCandidateEl.title = `Type: ${remoteCandidate.candidateType}\nPriority: ${remoteCandidate.priority}`;
+                                }
+
+                                // 更新选中的候选对
+                                const selectedPairEl = type === 'video'
+                                    ? document.getElementById('selectedCandidatePair')
+                                    : document.getElementById('dataSelectedCandidatePair');
+                                if (selectedPairEl) {
+                                    const localAddr = localCandidate.address || '--';
+                                    const remoteAddr = remoteCandidate.address || '--';
+                                    selectedPairEl.textContent = `${localAddr} <-> ${remoteAddr}`;
+                                    selectedPairEl.title = `RTT: ${report.currentRoundTripTime ? (report.currentRoundTripTime * 1000).toFixed(0) + 'ms' : '--'}`;
+                                }
+                            }
+                        }
+                    }
+                });
+                if (!foundPair) {
+                    console.warn('No selected ICE candidate pair found');
+                }
+            }).catch(err => {
+                console.warn('Failed to get ICE stats:', err);
+            });
+        }
+    }
+
+    // 解析 ICE 候选字符串
+    function parseIceCandidate(candidateStr) {
+        if (!candidateStr || candidateStr === '') return null;
+        
+        const parts = candidateStr.split(' ');
+        if (parts.length < 8) return null;
+
+        return {
+            foundation: parts[0],
+            componentId: parts[1],
+            transport: parts[2],
+            priority: parts[3],
+            address: parts[4],
+            port: parts[5],
+            type: parts[7], // 'host', 'srflx', 'relay', etc.
+            protocol: parts[2] // 'UDP' or 'TCP'
+        };
+    }
 
     const offerId = document.getElementById('offerId');
     const offerBtn = document.getElementById('offerBtn');
@@ -253,6 +360,14 @@ window.addEventListener('load', () => {
 
     let lastBytesReceived = 0;
     let lastTimestamp = Date.now();
+    
+    // ========== 关键帧请求控制 ==========
+    let lastFirCount = 0;
+    let lastPliCount = 0;
+    let firRequestTimes = []; // 记录FIR请求时间
+    let pliRequestTimes = []; // 记录PLI请求时间
+    const FIR_REQUEST_INTERVAL = 2000; // FIR请求最小间隔2秒
+    const PLI_REQUEST_INTERVAL = 1000; // PLI请求最小间隔1秒
 
     // 更新视频统计信息
     async function updateVideoStats() {
@@ -329,9 +444,57 @@ window.addEventListener('load', () => {
                 }
             }
 
+            // ========== 帧间延迟监控 ==========
+            const interFrameDelayStDev = videoStats.totalSquaredInterFrameDelay / (videoStats.framesDecoded || 1);
+            
+            // 如果帧间延迟标准差过大，警告
+            if (interFrameDelayStDev > 0.0001) {  // 阈值：0.0001秒 = 0.1ms
+                console.warn('⚠️ High inter-frame delay variation:', {
+                    '标准差': (interFrameDelayStDev * 1000).toFixed(2) + 'ms',
+                    '平均帧间隔': ((videoStats.totalInterFrameDelay / videoStats.framesDecoded) * 1000).toFixed(2) + 'ms',
+                    '预期帧间隔': (1000 / (videoStats.framesPerSecond || 30)).toFixed(2) + 'ms'
+                });
+            }
+
             // 更新分辨率信息
             if (videoStats.frameWidth && videoStats.frameHeight && videoStatsElements.resolution) {
                 videoStatsElements.resolution.textContent = `${videoStats.frameWidth}x${videoStats.frameHeight}`;
+            }
+
+            // ========== 关键帧请求监控 ==========
+            const firCount = videoStats.firCount || 0;
+            const pliCount = videoStats.pliCount || 0;
+            
+            // 检测FIR请求
+            if (firCount > lastFirCount) {
+                const now = Date.now();
+                firRequestTimes.push(now);
+                
+                // 清理10秒前的记录
+                firRequestTimes = firRequestTimes.filter(t => now - t < 10000);
+                
+                // 如果10秒内FIR请求超过3次，警告
+                if (firRequestTimes.length > 3) {
+                    console.warn('⚠️ FIR request too frequent:', firRequestTimes.length, 'times in 10s');
+                }
+                
+                lastFirCount = firCount;
+            }
+            
+            // 检测PLI请求
+            if (pliCount > lastPliCount) {
+                const now = Date.now();
+                pliRequestTimes.push(now);
+                
+                // 清理10秒前的记录
+                pliRequestTimes = pliRequestTimes.filter(t => now - t < 10000);
+                
+                // 如果10秒内PLI请求超过5次，警告
+                if (pliRequestTimes.length > 5) {
+                    console.warn('⚠️ PLI request too frequent:', pliRequestTimes.length, 'times in 10s');
+                }
+                
+                lastPliCount = pliCount;
             }
 
             // 更新音频波纹效果 - 检测是否在接收音频
@@ -896,9 +1059,15 @@ window.addEventListener('load', () => {
             console.log(`ICE Connection state: ${pc.iceConnectionState}`);
             updateStatus(`ICE: ${pc.iceConnectionState}`);
 
+            // 更新 ICE 信息展示
+            updateIceInfoDisplay(id, 'video');
+
             if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
                 console.log(`ICE connection established with ${id}`);
                 isReconnecting = false; // ICE 连接成功，重置状态
+                // 延迟再次更新 ICE 信息，确保获取到选中的候选对
+                setTimeout(() => updateIceInfoDisplay(id, 'video'), 1000);
+                setTimeout(() => updateIceInfoDisplay(id, 'video'), 3000);
             } else if (pc.iceConnectionState === 'failed') {
                 console.error(`ICE connection failed with ${id}, immediate reconnection`);
                 updateStatus(`ICE failed, reconnecting...`);
@@ -931,10 +1100,16 @@ window.addEventListener('load', () => {
                 pc._connectionTimeout = null;
             }
 
+            // 更新 ICE 信息展示
+            updateIceInfoDisplay(id, 'video');
+
             if (pc.connectionState === 'connected') {
                 updateStatus(`Connected to ${id}`);
                 isReconnecting = false; // 重置连接状态
                 stopAutoReconnect(); // 连接成功，停止自动重连
+                // 延迟再次更新 ICE 信息，确保获取到选中的候选对
+                setTimeout(() => updateIceInfoDisplay(id, 'video'), 1000);
+                setTimeout(() => updateIceInfoDisplay(id, 'video'), 3000);
             } else if (pc.connectionState === 'failed') {
                 console.error(`Connection failed with ${id}, immediate reconnection`);
                 updateStatus(`Connection failed with ${id}`);
@@ -1081,6 +1256,11 @@ window.addEventListener('load', () => {
 
                 // 应用缓冲区最小化
                 PerformanceOptimizer.adaptBufferSize();
+                
+                // 限制PLI/FIR请求频率（避免频繁请求关键帧）
+                setTimeout(() => {
+                    PerformanceOptimizer.limitPLIRequests(2000);  // 最小间隔2秒
+                }, 1000);
             }
 
             // 添加媒体事件监听
@@ -1396,10 +1576,10 @@ window.addEventListener('load', () => {
                         if (!sdp.includes('x-google-min-playout-delay-ms') &&
                             !sdp.includes('x-google-max-playout-delay-ms')) {
 
-                            // 插入最小播放延迟（30ms）
-                            const minDelayLine = 'a=x-google-min-playout-delay-ms:20\r\n';
-                            // 插入最大播放延迟（100ms）
-                            const maxDelayLine = 'a=x-google-max-playout-delay-ms:50\r\n';
+                            // 插入最小播放延迟（5ms - 更激进的低延迟设置）
+                            const minDelayLine = 'a=x-google-min-playout-delay-ms:5\r\n';
+                            // 插入最大播放延迟（20ms）
+                            const maxDelayLine = 'a=x-google-max-playout-delay-ms:20\r\n';
 
                             // 在视频媒体行后插入延迟设置
                             sdp = sdp.slice(0, insertPosition) +
@@ -1407,7 +1587,7 @@ window.addEventListener('load', () => {
                                 maxDelayLine +
                                 sdp.slice(insertPosition);
 
-                            console.log('Added jitter buffer delay control to SDP (20-50ms)');
+                            console.log('Added jitter buffer delay control to SDP (5-20ms)');
                         }
                     }
 

@@ -28,6 +28,83 @@ window.addEventListener('load', () => {
     let dataReconnectInterval = null; // PeerConnection 自动重连定时器
     let dataWsReconnectInterval = null; // WebSocket 重连定时器
 
+    // 更新 DATA LINK 的 ICE 信息展示
+    function dataUpdateIceInfoDisplay(id) {
+        const pc = dataPeerConnectionMap[id];
+        if (!pc) return;
+
+        // 更新 ICE 状态
+        const iceStatusEl = document.getElementById('dataIceStatus');
+        if (iceStatusEl) {
+            iceStatusEl.textContent = pc.iceConnectionState || '--';
+        }
+
+        // 获取并展示选中的 ICE 候选对
+        if (pc.connectionState === 'connected' || pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+            pc.getStats().then(stats => {
+                let foundPair = false;
+                stats.forEach((report) => {
+                    // 查找选中的候选对（selected 或 state 为 succeeded）
+                    if (report.type === 'candidate-pair' && (report.selected || report.state === 'succeeded')) {
+                        foundPair = true;
+                        const localCandidateId = report.localCandidateId;
+                        const remoteCandidateId = report.remoteCandidateId;
+
+                        if (localCandidateId && remoteCandidateId) {
+                            const localCandidate = stats.get(localCandidateId);
+                            const remoteCandidate = stats.get(remoteCandidateId);
+                            
+                            if (localCandidate && remoteCandidate) {
+                                // 更新连接类型
+                                const connectionTypeEl = document.getElementById('dataConnectionType');
+                                if (connectionTypeEl) {
+                                    const localType = localCandidate.candidateType || 'unknown';
+                                    const isRelay = localType === 'relay';
+                                    connectionTypeEl.textContent = isRelay ? 'TURN (Relay)' : 'P2P (Direct)';
+                                    connectionTypeEl.style.color = isRelay ? '#FFA500' : '#32CD32';
+                                }
+
+                                // 更新本地候选
+                                const localCandidateEl = document.getElementById('dataLocalCandidate');
+                                if (localCandidateEl) {
+                                    const address = localCandidate.address || '--';
+                                    const port = localCandidate.port || '--';
+                                    const protocol = localCandidate.protocol || '--';
+                                    localCandidateEl.textContent = `${address}:${port} (${protocol})`;
+                                    localCandidateEl.title = `Type: ${localCandidate.candidateType}\nPriority: ${localCandidate.priority}`;
+                                }
+
+                                // 更新远程候选
+                                const remoteCandidateEl = document.getElementById('dataRemoteCandidate');
+                                if (remoteCandidateEl) {
+                                    const address = remoteCandidate.address || '--';
+                                    const port = remoteCandidate.port || '--';
+                                    const protocol = remoteCandidate.protocol || '--';
+                                    remoteCandidateEl.textContent = `${address}:${port} (${protocol})`;
+                                    remoteCandidateEl.title = `Type: ${remoteCandidate.candidateType}\nPriority: ${remoteCandidate.priority}`;
+                                }
+
+                                // 更新选中的候选对
+                                const selectedPairEl = document.getElementById('dataSelectedCandidatePair');
+                                if (selectedPairEl) {
+                                    const localAddr = localCandidate.address || '--';
+                                    const remoteAddr = remoteCandidate.address || '--';
+                                    selectedPairEl.textContent = `${localAddr} <-> ${remoteAddr}`;
+                                    selectedPairEl.title = `RTT: ${report.currentRoundTripTime ? (report.currentRoundTripTime * 1000).toFixed(0) + 'ms' : '--'}`;
+                                }
+                            }
+                        }
+                    }
+                });
+                if (!foundPair) {
+                    console.warn('No selected ICE candidate pair found');
+                }
+            }).catch(err => {
+                console.warn('Failed to get ICE stats:', err);
+            });
+        }
+    }
+
     const dataOfferId = document.getElementById('dataOfferId');
     const dataOfferBtn = document.getElementById('dataOfferBtn');
     const dataLocalIdElement = document.getElementById('dataLocalId');
@@ -887,9 +964,15 @@ window.addEventListener('load', () => {
     function dataCreatePeerConnection(ws, id) {
         const pc = new RTCPeerConnection(rtcConfig);
         pc.oniceconnectionstatechange = () => {
+            console.log(`DATA ICE Connection state: ${pc.iceConnectionState}`);
+            // 更新 ICE 信息展示
+            dataUpdateIceInfoDisplay(id);
+
             if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
                 dataUpdateConnStatus('connected', 'CONNECTED');
-                // dataStopAutoReconnect(); // 连接成功，停止自动重连
+                // 延迟再次更新 ICE 信息，确保获取到选中的候选对
+                setTimeout(() => dataUpdateIceInfoDisplay(id), 1000);
+                setTimeout(() => dataUpdateIceInfoDisplay(id), 3000);
             } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
                 dataUpdateConnStatus('disconnected', 'DISCONNECTED');
                 dataToggleNoSignalOverlay(true);
@@ -898,10 +981,17 @@ window.addEventListener('load', () => {
             }
         };
         pc.onconnectionstatechange = () => {
+            console.log(`DATA Connection state: ${pc.connectionState}`);
+            // 更新 ICE 信息展示
+            dataUpdateIceInfoDisplay(id);
+
             if (pc.connectionState === 'connected') {
                 dataUpdateConnStatus('connected', 'CONNECTED');
                 dataToggleNoSignalOverlay(false);
                 dataStopAutoReconnect(); // 连接成功，停止自动重连
+                // 延迟再次更新 ICE 信息，确保获取到选中的候选对
+                setTimeout(() => dataUpdateIceInfoDisplay(id), 1000);
+                setTimeout(() => dataUpdateIceInfoDisplay(id), 3000);
             } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
                 dataUpdateConnStatus('disconnected', 'DISCONNECTED');
                 dataToggleNoSignalOverlay(true);
