@@ -24,11 +24,11 @@ fi
 
 echo "Using configuration file: $CONFIG_FILE"
 
-# Parse devices from config file
+# Parse devices from config file (strips comments and whitespace)
 parse_config() {
     local key="$1"
     local file="$2"
-    grep "^${key}=" "$file" 2>/dev/null | cut -d'=' -f2-
+    grep "^${key}=" "$file" 2>/dev/null | head -1 | cut -d'=' -f2- | sed 's/[[:space:]]*#.*//; s/^[[:space:]]*//; s/[[:space:]]*$//'
 }
 
 VIDEO_DEVICE=$(parse_config "videoDevice" "$CONFIG_FILE")
@@ -37,6 +37,15 @@ SPEAKER_DEVICE=$(parse_config "speakerDevice" "$CONFIG_FILE")
 
 # Build device mappings
 DEVICES=""
+
+# Rockchip MPP hardware encoder devices (if available)
+for dev in /dev/mpp_service /dev/rga /dev/dri/renderD128 /dev/dri/renderD129 /dev/dma_heap/system; do
+    if [ -e "$dev" ]; then
+        DEVICES="$DEVICES --device=$dev"
+        echo "Rockchip device: $dev"
+    fi
+done
+
 if [ -n "$VIDEO_DEVICE" ] && [ -e "$VIDEO_DEVICE" ]; then
     DEVICES="$DEVICES --device=$VIDEO_DEVICE"
     echo "Video device: $VIDEO_DEVICE"
@@ -70,7 +79,7 @@ docker run -d \
   -v "$CONFIG_DIR:/app/config" \
   --network $NETWORK_MODE \
   $IMAGE_NAME \
-  ./docker-entrypoint.sh "/app/config/$CONFIG_FILENAME"
+  "/app/config/$CONFIG_FILENAME"
 
 # Show running containers
 echo ""

@@ -448,8 +448,8 @@ window.addEventListener('load', () => {
             const decodeTime = ((videoStats.totalDecodeTime || 0) / (videoStats.framesDecoded || 1)) * 1000;
             const totalLatency = jitterBufferDelay + decodeTime;
 
-            if (videoStatsElements.latency) {
-                videoStatsElements.latency.textContent = totalLatency.toFixed(0) + ' ms';
+            if (videoStatsElements.delay) {
+                videoStatsElements.delay.textContent = totalLatency.toFixed(0) + ' ms';
             }
 
             // 更新编解码器信息

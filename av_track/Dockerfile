@@ -1,5 +1,5 @@
 # Dockerfile for av_track WebRTC streaming application
-FROM alifys/ubuntu:arm64
+FROM alifys/ubuntu:rockchip
 
 # Metadata
 LABEL maintainer="webrtc-av-track"
@@ -29,5 +29,6 @@ RUN chmod +x docker-entrypoint.sh
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD pgrep -f webrtc_publisher || exit 1
 
-# Set entrypoint
+# Set entrypoint with default config path (可被 docker run 参数覆盖)
 ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["./config.txt"]

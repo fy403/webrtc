@@ -17,11 +17,11 @@ check_device() {
     echo "Device $device found"
 }
 
-# Function to read config value
+# Function to read config value (strips comments and whitespace)
 get_config() {
     local key=$1
     local default=$2
-    grep "^${key}=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || echo "$default"
+    grep "^${key}=" "$CONFIG_FILE" 2>/dev/null | head -1 | cut -d'=' -f2- | sed 's/[[:space:]]*#.*//; s/^[[:space:]]*//; s/[[:space:]]*$//' | tr -d '"' | tr -d "'" | grep -v '^$' || echo "$default"
 }
 
 # Main entrypoint
