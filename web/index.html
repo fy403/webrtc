@@ -387,6 +387,7 @@
                         <button class="btn" id="muteMicBtn" title="MUTE MICROPHONE">🎤</button>
                         <button class="btn" id="muteSpeakerBtn" title="MUTE SPEAKER">🔊</button>
                         <button class="btn" id="helperLinesBtn" title="TOGGLE HELPER LINES">📐</button>
+                        <button class="btn" id="rotateBtn" title="ROTATE VIDEO">🔄</button>
                         <button class="btn" id="clockBtn" title="PRECISION CLOCK">🕐</button>
                         <button class="btn" id="curveBtn" title="SPEED CURVE">📈</button>
                         <button class="btn" id="configBtn" title="CONFIG">⚙️</button>
@@ -795,6 +796,78 @@
                         helperLines.style.display = 'block';
                         helperLinesBtn.classList.add('btn-active');
                     }
+                });
+            }
+
+            // Cookie 工具函数
+            function setCookie(name, value, days) {
+                const expires = new Date();
+                expires.setTime(expires.getTime() + (days || 365) * 24 * 60 * 60 * 1000);
+                document.cookie = name + '=' + encodeURIComponent(value) + ';expires=' + expires.toUTCString() + ';path=/;SameSite=Lax';
+            }
+
+            function getCookie(name) {
+                const nameEQ = name + '=';
+                const ca = document.cookie.split(';');
+                for (let i = 0; i < ca.length; i++) {
+                    let c = ca[i].trim();
+                    if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+                }
+                return null;
+            }
+
+            // 视频旋转功能
+            const rotateBtn = document.getElementById('rotateBtn');
+            const remoteVideo = document.getElementById('remoteVideo');
+            const videoContainer = document.querySelector('.video-container');
+            const ROTATION_COOKIE = 'video_rotation';
+            const ROTATION_ANGLES = [0, 90, 180, 270];
+            let currentRotationIndex = 0;
+
+            function applyRotation(angle) {
+                if (!remoteVideo) return;
+                remoteVideo.style.transform = angle === 0 ? '' : 'rotate(' + angle + 'deg)';
+                remoteVideo.style.transformOrigin = 'center center';
+
+                // 90° / 270° 时视频宽高互换，调整容器和 object-fit
+                const isPortrait = (angle === 90 || angle === 270);
+                if (videoContainer) {
+                    videoContainer.style.paddingBottom = isPortrait ? '177.78%' : '56.25%';
+                }
+                remoteVideo.style.objectFit = isPortrait ? 'contain' : '';
+
+                // 更新按钮状态
+                if (rotateBtn) {
+                    if (angle === 0) {
+                        rotateBtn.classList.remove('btn-active');
+                        rotateBtn.title = 'ROTATE VIDEO';
+                    } else {
+                        rotateBtn.classList.add('btn-active');
+                        rotateBtn.title = 'ROTATE VIDEO (' + angle + '°)';
+                    }
+                }
+            }
+
+            // 页面加载时从 cookie 恢复旋转状态
+            const savedRotation = getCookie(ROTATION_COOKIE);
+            let initialAngle = 0;
+            if (savedRotation !== null) {
+                initialAngle = parseInt(savedRotation, 10);
+                if (isNaN(initialAngle) || !ROTATION_ANGLES.includes(initialAngle)) {
+                    initialAngle = 0;
+                }
+            }
+            currentRotationIndex = ROTATION_ANGLES.indexOf(initialAngle);
+            if (currentRotationIndex < 0) currentRotationIndex = 0;
+            applyRotation(initialAngle);
+
+            // 旋转按钮点击事件
+            if (rotateBtn) {
+                rotateBtn.addEventListener('click', function () {
+                    currentRotationIndex = (currentRotationIndex + 1) % ROTATION_ANGLES.length;
+                    const angle = ROTATION_ANGLES[currentRotationIndex];
+                    applyRotation(angle);
+                    setCookie(ROTATION_COOKIE, angle.toString(), 365);
                 });
             }
 
