@@ -9,6 +9,7 @@
 </head>
 <body>
     <div class="config-page">
+        <div id="qualityToast" class="quality-toast"></div>
         <div class="config-header-with-sidebar">
             <!-- 左侧配置列表 -->
             <div class="config-sidebar">
@@ -105,15 +106,12 @@
                 </svg>
                 视频参数配置
             </div>
+            <div class="quality-preset-bar" id="qualityPresetBar">
+                <button class="quality-preset-btn active" data-preset="medium" data-fps="30" data-bitrate="4000000" tabindex="0">中画质</button>
+                <button class="quality-preset-btn" data-preset="low" data-fps="15" data-bitrate="1000000" tabindex="-1">低画质</button>
+                <button class="quality-preset-btn" data-preset="high" data-fps="60" data-bitrate="8000000" tabindex="-1">高画质</button>
+            </div>
             <div class="config-grid">
-                <div class="form-group">
-                    <label class="form-label">分辨率</label>
-                    <select class="form-select" id="videoResolution">
-                        <option value="640x480">640x480</option>
-                        <option value="1280x720">1280x720</option>
-                        <option value="1920x1080">1920x1080</option>
-                    </select>
-                </div>
                 <div class="form-group">
                     <label class="form-label">帧率 (FPS)</label>
                     <select class="form-select" id="videoFps">
@@ -121,7 +119,10 @@
                         <option value="15">15</option>
                         <option value="30">30</option>
                         <option value="60">60</option>
+                        <option value="__custom__">自定义...</option>
                     </select>
+                    <input type="number" class="form-input form-custom-input" id="videoFpsCustom"
+                           placeholder="1-120" min="1" max="120" style="display:none; margin-top:6px;">
                 </div>
                 <div class="form-group">
                     <label class="form-label">码率 (bps)</label>
@@ -130,14 +131,10 @@
                         <option value="2000000">2 Mbps</option>
                         <option value="5000000">4 Mbps</option>
                         <option value="8000000">8 Mbps</option>
+                        <option value="__custom__">自定义...</option>
                     </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">视频格式</label>
-                    <select class="form-select" id="videoFormat">
-                        <option value="mjpeg">MJPEG</option>
-                        <option value="yuyv422">YUYV422</option>
-                    </select>
+                    <input type="number" class="form-input form-custom-input" id="videoBitrateCustom"
+                           placeholder="Mbps" min="0.1" max="100" step="0.1" style="display:none; margin-top:6px;">
                 </div>
             </div>
         </div>
@@ -166,6 +163,34 @@
                 <label class="form-label">ICE 服务器配置</label>
                 <div id="dataIceServers"></div>
                 <button class="btn-add" onclick="addDataIceServer()">+ 添加 ICE 服务器</button>
+            </div>
+        </div>
+
+        <!-- Shell 命令连接配置 -->
+        <div class="config-section">
+            <div class="section-title">
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <rect x="2" y="3" width="20" height="18" rx="2" />
+                    <polyline points="6 9 10 13 14 9" />
+                    <line x1="8" y1="17" x2="16" y2="17" />
+                </svg>
+                Shell 命令连接配置
+            </div>
+            <div class="config-grid">
+                <div class="form-group">
+                    <label class="form-label">Signaling 服务器地址</label>
+                    <input type="text" class="form-input" id="cmdSignalingUrl" placeholder="ws://example.com:8000">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">远程设备 ID</label>
+                    <input type="text" class="form-input" id="cmdRemoteId" placeholder="cmd_XXXXX">
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <label class="form-label">ICE 服务器配置</label>
+                <div id="cmdIceServers"></div>
+                <button class="btn-add" onclick="addCmdIceServer()">+ 添加 ICE 服务器</button>
             </div>
         </div>
 
@@ -321,6 +346,132 @@
             document.getElementById('currentConfigName').textContent = name;
         }
 
+        // 自定义输入显隐
+        function configToggleCustomInputs() {
+            const fpsSel = document.getElementById('videoFps');
+            const brSel = document.getElementById('videoBitrate');
+            document.getElementById('videoFpsCustom').style.display = (fpsSel && fpsSel.value == '__custom__') ? 'block' : 'none';
+            document.getElementById('videoBitrateCustom').style.display = (brSel && brSel.value == '__custom__') ? 'block' : 'none';
+        }
+        
+        function configGetFps() {
+            const sel = document.getElementById('videoFps');
+            if (sel && sel.value == '__custom__') {
+                const val = parseInt(document.getElementById('videoFpsCustom').value);
+                return (val > 0 && val <= 120) ? val : 30;
+            }
+            return sel ? parseInt(sel.value) : 30;
+        }
+        
+        function configGetBitrate() {
+            const sel = document.getElementById('videoBitrate');
+            if (sel && sel.value == '__custom__') {
+                const val = parseFloat(document.getElementById('videoBitrateCustom').value);
+                return (val > 0 && val <= 100) ? Math.round(val * 1000000) : 8000000;
+            }
+            return sel ? parseInt(sel.value) : 8000000;
+        }
+        
+        document.getElementById('videoFps').addEventListener('change', configToggleCustomInputs);
+        document.getElementById('videoBitrate').addEventListener('change', configToggleCustomInputs);
+        
+        // ==================== 画质挡位 ====================
+        const qualityPresets = {
+            low:    { fps: 15, bitrate: 1000000, label: '低画质' },
+            medium: { fps: 30, bitrate: 4000000, label: '中画质' },
+            high:   { fps: 60, bitrate: 8000000, label: '高画质' }
+        };
+        const presetOrder = ['medium', 'low', 'high'];  // Tab 切换顺序
+        
+        function applyQualityPreset(presetKey) {
+            const preset = qualityPresets[presetKey];
+            if (!preset) { console.warn('[QualityPreset] unknown preset:', presetKey); return; }
+            console.log('[QualityPreset] applying:', preset.label, preset.fps + 'fps', (preset.bitrate/1000000).toFixed(1)+'Mbps');
+            
+            // 更新 FPS
+            const fpsSel = document.getElementById('videoFps');
+            const presetFpsValues = [10, 15, 30, 60];
+            if (presetFpsValues.includes(preset.fps)) {
+                fpsSel.value = preset.fps.toString();
+            } else {
+                fpsSel.value = '__custom__';
+                document.getElementById('videoFpsCustom').value = preset.fps;
+            }
+            
+            // 更新码率
+            const brSel = document.getElementById('videoBitrate');
+            const presetBrValues = [1000000, 2000000, 5000000, 8000000];
+            if (presetBrValues.includes(preset.bitrate)) {
+                brSel.value = preset.bitrate.toString();
+            } else {
+                brSel.value = '__custom__';
+                document.getElementById('videoBitrateCustom').value = (preset.bitrate / 1000000).toFixed(1);
+            }
+            
+            configToggleCustomInputs();
+            highlightQualityPreset(presetKey);
+            showQualityToast(preset);
+        }
+        
+        function highlightQualityPreset(presetKey) {
+            document.querySelectorAll('.quality-preset-btn').forEach(btn => {
+                const isActive = btn.dataset.preset === presetKey;
+                btn.classList.toggle('active', isActive);
+                btn.tabIndex = isActive ? 0 : -1;
+            });
+        }
+        
+        function getActivePreset() {
+            const activeBtn = document.querySelector('.quality-preset-btn.active');
+            return activeBtn ? activeBtn.dataset.preset : null;
+        }
+        
+        // 点击切换 + V 键监听
+        document.querySelectorAll('.quality-preset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                applyQualityPreset(btn.dataset.preset);
+            });
+        });
+        
+        // 全局 V 键循环切换画质挡位
+        let qualityToastTimer = null;
+        function showQualityToast(preset) {
+            const toast = document.getElementById('qualityToast');
+            if (!toast) { console.warn('qualityToast element not found'); return; }
+            const mbps = (preset.bitrate / 1000000).toFixed(1);
+            toast.innerHTML = `<span class="toast-label">${preset.label}</span><span class="toast-info">${preset.fps}fps · ${mbps}Mbps</span>`;
+            toast.classList.add('show');
+            if (qualityToastTimer) clearTimeout(qualityToastTimer);
+            qualityToastTimer = setTimeout(() => toast.classList.remove('show'), 2000);
+        }
+        
+        document.addEventListener('keydown', (e) => {
+            // e.code 比 e.key 更可靠，避免大小写/布局差异
+            if (e.code !== 'KeyV') return;
+            // 不拦截输入框/下拉框中的按键
+            const el = document.activeElement;
+            if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+            e.preventDefault();
+            console.log('[QualityPreset] V key pressed, cycling preset');
+            const curKey = getActivePreset() || 'medium';
+            const curIdx = presetOrder.indexOf(curKey);
+            const nextIdx = (curIdx + 1) % presetOrder.length;
+            const nextKey = presetOrder[nextIdx];
+            console.log('[QualityPreset] switching from', curKey, 'to', nextKey);
+            applyQualityPreset(nextKey);
+        });
+        
+        // 根据当前 fps/bitrate 匹配画质挡位
+        function matchQualityPreset(fps, bitrate) {
+            for (const [key, preset] of Object.entries(qualityPresets)) {
+                if (preset.fps === fps && preset.bitrate === bitrate) {
+                    return key;
+                }
+            }
+            return null;
+        }
+        // ==================== 画质挡位 END ====================
+        
         // 加载配置到表单
         function loadConfigToForm() {
             const config = ConfigManager.getCurrentConfig();
@@ -337,10 +488,34 @@
 
             // 视频参数配置
             const videoConfig = config.video.videoConfig || {};
-            document.getElementById('videoResolution').value = videoConfig.resolution || '640x480';
-            document.getElementById('videoFps').value = videoConfig.fps || 30;
-            document.getElementById('videoBitrate').value = videoConfig.bitrate || 8000000;
-            document.getElementById('videoFormat').value = videoConfig.format || 'yuyv422';
+            const fpsValue = videoConfig.fps || 30;
+            const bitrateValue = videoConfig.bitrate || 8000000;
+            
+            // 设置FPS（预设或自定义）
+            const fpsSelectEl = document.getElementById('videoFps');
+            const presetFpsValues = [10, 15, 30, 60];
+            if (presetFpsValues.includes(fpsValue)) {
+                fpsSelectEl.value = fpsValue.toString();
+            } else {
+                fpsSelectEl.value = '__custom__';
+                document.getElementById('videoFpsCustom').value = fpsValue;
+            }
+            
+            // 设置码率（预设或自定义）
+            const bitrateSelectEl = document.getElementById('videoBitrate');
+            const presetBitrateValues = [1000000, 2000000, 5000000, 8000000];
+            if (presetBitrateValues.includes(bitrateValue)) {
+                bitrateSelectEl.value = bitrateValue.toString();
+            } else {
+                bitrateSelectEl.value = '__custom__';
+                document.getElementById('videoBitrateCustom').value = (bitrateValue / 1000000).toFixed(1);
+            }
+            
+            configToggleCustomInputs();
+            
+            // 匹配画质挡位高亮
+            const matchedPreset = matchQualityPreset(fpsValue, bitrateValue);
+            highlightQualityPreset(matchedPreset || 'medium');
 
             // 视频 ICE 服务器
             const videoIceContainer = document.getElementById('videoIceServers');
@@ -362,6 +537,21 @@
                 config.data.iceServers.forEach((server, index) => {
                     addIceServerElement(dataIceContainer, server, 'data', index);
                 });
+            }
+
+            // Shell 命令配置
+            if (document.getElementById('cmdSignalingUrl')) {
+                document.getElementById('cmdSignalingUrl').value = config.cmd.signalingUrl || '';
+                document.getElementById('cmdRemoteId').value = config.cmd.remoteId || '';
+
+                // Shell ICE 服务器
+                const cmdIceContainer = document.getElementById('cmdIceServers');
+                cmdIceContainer.innerHTML = '';
+                if (config.cmd.iceServers && config.cmd.iceServers.length > 0) {
+                    config.cmd.iceServers.forEach((server, index) => {
+                        addIceServerElement(cmdIceContainer, server, 'cmd', index);
+                    });
+                }
             }
 
             // 主题配置
@@ -637,6 +827,13 @@
             addIceServerElement(container, { urls: [] }, 'data', index);
         }
 
+        // 添加 Shell 命令 ICE 服务器
+        function addCmdIceServer() {
+            const container = document.getElementById('cmdIceServers');
+            const index = container.children.length;
+            addIceServerElement(container, { urls: [] }, 'cmd', index);
+        }
+
         // 删除 ICE 服务器
         function removeIceServer(type, index) {
             const container = document.getElementById(`${type}IceServers`);
@@ -691,10 +888,8 @@
                     rtcpMuxPolicy: document.getElementById('videoRtcpMuxPolicy').value,
                     encodedInsertableStreams: document.getElementById('videoEncodedInsertableStreams').value === 'true',
                     videoConfig: {
-                        resolution: document.getElementById('videoResolution').value,
-                        fps: parseInt(document.getElementById('videoFps').value),
-                        bitrate: parseInt(document.getElementById('videoBitrate').value),
-                        format: document.getElementById('videoFormat').value
+                        fps: configGetFps(),
+                        bitrate: configGetBitrate()
                     }
                 };
 
@@ -703,6 +898,13 @@
                     signalingUrl: document.getElementById('dataSignalingUrl').value.trim(),
                     remoteId: document.getElementById('dataRemoteId').value.trim(),
                     iceServers: getIceServersFromForm('data')
+                };
+
+                // 收集 Shell 命令配置
+                const cmdConfig = {
+                    signalingUrl: document.getElementById('cmdSignalingUrl').value.trim(),
+                    remoteId: document.getElementById('cmdRemoteId').value.trim(),
+                    iceServers: getIceServersFromForm('cmd')
                 };
 
                 // 收集主题配置
@@ -720,6 +922,7 @@
                 // 更新配置
                 ConfigManager.updateVideoConfig(videoConfig);
                 ConfigManager.updateDataConfig(dataConfig);
+                ConfigManager.updateCmdConfig(cmdConfig);
                 ConfigManager.updateTheme(themeColors);
 
                 showMessage('配置已保存', 'success');
@@ -748,10 +951,8 @@
                     rtcpMuxPolicy: document.getElementById('videoRtcpMuxPolicy').value,
                     encodedInsertableStreams: document.getElementById('videoEncodedInsertableStreams').value === 'true',
                     videoConfig: {
-                        resolution: document.getElementById('videoResolution').value,
                         fps: parseInt(document.getElementById('videoFps').value),
-                        bitrate: parseInt(document.getElementById('videoBitrate').value),
-                        format: document.getElementById('videoFormat').value
+                        bitrate: parseInt(document.getElementById('videoBitrate').value)
                     }
                 };
 
@@ -761,8 +962,15 @@
                     iceServers: getIceServersFromForm('data')
                 };
 
+                const cmdConfig = {
+                    signalingUrl: document.getElementById('cmdSignalingUrl').value.trim(),
+                    remoteId: document.getElementById('cmdRemoteId').value.trim(),
+                    iceServers: getIceServersFromForm('cmd')
+                };
+
                 ConfigManager.updateVideoConfig(videoConfig);
                 ConfigManager.updateDataConfig(dataConfig);
+                ConfigManager.updateCmdConfig(cmdConfig);
 
                 showMessage('配置已应用', 'success');
 

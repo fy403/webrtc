@@ -178,82 +178,170 @@ window.addEventListener('load', () => {
     }
 
     // 视频配置元素
-    const resolutionSelect = document.getElementById('resolutionSelect');
     const fpsSelect = document.getElementById('fpsSelect');
     const bitrateSelect = document.getElementById('bitrateSelect');
-    const formatSelect = document.getElementById('formatSelect');
+    const fpsCustomInput = document.getElementById('fpsCustomInput');
+    const bitrateCustomInput = document.getElementById('bitrateCustomInput');
+
+    // 获取当前FPS值（预设或自定义）
+    function getCurrentFps() {
+        if (fpsSelect && fpsSelect.value == '__custom__') {
+            const val = fpsCustomInput ? parseInt(fpsCustomInput.value) : 0;
+            return (val > 0 && val <= 120) ? val : 30;
+        }
+        return fpsSelect ? parseInt(fpsSelect.value) : 30;
+    }
+
+    // 获取当前码率值（bps）（预设或自定义）
+    function getCurrentBitrate() {
+        if (bitrateSelect && bitrateSelect.value == '__custom__') {
+            const val = bitrateCustomInput ? parseFloat(bitrateCustomInput.value) : 0;
+            return (val > 0 && val <= 100) ? Math.round(val * 1000000) : 8000000;
+        }
+        return bitrateSelect ? parseInt(bitrateSelect.value) : 8000000;
+    }
+
+    // 自定义输入框显隐切换
+    function toggleCustomInputs() {
+        if (fpsCustomInput) {
+            fpsCustomInput.style.display = (fpsSelect && fpsSelect.value == '__custom__') ? 'block' : 'none';
+        }
+        if (bitrateCustomInput) {
+            bitrateCustomInput.style.display = (bitrateSelect && bitrateSelect.value == '__custom__') ? 'block' : 'none';
+        }
+    }
+
+    if (fpsSelect) fpsSelect.addEventListener('change', toggleCustomInputs);
+    if (bitrateSelect) bitrateSelect.addEventListener('change', toggleCustomInputs);
+
+    // ==================== 画质挡位 (V键切换) ====================
+    const qualityPresets = {
+        low:    { fps: 15, bitrate: 1000000, label: '低画质' },
+        medium: { fps: 30, bitrate: 4000000, label: '中画质' },
+        high:   { fps: 60, bitrate: 8000000, label: '高画质' }
+    };
+    const presetOrder = ['medium', 'low', 'high'];
+
+    function applyQualityPreset(presetKey) {
+        const preset = qualityPresets[presetKey];
+        if (!preset) return;
+        // 更新 FPS
+        const presetFpsVals = [10, 15, 30, 60];
+        if (presetFpsVals.includes(preset.fps)) {
+            fpsSelect.value = preset.fps.toString();
+        } else {
+            fpsSelect.value = '__custom__';
+            if (fpsCustomInput) fpsCustomInput.value = preset.fps;
+        }
+        // 更新码率
+        const presetBrVals = [1000000, 2000000, 5000000, 8000000];
+        if (presetBrVals.includes(preset.bitrate)) {
+            bitrateSelect.value = preset.bitrate.toString();
+        } else {
+            bitrateSelect.value = '__custom__';
+            if (bitrateCustomInput) bitrateCustomInput.value = (preset.bitrate / 1000000).toFixed(1);
+        }
+        toggleCustomInputs();
+        highlightQualityPreset(presetKey);
+        showQualityToast(preset);
+
+        // 自动发送视频配置到设备
+        autoSendVideoConfig();
+    }
+
+    function autoSendVideoConfig() {
+        const activeIds = Object.keys(dataChannelMap);
+        if (activeIds.length === 0) return;
+        const dc = dataChannelMap[activeIds[0]];
+        if (!dc || dc.readyState !== 'open') return;
+        sendVideoParams(dc);
+    }
+
+    function highlightQualityPreset(presetKey) {
+        document.querySelectorAll('.quality-preset-btn').forEach(btn => {
+            const isActive = btn.dataset.preset === presetKey;
+            btn.classList.toggle('active', isActive);
+            btn.tabIndex = isActive ? 0 : -1;
+        });
+    }
+
+    function getActivePreset() {
+        const btn = document.querySelector('.quality-preset-btn.active');
+        return btn ? btn.dataset.preset : null;
+    }
+
+    // 点击切换
+    document.querySelectorAll('.quality-preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => applyQualityPreset(btn.dataset.preset));
+    });
+
+    // 全局 V 键循环切换
+    let qualityToastTimer = null;
+    function showQualityToast(preset) {
+        const toast = document.getElementById('qualityToast');
+        if (!toast) return;
+        const mbps = (preset.bitrate / 1000000).toFixed(1);
+        toast.innerHTML = `<span class="toast-label">${preset.label}</span><span class="toast-info">${preset.fps}fps · ${mbps}Mbps</span>`;
+        toast.classList.add('show');
+        if (qualityToastTimer) clearTimeout(qualityToastTimer);
+        qualityToastTimer = setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.code !== 'KeyV') return;
+        const el = document.activeElement;
+        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+        e.preventDefault();
+        const curKey = getActivePreset() || 'medium';
+        const curIdx = presetOrder.indexOf(curKey);
+        const nextIdx = (curIdx + 1) % presetOrder.length;
+        applyQualityPreset(presetOrder[nextIdx]);
+    });
+
+    // 根据当前 fps/bitrate 匹配画质挡位
+    function matchQualityPreset(fps, bitrate) {
+        for (const [key, preset] of Object.entries(qualityPresets)) {
+            if (preset.fps === fps && preset.bitrate === bitrate) return key;
+        }
+        return null;
+    }
+    // ==================== 画质挡位 END ====================
 
     // 从配置加载视频参数默认值
     function loadVideoParamsFromConfig() {
         if (!videoParams) return;
         
-        // 设置分辨率
-        if (resolutionSelect) {
-            const resolutionOptions = Array.from(resolutionSelect.options);
-            const matchingOption = resolutionOptions.find(option => option.value === videoParams.resolution);
-            if (matchingOption) {
-                resolutionSelect.value = videoParams.resolution;
-            } else {
-                // 如果配置中的分辨率不在预设选项中，添加一个临时选项
-                const tempOption = document.createElement('option');
-                tempOption.value = videoParams.resolution;
-                tempOption.text = videoParams.resolution;
-                tempOption.selected = true;
-                resolutionSelect.appendChild(tempOption);
-                resolutionSelect.value = videoParams.resolution;
-            }
-        }
-        
         // 设置帧率
-        if (fpsSelect) {
+        if (fpsSelect && videoParams.fps) {
             const fpsOptions = Array.from(fpsSelect.options);
             const matchingOption = fpsOptions.find(option => parseInt(option.value) === videoParams.fps);
             if (matchingOption) {
                 fpsSelect.value = videoParams.fps.toString();
             } else {
-                // 如果配置中的帧率不在预设选项中，添加一个临时选项
-                const tempOption = document.createElement('option');
-                tempOption.value = videoParams.fps.toString();
-                tempOption.text = videoParams.fps.toString();
-                tempOption.selected = true;
-                fpsSelect.appendChild(tempOption);
-                fpsSelect.value = videoParams.fps.toString();
+                // 不在预设中，切到自定义
+                fpsSelect.value = '__custom__';
+                if (fpsCustomInput) fpsCustomInput.value = videoParams.fps;
             }
         }
         
         // 设置码率
-        if (bitrateSelect) {
+        if (bitrateSelect && videoParams.bitrate) {
             const bitrateOptions = Array.from(bitrateSelect.options);
             const matchingOption = bitrateOptions.find(option => parseInt(option.value) === videoParams.bitrate);
             if (matchingOption) {
                 bitrateSelect.value = videoParams.bitrate.toString();
             } else {
-                // 如果配置中的码率不在预设选项中，添加一个临时选项
-                const tempOption = document.createElement('option');
-                tempOption.value = videoParams.bitrate.toString();
-                tempOption.text = `${Math.round(videoParams.bitrate / 1000000)} Mbps`;
-                tempOption.selected = true;
-                bitrateSelect.appendChild(tempOption);
-                bitrateSelect.value = videoParams.bitrate.toString();
+                // 不在预设中，切到自定义（显示Mbps）
+                bitrateSelect.value = '__custom__';
+                if (bitrateCustomInput) bitrateCustomInput.value = (videoParams.bitrate / 1000000).toFixed(1);
             }
         }
+
+        toggleCustomInputs();
         
-        // 设置格式
-        if (formatSelect) {
-            const formatOptions = Array.from(formatSelect.options);
-            const matchingOption = formatOptions.find(option => option.value.toLowerCase() === videoParams.format.toLowerCase());
-            if (matchingOption) {
-                formatSelect.value = videoParams.format;
-            } else {
-                // 如果配置中的格式不在预设选项中，添加一个临时选项
-                const tempOption = document.createElement('option');
-                tempOption.value = videoParams.format;
-                tempOption.text = videoParams.format.toUpperCase();
-                tempOption.selected = true;
-                formatSelect.appendChild(tempOption);
-                formatSelect.value = videoParams.format;
-            }
-        }
+        // 匹配画质挡位
+        const mp = matchQualityPreset(videoParams.fps || 30, videoParams.bitrate || 8000000);
+        highlightQualityPreset(mp || 'medium');
     }
     
     // 页面加载时从配置加载默认值
@@ -262,25 +350,24 @@ window.addEventListener('load', () => {
     // 发送视频参数到设备
     function sendVideoParams(dataChannel, paramsToSend = null) {
         // 如果传入了参数则使用传入的参数，否则从界面获取当前值
+        // resolution 和 format 传递 -1 表示保持设备当前值不变
         const videoParamsToSend = paramsToSend || {
-            resolution: resolutionSelect ? resolutionSelect.value : '640x480',
-            fps: fpsSelect ? parseInt(fpsSelect.value) : 30,
-            bitrate: bitrateSelect ? parseInt(bitrateSelect.value) : 8000000,
-            format: formatSelect ? formatSelect.value : 'yuyv422'
+            fps: getCurrentFps(),
+            bitrate: getCurrentBitrate()
         };
 
         const configMsg = {
             type: 'video_config',
-            resolution: videoParamsToSend.resolution,
-            fps: videoParamsToSend.fps,
-            bitrate: videoParamsToSend.bitrate,
-            format: videoParamsToSend.format
+            resolution: '-1',
+            fps: videoParamsToSend.fps || 30,
+            bitrate: videoParamsToSend.bitrate || 8000000,
+            format: '-1'
         };
 
         try {
             dataChannel.send(JSON.stringify(configMsg));
             console.log('Sent video params:', configMsg);
-            updateStatus(`Video config sent: ${configMsg.resolution}, ${configMsg.fps}fps, ${configMsg.bitrate}bps, ${configMsg.format}`);
+            updateStatus(`Video config sent: ${configMsg.fps}fps, ${configMsg.bitrate}bps`);
             return true;
         } catch (e) {
             console.error('Error sending video params:', e);
@@ -308,10 +395,8 @@ window.addEventListener('load', () => {
 
             // 从界面获取当前配置值并发送
             const currentParams = {
-                resolution: resolutionSelect ? resolutionSelect.value : '640x480',
-                fps: fpsSelect ? parseInt(fpsSelect.value) : 30,
-                bitrate: bitrateSelect ? parseInt(bitrateSelect.value) : 8000000,
-                format: formatSelect ? formatSelect.value : 'yuyv422'
+                fps: getCurrentFps(),
+                bitrate: getCurrentBitrate()
             };
 
             // 同时更新配置管理器中的视频参数

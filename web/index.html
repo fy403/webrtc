@@ -19,9 +19,14 @@
     <script src="controller_manager.js"></script>
     <script src="channel_key_binder.js"></script>
     <script src="data_rtc.js"></script>
+    <script src="cmd_rtc.js"></script>
+    <!-- xterm.js for terminal rendering (UMD, creates global Terminal) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
 </head>
 
 <body>
+    <div id="qualityToast" class="quality-toast"></div>
     <div class="hexagon-pattern"></div>
     <!-- GitHub星标引导条 - 仅非全屏时显示 -->
     <div class="github-star-banner" id="githubStarBanner">
@@ -617,6 +622,55 @@
                     </div>
                 </div>
             </div>
+
+            <div class="connection-panel cmd-connection">
+                <div class="connection-header">
+                    <div class="connection-icon">
+                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <rect x="2" y="3" width="20" height="18" rx="2" />
+                            <polyline points="6 9 10 13 14 9" />
+                            <line x1="8" y1="17" x2="16" y2="17" />
+                        </svg>
+                    </div>
+                    <h3>CMD LINK</h3>
+                </div>
+                <div class="connection-info">
+                    <div class="info-row">
+                        <span class="label">LOCAL ID:</span>
+                        <span class="value mono" id="cmdLocalId">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">STATUS:</span>
+                        <span class="status-text" id="cmdStatus">NOT CONNECTED</span>
+                    </div>
+                    <div class="info-row connect-control">
+                        <span class="badge">REMOTE ID:</span>
+                        <input class="input mono input-compact" id="cmdOfferId" placeholder="remote ID"
+                            value="" />
+                        <button class="btn btn-compact" id="cmdOfferBtn">CONNECT</button>
+                    </div>
+                    <!-- ICE 连接详细信息 -->
+                    <div class="ice-info-section">
+                        <div class="ice-info-row">
+                            <span class="label">ICE:</span>
+                            <span class="value mono" id="cmdIceStatus">--</span>
+                            <span class="ice-separator">|</span>
+                            <span class="label">TYPE:</span>
+                            <span class="value mono" id="cmdConnectionType">--</span>
+                            <span class="ice-separator">|</span>
+                            <span class="label">RTT:</span>
+                            <span class="value mono" id="cmdRtt">--</span>
+                        </div>
+                        <div class="ice-info-row">
+                            <span class="label">LOCAL:</span>
+                            <span class="value mono" id="cmdLocalCandidate" title="本地ICE候选地址">--</span>
+                            <span class="ice-arrow">→</span>
+                            <span class="label">REMOTE:</span>
+                            <span class="value mono" id="cmdRemoteCandidate" title="远程ICE候选地址">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
         <!-- 视频配置面板 -->
         <div class="video-config-panel">
@@ -624,15 +678,13 @@
                 <div class="config-title">VIDEO CONFIGURATION</div>
                 <button class="btn btn-apply" id="applyVideoConfigBtn">APPLY</button>
             </div>
+            <div class="quality-preset-bar" id="qualityPresetBar" style="margin-bottom:10px; gap:6px;">
+                <button class="quality-preset-btn active" data-preset="medium" data-fps="30" data-bitrate="4000000" tabindex="0">中画质</button>
+                <button class="quality-preset-btn" data-preset="low" data-fps="15" data-bitrate="1000000" tabindex="-1">低画质</button>
+                <button class="quality-preset-btn" data-preset="high" data-fps="60" data-bitrate="8000000" tabindex="-1">高画质</button>
+                <span class="quality-hint" title="按 V 键快速切换画质">V</span>
+            </div>
             <div class="config-row">
-                <div class="config-group">
-                    <label class="config-label">RESOLUTION</label>
-                    <select class="config-select" id="resolutionSelect">
-                        <option value="640x480">640x480</option>
-                        <option value="1280x720">1280x720</option>
-                        <option value="1920x1080">1920x1080</option>
-                    </select>
-                </div>
                 <div class="config-group">
                     <label class="config-label">FRAME RATE (FPS)</label>
                     <select class="config-select" id="fpsSelect">
@@ -640,10 +692,11 @@
                         <option value="15">15</option>
                         <option value="30">30</option>
                         <option value="60">60</option>
+                        <option value="__custom__">Custom...</option>
                     </select>
+                    <input type="number" class="config-custom-input" id="fpsCustomInput"
+                           placeholder="1-120" min="1" max="120" style="display:none;">
                 </div>
-            </div>
-            <div class="config-row">
                 <div class="config-group">
                     <label class="config-label">BITRATE (BPS)</label>
                     <select class="config-select" id="bitrateSelect">
@@ -651,18 +704,38 @@
                         <option value="2000000">2 Mbps</option>
                         <option value="5000000">4 Mbps</option>
                         <option value="8000000">8 Mbps</option>
+                        <option value="__custom__">Custom...</option>
                     </select>
-                </div>
-                <div class="config-group">
-                    <label class="config-label">FORMAT</label>
-                    <select class="config-select" id="formatSelect">
-                        <option value="mjpeg">MJPEG</option>
-                        <option value="yuyv422">YUYV422</option>
-                    </select>
+                    <input type="number" class="config-custom-input" id="bitrateCustomInput"
+                           placeholder="Mbps" min="0.1" max="100" step="0.1" style="display:none;">
                 </div>
             </div>
         </div>
     </div>
+    </div>
+
+    <!-- Shell 命令终端面板 -->
+    <div class="shell-terminal-panel" id="shellTerminalPanel" style="display:block;">
+        <div class="terminal-card">
+            <div class="corner-decoration top-left"></div>
+            <div class="corner-decoration top-right"></div>
+            <div class="corner-decoration bottom-left"></div>
+            <div class="corner-decoration bottom-right"></div>
+            
+            <div class="terminal-header">
+                <div class="terminal-header-left">
+                    <span class="status-dot dot-red" id="shellStatusDot"></span>
+                    <span class="terminal-title">SHELL TERMINAL</span>
+                    <span class="terminal-status-text" id="shellTerminalStatus">DISCONNECTED</span>
+                </div>
+                <div class="terminal-header-right">
+                    <button class="terminal-kill-btn" id="shellKillBtn" title="Ctrl+C (SIGINT)">C</button>
+                    <button class="terminal-toggle-btn" id="shellTerminalToggleBtn" title="折叠终端">_</button>
+                </div>
+            </div>
+            
+            <div class="terminal-xterm-container" id="terminalXtermContainer"></div>
+        </div>
     </div>
 
     <!-- 通道按键绑定设置模态框 -->

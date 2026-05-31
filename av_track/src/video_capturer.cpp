@@ -486,19 +486,57 @@ void VideoCapturer::cleanup_fps_filter() {
   fps_buffer_sink_ = nullptr;
 }
 
+
 void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitrate, const std::string &format) {
   // 使用互斥锁保护reconfigure操作，避免竞态条件
   std::lock_guard<std::mutex> lock(config_mutex_);
 
-  std::cout << "Reconfiguring video capturer..." << std::endl;
+  std::cout << "Reconfiguring video capturer (stability mode)..." << std::endl;
 
-  // 检测是否为模拟摄像头模式 (lavfi)
-  bool is_fake_camera = (device_ == "fake" || device_.substr(0, 5) == "lavfi");
+  // -1/空值表示保持当前值不变
+  if (resolution != "-1" && !resolution.empty()) {
+    resolution_ = resolution;
+    std::cout << "  resolution changed to: " << resolution_ << std::endl;
+  }
+  if (fps != -1) {
+    framerate_ = fps;
+    std::cout << "  fps changed to: " << framerate_ << std::endl;
+  }
+  if (format != "-1" && !format.empty()) {
+    video_format_ = format;
+    std::cout << "  format changed to: " << video_format_ << std::endl;
+  }
+
+  // 如果 fps 和 bitrate 都没变，无需重配置
+  if (fps == -1 && bitrate == -1) {
+    std::cout << "No encoder parameters changed, skipping reconfiguration" << std::endl;
+    return;
+  }
+
+  // 稳定性改进：不关闭/重开采集设备，只重配置编码器和FPS滤镜
+  // 对网络流模式 (UDP) 也不做任何操作，因为没有本地编码器控制
+  if (is_udp_stream_) {
+    std::cout << "UDP stream mode, skipping encoder reconfiguration" << std::endl;
+    return;
+  }
+
+  // 解析当前分辨率获取宽高
+  int width = 640, height = 480;
+  sscanf(resolution_.c_str(), "%dx%d", &width, &height);
+  if (width < height) {
+    std::swap(width, height);
+  }
+
+  int actual_fps = (fps != -1) ? fps : framerate_;
+  int actual_bitrate = (bitrate != -1) ? bitrate : 0;
+
+  std::cout << "Reconfiguring encoder: " << width << "x" << height
+            << " " << actual_fps << "fps " << actual_bitrate << "bps" << std::endl;
 
   // 暂停采集
   pause_capture();
 
-  // 清空队列
+  // 清空队列（帧已被采集但还未处理）
   decode_queue_.clear();
   encode_queue_.clear();
   send_queue_.clear();
@@ -506,176 +544,48 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
   // 关闭旧编码器
   encoder_->close_encoder();
 
-  // 清理旧资源
-  if (sws_context_) {
-    sws_freeContext(sws_context_);
-    sws_context_ = nullptr;
-  }
-
-  if (codec_context_) {
-    avcodec_free_context(&codec_context_);
-    codec_context_ = nullptr;
-  }
-
-  if (format_context_) {
-    avformat_close_input(&format_context_);
-    format_context_ = nullptr;
-  }
-
-  // 清空帧池
-  clear_frame_pool();
-
-  // 更新参数
-  resolution_ = resolution;
-  framerate_ = fps;
-  video_format_ = format;
-
-  // 重新打开输入设备
-  if (is_fake_camera) {
-    // lavfi 模拟摄像头模式
-    std::cout << "Reconfiguring lavfi fake camera..." << std::endl;
-
-    // 解析分辨率
-    int width = 640, height = 480;
-    sscanf(resolution_.c_str(), "%dx%d", &width, &height);
-    std::cout << "New resolution: " << width << "x" << height << std::endl;
-
-    // 重新构建 lavfi 描述符
-    char lavfi_desc[256];
-    snprintf(lavfi_desc, sizeof(lavfi_desc),
-             "testsrc=size=%dx%d:rate=%d,"
-             "format=pix_fmts=yuv420p",
-             width, height, framerate_);
-
-    std::cout << "New lavfi desc: " << lavfi_desc << std::endl;
-
-    AVDictionary *options = nullptr;
-    av_dict_set(&options, "format_name", "lavfi", 0);
-
-    int ret = avformat_open_input(&format_context_, lavfi_desc,
-                                  av_find_input_format("lavfi"), &options);
-    if (ret < 0) {
-      std::cerr << "Cannot open lavfi device: " << av_error_string(ret) << std::endl;
-      return;
-    }
-  } else {
-    // 真实摄像头或网络流模式
-    const AVInputFormat *input_format = nullptr;
-    if (is_udp_stream_) {
-      // 网络流模式：不需要指定输入格式
-      std::cout << "Reconfiguring network stream..." << std::endl;
-    } else {
-      // V4L2 摄像头模式
-      input_format = av_find_input_format("v4l2");
-      if (!input_format) {
-        std::cerr << "Cannot find V4L2 input format" << std::endl;
-        return;
-      }
-    }
-
-    std::string device_path = device_;
-
-    // 解析分辨率
-    int width = 640, height = 480;
-    sscanf(resolution_.c_str(), "%dx%d", &width, &height);
-    if (width < height) {
-      resolution_ = std::to_string(height) + "x" + std::to_string(width);
-    }
-
-    AVDictionary *options = nullptr;
-
-    if (!is_udp_stream_) {
-      // 摄像头模式：设置视频参数
-      av_dict_set(&options, "video_size", resolution_.c_str(), 0);
-      av_dict_set(&options, "framerate", std::to_string(framerate_).c_str(), 0);
-      if (!video_format_.empty()) {
-        av_dict_set(&options, "input_format", video_format_.c_str(), 0);
-        std::cout << "Using video input format: " << video_format_ << std::endl;
-      } else {
-        std::cout << "Using video input format: auto-detect" << std::endl;
-      }
-    }
-
-    int ret = avformat_open_input(&format_context_, device_path.c_str(),
-                                  input_format, &options);
-    if (ret < 0) {
-      std::cerr << "Cannot open video device: " << av_error_string(ret) << std::endl;
-      return;
-    }
-  }
-
-  // 查找流信息
-  int ret = avformat_find_stream_info(format_context_, nullptr);
-  if (ret < 0) {
-    std::cerr << "Cannot find stream info: " << av_error_string(ret) << std::endl;
+  // 使用新参数重新打开编码器
+  if (!encoder_->open_encoder(width, height, actual_fps, actual_bitrate, profile_)) {
+    std::cerr << "Failed to reconfigure encoder" << std::endl;
+    resume_capture();
     return;
   }
 
-  video_stream_index_ = -1;
-  for (unsigned int i = 0; i < format_context_->nb_streams; i++) {
-    if (format_context_->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
-      video_stream_index_ = i;
-      break;
-    }
-  }
-
-  if (video_stream_index_ == -1) {
-    std::cerr << "Cannot find video stream" << std::endl;
+  // 更新编码器输出参数（SwsContext可能在分辨率不变时不需要重建）
+  AVCodecContext *encoder_context = encoder_->get_context();
+  if (!encoder_context) {
+    std::cerr << "Encoder context is null after reconfiguration" << std::endl;
+    resume_capture();
     return;
   }
 
-  // 如果不是网络流，需要重新配置解码器和编码器
-  if (!is_udp_stream_) {
-    AVCodecParameters *codec_params = format_context_->streams[video_stream_index_]->codecpar;
-    const AVCodec *codec = avcodec_find_decoder(codec_params->codec_id);
-    if (!codec) {
-      std::cerr << "Cannot find decoder" << std::endl;
-      return;
+  bool resolution_changed = (encoder_out_width_ != encoder_context->width ||
+                             encoder_out_height_ != encoder_context->height ||
+                             encoder_out_pix_fmt_ != encoder_context->pix_fmt);
+  encoder_out_width_ = encoder_context->width;
+  encoder_out_height_ = encoder_context->height;
+  encoder_out_pix_fmt_ = encoder_context->pix_fmt;
+
+  if (resolution_changed && codec_context_) {
+    // 只有在分辨率变化时才重建 SwsContext
+    if (sws_context_) {
+      sws_freeContext(sws_context_);
+      sws_context_ = nullptr;
     }
-
-    codec_context_ = avcodec_alloc_context3(codec);
-    avcodec_parameters_to_context(codec_context_, codec_params);
-
-    ret = avcodec_open2(codec_context_, codec, nullptr);
-    if (ret < 0) {
-      std::cerr << "Cannot open codec: " << av_error_string(ret) << std::endl;
-      return;
-    }
-
-    codec_context_->thread_count = 2;
-
-    // 解析分辨率
-    int width = 640, height = 480;
-    sscanf(resolution_.c_str(), "%dx%d", &width, &height);
-
-    // 使用新参数配置编码器（传入当前 profile）
-    if (!encoder_->open_encoder(width, height, fps, bitrate, profile_)) {
-      std::cerr << "Failed to reconfigure encoder" << std::endl;
-      return;
-    }
-
-    AVCodecContext *encoder_context = encoder_->get_context();
-    if (!encoder_context) {
-      std::cerr << "Encoder context is null after reconfiguration" << std::endl;
-      return;
-    }
-    encoder_out_width_ = encoder_context->width;
-    encoder_out_height_ = encoder_context->height;
-    encoder_out_pix_fmt_ = encoder_context->pix_fmt;
-
-    // 重新创建 SwsContext
     sws_context_ = sws_getContext(
         codec_context_->width, codec_context_->height, codec_context_->pix_fmt,
         encoder_out_width_, encoder_out_height_, encoder_out_pix_fmt_,
         SWS_BILINEAR, nullptr, nullptr, nullptr);
-
     if (!sws_context_) {
       std::cerr << "Cannot recreate SwsContext after reconfigure" << std::endl;
+      resume_capture();
       return;
     }
+  }
 
-    // 重新初始化 FPS 滤镜
-    if (!init_fps_filter(encoder_out_width_, encoder_out_height_, fps)) {
+  // 重新初始化 FPS 滤镜
+  if (fps != -1) {
+    if (!init_fps_filter(encoder_out_width_, encoder_out_height_, actual_fps)) {
       std::cout << "Warning: FPS filter re-init failed, using raw framerate" << std::endl;
     }
   }
@@ -683,7 +593,7 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
   // 恢复采集
   resume_capture();
 
-  std::cout << "Video capturer reconfigured successfully" << std::endl;
+  std::cout << "Video capturer reconfigured successfully (stability mode)" << std::endl;
 }
 
 void VideoCapturer::capture_loop() {

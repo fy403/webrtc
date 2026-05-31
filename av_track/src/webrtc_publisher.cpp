@@ -320,13 +320,17 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
               std::cout << "Received video config from " << id << std::endl;
 
               if (video_capturer_) {
-                std::string resolution = msg.value("resolution", "640x480");
-                int fps = msg.value("fps", 30);
-                int bitrate = msg.value("bitrate", 3200000);
-                std::string format = msg.value("format", "yuyv422");
+                std::string resolution = msg.value("resolution", "-1");
+                int fps = msg.value("fps", -1);
+                int bitrate = msg.value("bitrate", -1);
+                std::string format = msg.value("format", "-1");
 
-                std::cout << "Video config: " << resolution << ", " << fps
-                          << "fps, " << bitrate << "bps, " << format << std::endl;
+                std::cout << "Video config: ";
+                if (resolution != "-1") std::cout << resolution << ", ";
+                if (fps != -1) std::cout << fps << "fps, ";
+                if (bitrate != -1) std::cout << bitrate << "bps, ";
+                if (format != "-1") std::cout << format;
+                std::cout << std::endl;
 
                 // 调用视频配置重置方法
                 video_capturer_->reconfigure(resolution, fps, bitrate, format);

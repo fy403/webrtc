@@ -21,16 +21,29 @@ const ConfigManager = {
             encodedInsertableStreams: false,
             // 视频参数配置
             videoConfig: {
-                resolution: '640x480',
                 fps: 30,
-                bitrate: 8000000,
-                format: 'yuyv422'
+                bitrate: 8000000
             }
         },
         // 数据连接配置
         data: {
             signalingUrl: 'ws://fy403.cn:8000',
             remoteId: 'data_Dd8fgkoKo90',
+            iceServers: [
+                {
+                    urls: ['stun:stun.l.google.com:19302']
+                },
+                {
+                    urls: ['turn:tx.fy403.cn:3478?transport=udp'],
+                    username: 'fy403',
+                    credential: 'qwertyuiop'
+                }
+            ]
+        },
+        // Shell 命令连接配置
+        cmd: {
+            signalingUrl: 'ws://fy403.cn:8000',
+            remoteId: 'cmd_Ab1cD2eF3g',
             iceServers: [
                 {
                     urls: ['stun:stun.l.google.com:19302']
@@ -107,6 +120,14 @@ const ConfigManager = {
             const configsJson = localStorage.getItem('webrtc_configs');
             if (configsJson) {
                 this.configs = JSON.parse(configsJson);
+                // Migrate: ensure all configs have cmd field
+                Object.keys(this.configs).forEach(name => {
+                    if (!this.configs[name].cmd) {
+                        this.configs[name].cmd = JSON.parse(
+                            JSON.stringify(this.defaultConfigTemplate.cmd)
+                        );
+                    }
+                });
             }
             const currentName = localStorage.getItem('webrtc_current_config');
             if (currentName) {
@@ -248,6 +269,7 @@ const ConfigManager = {
         const defaultTemplate = JSON.parse(JSON.stringify(this.defaultConfigTemplate));
         config.video = defaultTemplate.video;
         config.data = defaultTemplate.data;
+        config.cmd = defaultTemplate.cmd;
         config.updatedAt = new Date().toISOString();
         this.saveConfigs();
         return config;
@@ -293,6 +315,17 @@ const ConfigManager = {
         return config ? config.data : null;
     },
 
+    // 获取Shell命令配置
+    getCmdConfig() {
+        const config = this.getCurrentConfig();
+        if (!config) return null;
+        // Ensure cmd field exists (for configs loaded before migration)
+        if (!config.cmd) {
+            config.cmd = JSON.parse(JSON.stringify(this.defaultConfigTemplate.cmd));
+        }
+        return config.cmd;
+    },
+
     // 更新视频配置
     updateVideoConfig(newConfig) {
         const config = this.getCurrentConfig();
@@ -332,6 +365,22 @@ const ConfigManager = {
         }
         Object.assign(this.getCurrentConfig().data, newConfig);
         this.getCurrentConfig().updatedAt = new Date().toISOString();
+        return this.saveConfigs();
+    },
+
+    // 更新Shell命令配置
+    updateCmdConfig(newConfig) {
+        let config = this.getCurrentConfig();
+        if (!config) {
+            this.init();
+            config = this.getCurrentConfig();
+        }
+        // Ensure cmd field exists (for configs created before cmd was added)
+        if (!config.cmd) {
+            config.cmd = JSON.parse(JSON.stringify(this.defaultConfigTemplate.cmd));
+        }
+        Object.assign(config.cmd, newConfig);
+        config.updatedAt = new Date().toISOString();
         return this.saveConfigs();
     },
 
