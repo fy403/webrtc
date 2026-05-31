@@ -26,7 +26,6 @@
 </head>
 
 <body>
-    <div id="qualityToast" class="quality-toast"></div>
     <div class="hexagon-pattern"></div>
     <!-- GitHub星标引导条 - 仅非全屏时显示 -->
     <div class="github-star-banner" id="githubStarBanner">
@@ -370,6 +369,8 @@
                             <div class="clock-sync">本时间同步国家授时中心精确到毫秒</div>
                             <div class="clock-time" id="clockTime"><span id="clockTimeMain"></span><span class="clock-ms">.<span id="clockMs"></span></span></div>
                         </div>
+                        <!-- 画质切换提示（inside video-container, visible in fullscreen） -->
+                        <div id="qualityToast" class="quality-toast"></div>
                     </div>
                 </div>
             </div>
@@ -893,7 +894,7 @@
             const rotateBtn = document.getElementById('rotateBtn');
             const remoteVideo = document.getElementById('remoteVideo');
             const videoContainer = document.querySelector('.video-container');
-            const ROTATION_COOKIE = 'video_rotation';
+            const ROTATION_KEY = 'video_rotation_angle';
             const ROTATION_ANGLES = [0, 90, 180, 270];
             let currentRotationIndex = 0;
 
@@ -921,8 +922,8 @@
                 }
             }
 
-            // 页面加载时从 cookie 恢复旋转状态
-            const savedRotation = getCookie(ROTATION_COOKIE);
+            // 页面加载时从 localStorage 恢复旋转状态
+            const savedRotation = localStorage.getItem(ROTATION_KEY);
             let initialAngle = 0;
             if (savedRotation !== null) {
                 initialAngle = parseInt(savedRotation, 10);
@@ -940,7 +941,7 @@
                     currentRotationIndex = (currentRotationIndex + 1) % ROTATION_ANGLES.length;
                     const angle = ROTATION_ANGLES[currentRotationIndex];
                     applyRotation(angle);
-                    setCookie(ROTATION_COOKIE, angle.toString(), 365);
+                    localStorage.setItem(ROTATION_KEY, angle.toString());
                 });
             }
 

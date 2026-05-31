@@ -85,3 +85,4 @@ docker run -d \
 echo ""
 echo "Container $CONTAINER_NAME started"
 echo "View logs: docker logs -f $CONTAINER_NAME"
+docker logs -f $CONTAINER_NAME

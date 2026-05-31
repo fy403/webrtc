@@ -82,9 +82,10 @@ docker run -d \
   -v "$CONFIG_DIR:/app/config" \
   --network $NETWORK_MODE \
   $IMAGE_NAME \
-  ./docker-entrypoint.sh "/app/config/$CONFIG_FILENAME"
+  "/app/config/$CONFIG_FILENAME"
 
 # Show running containers
 echo ""
 echo "Container $CONTAINER_NAME started"
 echo "View logs: docker logs -f $CONTAINER_NAME"
+docker logs -f $CONTAINER_NAME

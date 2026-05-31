@@ -1,0 +1,19 @@
+[Unit]
+Description=CMD Track RTC Service with Health Checks
+After=network.target
+Wants=network.target
+Requires=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/pi/cmd_track
+ExecStart=/home/pi/cmd_track/cmd_track_rtc.sh
+Restart=always
+RestartSec=1
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cmd-track-rtc
+
+[Install]
+WantedBy=multi-user.target

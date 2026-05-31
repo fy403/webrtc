@@ -334,9 +334,6 @@ window.addEventListener('load', () => {
                 cmdUpdateConnectionInfo(cmdCurrentPeerConnection);
             }
 
-            // Focus terminal on connect
-            setTimeout(() => { try { term.focus(); } catch (e) {} }, 200);
-
             // Fit terminal after connection
             if (fitAddon) {
                 setTimeout(() => { try { fitAddon.fit(); } catch (e) {} }, 300);
@@ -595,9 +592,6 @@ window.addEventListener('load', () => {
     term.writeln('\x1b[32m║   Support: htop, vim, tmux, bash, ...   ║\x1b[0m');
     term.writeln('\x1b[32m╚══════════════════════════════════════════╝\x1b[0m');
     term.writeln('\x1b[36mWaiting for WebRTC connection...\x1b[0m');
-
-    // Focus terminal on load
-    setTimeout(() => { try { term.focus(); } catch (e) {} }, 600);
 
     // Terminal card click → focus
     const terminalCard = document.querySelector('.terminal-card');

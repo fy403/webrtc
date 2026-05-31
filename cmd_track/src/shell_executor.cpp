@@ -41,6 +41,13 @@ ShellSession::ShellSession(int rows, int cols,
 
     if (pid == 0) {
         // ── child process ──────────────────────────────────────────
+        // Chroot into host filesystem so shell runs natively on host
+        if (chroot("/host") == 0) {
+            chdir("/");
+        } else {
+            perror("[ShellSession] chroot(/host) failed, falling back to container root");
+        }
+
         // Set up environment
         const char* term = getenv("TERM");
         if (!term || term[0] == '\0') {

@@ -20,7 +20,7 @@ turnPass=qwertyuiop               # TURN服务器密码
 # =============================================================================
 usbDevice=/dev/ttyUSB0            # 电机驱动板串口设备
 ttyBaudrate=115200                # 串口波特率
-motorDriverType=pwm               # 电机驱动类型：uart 或 crsf 或 pwm 或 dummy(调试用)
+motorDriverType=dummy               # 电机驱动类型：uart 或 crsf 或 pwm 或 dummy(调试用)
 
 # =============================================================================
 # GSM Module Configuration (4G模块配置)
