@@ -376,13 +376,67 @@
         document.getElementById('videoBitrate').addEventListener('change', configToggleCustomInputs);
         
         // ==================== 画质挡位 ====================
-        const qualityPresets = {
+        const PRESETS_KEY = 'webrtc_quality_presets';
+        const defaultPresets = {
             low:    { fps: 15, bitrate: 1000000, label: '低画质' },
             medium: { fps: 30, bitrate: 4000000, label: '中画质' },
             high:   { fps: 60, bitrate: 8000000, label: '高画质' }
         };
+
+        // 从 localStorage 恢复用户之前保存的 preset 值
+        let qualityPresets = {};
+        try {
+            const saved = localStorage.getItem(PRESETS_KEY);
+            qualityPresets = saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(defaultPresets));
+        } catch (e) {
+            qualityPresets = JSON.parse(JSON.stringify(defaultPresets));
+        }
+
         const presetOrder = ['medium', 'low', 'high'];  // Tab 切换顺序
-        
+
+        // 加载后将 preset 值同步到按钮 data 属性
+        function applyPresetsToButtons() {
+            presetOrder.forEach(key => {
+                const btn = document.querySelector(`.quality-preset-btn[data-preset="${key}"]`);
+                if (btn && qualityPresets[key]) {
+                    btn.dataset.fps = qualityPresets[key].fps;
+                    btn.dataset.bitrate = qualityPresets[key].bitrate;
+                    btn.textContent = qualityPresets[key].label;
+                }
+            });
+        }
+
+        // 保存后将当前画质值持久化到当前激活的 preset 和 localStorage
+        function persistPresetAfterSave(fps, bitrate) {
+            // 优先更新当前高亮的 preset（用户选中的那个）
+            const active = getActivePreset();
+            if (active && qualityPresets[active]) {
+                qualityPresets[active].fps = fps;
+                qualityPresets[active].bitrate = bitrate;
+            } else {
+                // fallback: 更新匹配的 preset
+                const matched = matchQualityPreset(fps, bitrate);
+                if (matched) {
+                    qualityPresets[matched].fps = fps;
+                    qualityPresets[matched].bitrate = bitrate;
+                }
+            }
+            // 持久化到 localStorage
+            localStorage.setItem(PRESETS_KEY, JSON.stringify(qualityPresets));
+            // 同步按钮显示
+            applyPresetsToButtons();
+        }
+
+        // 将已保存的 fps/bitrate 同步回 preset（页面加载时用）
+        function syncPresetsFromSavedConfig(fps, bitrate) {
+            const matched = matchQualityPreset(fps, bitrate);
+            if (matched) {
+                qualityPresets[matched].fps = fps;
+                qualityPresets[matched].bitrate = bitrate;
+                localStorage.setItem(PRESETS_KEY, JSON.stringify(qualityPresets));
+            }
+        }
+
         function applyQualityPreset(presetKey) {
             const preset = qualityPresets[presetKey];
             if (!preset) { console.warn('[QualityPreset] unknown preset:', presetKey); return; }
@@ -513,9 +567,10 @@
             
             configToggleCustomInputs();
             
-            // 匹配画质挡位高亮
+            // 同步画质挡位：用已保存的配置更新 preset 值，不写死
+            syncPresetsFromSavedConfig(fpsValue, bitrateValue);
             const matchedPreset = matchQualityPreset(fpsValue, bitrateValue);
-            highlightQualityPreset(matchedPreset || 'medium');
+            highlightQualityPreset(matchedPreset);  // 无匹配时不高亮 fake preset
 
             // 视频 ICE 服务器
             const videoIceContainer = document.getElementById('videoIceServers');
@@ -893,6 +948,9 @@
                     }
                 };
 
+                // 持久化画质挡位值回 preset（不写死）
+                persistPresetAfterSave(videoConfig.videoConfig.fps, videoConfig.videoConfig.bitrate);
+
                 // 收集数据配置
                 const dataConfig = {
                     signalingUrl: document.getElementById('dataSignalingUrl').value.trim(),
@@ -951,10 +1009,13 @@
                     rtcpMuxPolicy: document.getElementById('videoRtcpMuxPolicy').value,
                     encodedInsertableStreams: document.getElementById('videoEncodedInsertableStreams').value === 'true',
                     videoConfig: {
-                        fps: parseInt(document.getElementById('videoFps').value),
-                        bitrate: parseInt(document.getElementById('videoBitrate').value)
+                        fps: configGetFps(),
+                        bitrate: configGetBitrate()
                     }
                 };
+
+                // 持久化画质挡位值回 preset
+                persistPresetAfterSave(videoConfig.videoConfig.fps, videoConfig.videoConfig.bitrate);
 
                 const dataConfig = {
                     signalingUrl: document.getElementById('dataSignalingUrl').value.trim(),
@@ -1002,6 +1063,8 @@
             ConfigManager.init();
             renderConfigList();
             loadConfigToForm();
+            // 从 localStorage 恢复用户保存的 preset 值到按钮
+            applyPresetsToButtons();
         });
     </script>
 </body>

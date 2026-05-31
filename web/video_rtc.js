@@ -215,12 +215,34 @@ window.addEventListener('load', () => {
     if (bitrateSelect) bitrateSelect.addEventListener('change', toggleCustomInputs);
 
     // ==================== 画质挡位 (V键切换) ====================
-    const qualityPresets = {
+    const PRESETS_KEY = 'webrtc_quality_presets';
+    const defaultPresets = {
         low:    { fps: 15, bitrate: 1000000, label: '低画质' },
         medium: { fps: 30, bitrate: 4000000, label: '中画质' },
         high:   { fps: 60, bitrate: 8000000, label: '高画质' }
     };
+    // 从 localStorage 同步 config 中用户保存的 preset 值
+    let qualityPresets;
+    try {
+        const saved = localStorage.getItem(PRESETS_KEY);
+        qualityPresets = saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(defaultPresets));
+    } catch (e) {
+        qualityPresets = JSON.parse(JSON.stringify(defaultPresets));
+    }
     const presetOrder = ['medium', 'low', 'high'];
+
+    // 同步 preset 值到按钮 data 属性和文字
+    function syncPresetButtons() {
+        presetOrder.forEach(key => {
+            const btn = document.querySelector(`.quality-preset-btn[data-preset="${key}"]`);
+            if (btn && qualityPresets[key]) {
+                btn.dataset.fps = qualityPresets[key].fps;
+                btn.dataset.bitrate = qualityPresets[key].bitrate;
+                btn.textContent = qualityPresets[key].label;
+            }
+        });
+    }
+    syncPresetButtons();
 
     function applyQualityPreset(presetKey) {
         const preset = qualityPresets[presetKey];
@@ -341,7 +363,7 @@ window.addEventListener('load', () => {
         
         // 匹配画质挡位
         const mp = matchQualityPreset(videoParams.fps || 30, videoParams.bitrate || 8000000);
-        highlightQualityPreset(mp || 'medium');
+        highlightQualityPreset(mp);  // 无匹配不高亮假 preset
     }
     
     // 页面加载时从配置加载默认值
@@ -399,10 +421,7 @@ window.addEventListener('load', () => {
                 bitrate: getCurrentBitrate()
             };
 
-            // 同时更新配置管理器中的视频参数
-            ConfigManager.updateVideoParams(currentParams);
-
-            // 发送配置到设备
+            // 发送配置到设备（index.html 不持久化，配置由 config.html 管理）
             sendVideoParams(dc, currentParams);
         });
     }
