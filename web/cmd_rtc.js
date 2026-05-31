@@ -176,23 +176,69 @@ window.addEventListener('load', () => {
     function cmdUpdateConnectionInfo(pc) {
         if (!pc) return;
         if (cmdIceStatusEl) cmdIceStatusEl.textContent = pc.iceConnectionState || '--';
-        pc.getStats(null).then(stats => {
-            stats.forEach(report => {
-                if (report.type === 'candidate-pair' && report.nominated) {
-                    if (cmdConnectionTypeEl) cmdConnectionTypeEl.textContent = report.localCandidateType || '--';
-                    if (cmdLocalCandEl) {
-                        const addr = report.localAddress || (report.localCandidateId || '--');
-                        cmdLocalCandEl.textContent = addr;
-                        cmdLocalCandEl.title = addr;
+
+        if (pc.connectionState === 'connected' ||
+            pc.iceConnectionState === 'connected' ||
+            pc.iceConnectionState === 'completed') {
+            pc.getStats().then(stats => {
+                let foundPair = false;
+                stats.forEach(report => {
+                    if (report.type === 'candidate-pair' &&
+                        (report.selected || report.state === 'succeeded')) {
+                        foundPair = true;
+                        const localCand = stats.get(report.localCandidateId);
+                        const remoteCand = stats.get(report.remoteCandidateId);
+
+                        if (localCand && remoteCand) {
+                            // Connection type
+                            const localType = localCand.candidateType || 'unknown';
+                            if (cmdConnectionTypeEl) {
+                                cmdConnectionTypeEl.textContent =
+                                    localType === 'relay' ? 'TURN' : 'P2P';
+                                cmdConnectionTypeEl.style.color =
+                                    localType === 'relay' ? '#FFA500' : '#32CD32';
+                            }
+
+                            // RTT
+                            const rttMs = report.currentRoundTripTime
+                                ? (report.currentRoundTripTime * 1000).toFixed(0) + ' ms' : '--';
+                            if (cmdRttEl) cmdRttEl.textContent = rttMs;
+
+                            // Local IP
+                            const localAddr = localCand.address
+                                || localCand.ip || localCand.ipAddress || '--';
+                            const localPort = localCand.port || '';
+                            if (cmdLocalCandEl) {
+                                cmdLocalCandEl.textContent = localPort
+                                    ? `${localAddr}:${localPort}` : localAddr;
+                                cmdLocalCandEl.title =
+                                    `Type: ${localType}\n` +
+                                    `Protocol: ${localCand.protocol || '--'}\n` +
+                                    `Priority: ${localCand.priority || '--'}`;
+                            }
+
+                            // Remote IP
+                            const remoteAddr = remoteCand.address
+                                || remoteCand.ip || remoteCand.ipAddress || '--';
+                            const remotePort = remoteCand.port || '';
+                            if (cmdRemoteCandEl) {
+                                cmdRemoteCandEl.textContent = remotePort
+                                    ? `${remoteAddr}:${remotePort}` : remoteAddr;
+                                cmdRemoteCandEl.title =
+                                    `Type: ${remoteCand.candidateType || 'unknown'}\n` +
+                                    `Protocol: ${remoteCand.protocol || '--'}\n` +
+                                    `Priority: ${remoteCand.priority || '--'}`;
+                            }
+                        }
                     }
-                    if (cmdRemoteCandEl) {
-                        const addr = report.remoteAddress || (report.remoteCandidateId || '--');
-                        cmdRemoteCandEl.textContent = addr;
-                        cmdRemoteCandEl.title = addr;
-                    }
+                });
+                if (!foundPair) {
+                    console.warn('[CMD] No selected ICE candidate pair found');
                 }
+            }).catch(err => {
+                console.warn('[CMD] Failed to get ICE stats:', err);
             });
-        }).catch(() => {});
+        }
     }
 
     // RTT measurement
