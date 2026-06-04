@@ -10,7 +10,7 @@
 #include <sys/time.h>
 
 GPSNMEAMonitor::GPSNMEAMonitor()
-    : serial_fd_(-1), device_("/dev/ttyUSB1"), baudrate_(115200),
+    : serial_fd_(-1), device_("/dev/ttyS5"), baudrate_(38400),
       initialized_(false), running_(false)
 {
 }
@@ -221,28 +221,29 @@ void GPSNMEAMonitor::parseNMEA(const std::string &nmea)
         return;
     }
 
-    // 提取语句类型 (例如: $GPGGA, $GPRMC, $GPVTG, $GPGSA, $GPGSV)
+    // 提取语句类型 (NMEA格式: $TTSSS, TT=Talker ID, SSS=Sentence Type)
+    // 支持: GP(GPS), BD(BeiDou), GN(Multi-constellation), GL(GLONASS), GA(Galileo), GQ(QZSS), GB(BDS)
     if (nmea.length() >= 6)
     {
-        std::string sentence_type = nmea.substr(0, 6);
+        std::string sentence_id = nmea.substr(3, 3);  // 提取后3位语句类型
 
-        if (sentence_type == "$GPGGA" || sentence_type == "$BDGGA")
+        if (sentence_id == "GGA")
         {
             latest_gga_ = nmea;
         }
-        else if (sentence_type == "$GPRMC" || sentence_type == "$BDRMC")
+        else if (sentence_id == "RMC")
         {
             latest_rmc_ = nmea;
         }
-        else if (sentence_type == "$GPVTG" || sentence_type == "$BDVTG")
+        else if (sentence_id == "VTG")
         {
             latest_vtg_ = nmea;
         }
-        else if (sentence_type == "$GPGSA" || sentence_type == "$BDGSA")
+        else if (sentence_id == "GSA")
         {
             latest_gsa_ = nmea;
         }
-        else if (sentence_type == "$GPGSV" || sentence_type == "$BDGSV")
+        else if (sentence_id == "GSV")
         {
             latest_gsv_ = nmea;
         }
@@ -365,9 +366,9 @@ bool GPSNMEAMonitor::parseGGA(const std::string &gga, std::string &time, float &
     }
 
     time = fields[1];
-    latitude = fields[2].empty() ? 0.0f : std::stof(fields[2]);
+    latitude = fields[2].empty() ? 0.0f : nmeaToDecimal(std::stof(fields[2]));
     lat_dir = fields[3].empty() ? 'N' : fields[3][0];
-    longitude = fields[4].empty() ? 0.0f : std::stof(fields[4]);
+    longitude = fields[4].empty() ? 0.0f : nmeaToDecimal(std::stof(fields[4]));
     lon_dir = fields[5].empty() ? 'E' : fields[5][0];
     quality = fields[6].empty() ? 0 : std::stoi(fields[6]);
     satellites = fields[7].empty() ? 0 : std::stoi(fields[7]);
@@ -402,9 +403,9 @@ bool GPSNMEAMonitor::parseRMC(const std::string &rmc, std::string &time, std::st
     }
 
     time = fields[1];
-    latitude = fields[3].empty() ? 0.0f : std::stof(fields[3]);
+    latitude = fields[3].empty() ? 0.0f : nmeaToDecimal(std::stof(fields[3]));
     lat_dir = fields[4].empty() ? 'N' : fields[4][0];
-    longitude = fields[5].empty() ? 0.0f : std::stof(fields[5]);
+    longitude = fields[5].empty() ? 0.0f : nmeaToDecimal(std::stof(fields[5]));
     lon_dir = fields[6].empty() ? 'E' : fields[6][0];
     speed_knots = fields[7].empty() ? 0.0f : std::stof(fields[7]);
     course = fields[8].empty() ? 0.0f : std::stof(fields[8]);
@@ -501,6 +502,20 @@ bool GPSNMEAMonitor::parseGSV(const std::string &gsv, int &total_msgs, int &msg_
     total_sats = fields[3].empty() ? 0 : std::stoi(fields[3]);
 
     return true;
+}
+
+/**
+ * 将 NMEA 坐标格式 (DDMM.MMMM 或 DDDMM.MMMM) 转换为十进制角度
+ * 例如: 2233.8 → 22 + 33.8/60 = 22.5633
+ *       11353.3 → 113 + 53.3/60 = 113.8883
+ */
+float GPSNMEAMonitor::nmeaToDecimal(float nmea_value)
+{
+    if (nmea_value <= 0.0f)
+        return 0.0f;
+    int degrees = static_cast<int>(nmea_value / 100.0f);
+    float minutes = nmea_value - degrees * 100.0f;
+    return degrees + minutes / 60.0f;
 }
 
 int GPSNMEAMonitor::baudrateToConstant(int baudrate)

@@ -55,29 +55,39 @@
 
                     <!-- 左上角 - GPS雷达圆圈和音频状态指示器 -->
                     <div class="top-left-indicators">
-                        <!-- GPS雷达圆圈 -->
-                        <div class="gps-radar" id="gpsRadar" title="GPS方位">
-                            <svg class="radar-svg" viewBox="0 0 80 80">
-                                <!-- 雷达圆圈背景 -->
-                                <circle class="radar-circle-outer" cx="40" cy="40" r="35" fill="none" stroke="rgba(0, 165, 0, 0.3)" stroke-width="1"/>
-                                <circle class="radar-circle-middle" cx="40" cy="40" r="25" fill="none" stroke="rgba(0, 165, 0, 0.5)" stroke-width="1"/>
-                                <circle class="radar-circle-inner" cx="40" cy="40" r="15" fill="none" stroke="rgba(0, 165, 0, 0.8)" stroke-width="1"/>
-                                <!-- 方向箭头 -->
-                                <g class="radar-arrow" id="radarArrow" transform="translate(40, 40)">
-                                    <polygon points="0,-10 -6,6 0,2 6,6" fill="#FF4500"/>
-                                </g>
+                        <!-- GPS雷达区块 (雷达+经纬度) -->
+                        <div class="gps-block">
+                            <div class="gps-radar" id="gpsRadar" title="GPS方位">
+                                <svg class="radar-svg" viewBox="0 0 80 80">
+                                    <!-- 雷达圆圈背景 -->
+                                    <circle class="radar-circle-outer" cx="40" cy="40" r="35" fill="none" stroke="rgba(0, 165, 0, 0.3)" stroke-width="1"/>
+                                    <circle class="radar-circle-middle" cx="40" cy="40" r="25" fill="none" stroke="rgba(0, 165, 0, 0.5)" stroke-width="1"/>
+                                    <circle class="radar-circle-inner" cx="40" cy="40" r="15" fill="none" stroke="rgba(0, 165, 0, 0.8)" stroke-width="1"/>
+                                    <!-- 方向箭头 -->
+                                    <g class="radar-arrow" id="radarArrow" transform="translate(40, 40)">
+                                        <polygon points="0,-10 -6,6 0,2 6,6" fill="#FF4500"/>
+                                    </g>
                                 <!-- H标记（起点） -->
                                 <g class="radar-home" id="radarHome" transform="translate(40, 40)" style="display: none;">
-                                    <text x="0" y="-30" text-anchor="middle" fill="var(--titan-primary)" font-size="14" font-weight="900">H</text>
+                                    <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="var(--titan-primary)" font-size="14" font-weight="900">H</text>
                                 </g>
-                                <!-- 中心点 -->
-                                <!-- <circle cx="40" cy="40" r="3" fill="var(--titan-primary)"/> -->
-                                <!-- 刻度线 -->
-                                <line x1="40" y1="5" x2="40" y2="12" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1"/>
-                                <line x1="40" y1="68" x2="40" y2="75" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1"/>
-                                <line x1="5" y1="40" x2="12" y2="40" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1"/>
-                                <line x1="68" y1="40" x2="75" y2="40" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1"/>
-                            </svg>
+                                    <!-- 中心点 -->
+                                    <!-- <circle cx="40" cy="40" r="3" fill="var(--titan-primary)"/> -->
+                                    <!-- 刻度线 -->
+                                    <line x1="40" y1="5" x2="40" y2="12" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1"/>
+                                    <line x1="40" y1="68" x2="40" y2="75" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1"/>
+                                    <line x1="5" y1="40" x2="12" y2="40" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1"/>
+                                    <line x1="68" y1="40" x2="75" y2="40" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1"/>
+                                </svg>
+                            </div>
+                            <div class="gps-coords" id="gpsCoords">
+                                <span id="gpsLatDisplay">--</span> / <span id="gpsLngDisplay">--</span>
+                            </div>
+                            <div class="gps-toggle" id="gpsToggle" title="显示/隐藏经纬度">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="3"/><path d="M12 5v2M12 17v2M5 12h2M17 12h2"/>
+                                </svg>
+                            </div>
                         </div>
 
                         <!-- 状态指示器组 -->

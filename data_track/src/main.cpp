@@ -626,7 +626,13 @@ void startWsHeartbeat() {
         return;
     }
 
+    // 安全清理旧的心跳线程（避免 std::thread 析构时 crash）
+    stopWsHeartbeat();
+
     std::cout << "Starting WebSocket heartbeat monitor..." << std::endl;
+
+    // 重新设置运行标志（stopWsHeartbeat 会将其设为 false）
+    g_ws_heartbeat_running = true;
 
     g_ws_heartbeat_thread = std::make_shared<std::thread>([]() {
         while (g_ws_heartbeat_running) {

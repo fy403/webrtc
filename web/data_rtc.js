@@ -710,6 +710,21 @@ window.addEventListener('load', () => {
             satelliteCount.textContent = dataSystemStatus.gpsSatellites || 0;
         }
 
+        // 更新经纬度显示
+        const latEl = document.getElementById('gpsLatDisplay');
+        const lngEl = document.getElementById('gpsLngDisplay');
+        if (latEl && lngEl) {
+            const lat = dataSystemStatus.gpsLatitude || 0;
+            const lng = dataSystemStatus.gpsLongitude || 0;
+            if (lat !== 0 || lng !== 0) {
+                latEl.textContent = lat.toFixed(2) + '°N';
+                lngEl.textContent = lng.toFixed(2) + '°E';
+            } else {
+                latEl.textContent = '--';
+                lngEl.textContent = '--';
+            }
+        }
+
         // 更新卫星指示器激活状态
         if (satelliteIndicator) {
             const satellites = dataSystemStatus.gpsSatellites || 0;
@@ -742,8 +757,9 @@ window.addEventListener('load', () => {
             radarHome.style.display = 'block';
 
             // 计算H在圆圈边缘的位置（相对于起点的相反方向）
+            // 圆心(40,40), 外圈半径35, H标记放在内圈半径处确保不越界
             const homeAngle = (bearing + 180) % 360;
-            const homeRadius = 30; // H标记距离中心的距离
+            const homeRadius = 25; // H标记距离中心的距离（内圈）
             const homeRad = (homeAngle - 90) * Math.PI / 180; // 调整角度以匹配SVG坐标系
             const homeX = Math.cos(homeRad) * homeRadius;
             const homeY = Math.sin(homeRad) * homeRadius;
@@ -839,6 +855,16 @@ window.addEventListener('load', () => {
     window.addEventListener('keydown', dataHandleThrottlePreset);
     // 初始化显示
     if (dataElements.throttleLimitIndicator) dataElements.throttleLimitIndicator.textContent = '不限';
+
+    // GPS 经纬度显示开关（默认隐藏）
+    const gpsToggle = document.getElementById('gpsToggle');
+    const gpsCoords = document.getElementById('gpsCoords');
+    if (gpsToggle && gpsCoords) {
+        gpsToggle.addEventListener('click', () => {
+            const isVisible = gpsCoords.classList.toggle('visible');
+            gpsToggle.classList.toggle('active', isVisible);
+        });
+    }
 
     // Initialize controllers
     initControllers();

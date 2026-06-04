@@ -15,7 +15,7 @@ public:
     ~GPSNMEAMonitor();
 
     // 初始化GPS模块
-    bool open(const std::string &gps_port = "/dev/ttyUSB1", int gps_baudrate = 115200);
+    bool open(const std::string &gps_port = "/dev/ttyS5", int gps_baudrate = 38400);
 
     // 获取GGA语句信息 (定位信息)
     bool getGGAInfo(std::string &time, float &latitude, char &lat_dir,
@@ -84,6 +84,7 @@ private:
     bool parseGSA(const std::string &gsa, char &mode, int &fix_mode,
                   float &pdop, float &hdop, float &vdop);
     bool parseGSV(const std::string &gsv, int &total_msgs, int &msg_num, int &total_sats);
+    static float nmeaToDecimal(float nmea_value);
     static int baudrateToConstant(int baudrate);
 };
 

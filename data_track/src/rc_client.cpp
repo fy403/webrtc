@@ -159,13 +159,13 @@ void RCClient::sendSystemStatus() {
     system_monitor_.getNetworkStats(rx_speed, tx_speed);
     system_monitor_.getMemoryInfo(mem_total_mb, mem_used_mb, mem_free_mb, mem_usage);
     std::cout << "[SystemStatus] 网络监控: RX=" << rx_speed << " Mbps, TX=" << tx_speed << " Mbps" << std::endl;
-    std::cout << "[SystemStatus] 内存监控: 总量=" << mem_total_mb << " MB, 使用=" << mem_used_mb << " MB, 利用率=" << (
-        mem_usage * 100) << "%" << std::endl;
+    std::cout << "[SystemStatus] 内存监控: 总量=" << mem_total_mb << " MB, 使用=" << mem_used_mb << " MB, 利用率=" << 
+        mem_usage << "%" << std::endl;
 
     // 获取详细CPU信息
     CPUMonitor::CPUInfo cpu_info;
     system_monitor_.getCPUInfo(cpu_info);
-    std::cout << "[SystemStatus] CPU监控: 总利用率=" << (cpu_info.total_usage * 100) << "%, 核心数=" << cpu_info.core_count <<
+    std::cout << "[SystemStatus] CPU监控: 总利用率=" << cpu_info.total_usage << "%, 核心数=" << cpu_info.core_count <<
             std::endl;
 
     // 获取4G模块信息
@@ -226,7 +226,7 @@ void RCClient::sendSystemStatus() {
     statusData["cpu_core_usage"] = core_usage_str;
 
     // 内存信息
-    statusData["mem_usage"] = std::to_string(static_cast<uint16_t>(mem_usage * 100));
+    statusData["mem_usage"] = std::to_string(static_cast<uint16_t>(mem_usage));
     statusData["mem_total_mb"] = std::to_string(static_cast<uint32_t>(mem_total_mb));
     statusData["mem_used_mb"] = std::to_string(static_cast<uint32_t>(mem_used_mb));
     statusData["mem_free_mb"] = std::to_string(static_cast<uint32_t>(mem_free_mb));

@@ -24,11 +24,11 @@ fi
 
 echo "Using configuration file: $CONFIG_FILE"
 
-# Parse devices from config file
+# Parse devices from config file (strip inline comments and whitespace)
 parse_config() {
     local key="$1"
     local file="$2"
-    grep "^${key}=" "$file" 2>/dev/null | cut -d'=' -f2-
+    grep "^${key}=" "$file" 2>/dev/null | cut -d'=' -f2- | cut -d'#' -f1 | xargs
 }
 
 USB_DEVICE=$(parse_config "usbDevice" "$CONFIG_FILE")

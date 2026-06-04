@@ -16,8 +16,8 @@ fi
 
 echo "Using configuration file: $CONFIG_FILE"
 
-# Read CHECK_INTERVAL from config file
-CHECK_INTERVAL=$(grep "^CHECK_INTERVAL=" "$CONFIG_FILE" | cut -d'=' -f2)
+# Read CHECK_INTERVAL from config file (strip comments)
+CHECK_INTERVAL=$(grep "^CHECK_INTERVAL=" "$CONFIG_FILE" | cut -d'=' -f2 | cut -d'#' -f1 | xargs)
 if [ -z "$CHECK_INTERVAL" ]; then
     CHECK_INTERVAL=2  # Default value
     echo "Warning: CHECK_INTERVAL not found in config, using default: 2 seconds"

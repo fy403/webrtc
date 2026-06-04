@@ -2596,6 +2596,15 @@ body.mobile-layout {
         height: 70px;
     }
 
+    .gps-coords {
+        width: 70px;
+        font-size: 9px;
+    }
+
+    .gps-toggle {
+        width: 70px;
+    }
+
     .status-indicators-group {
         gap: 8px;
     }
@@ -2642,6 +2651,12 @@ body.mobile-layout {
 }
 
 /* GPS雷达圆圈 */
+.gps-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
 .gps-radar {
     position: relative;
     width: 140px;
@@ -2659,6 +2674,51 @@ body.mobile-layout {
 .gps-radar:hover {
     border-color: var(--titan-primary);
     box-shadow: var(--titan-glow);
+}
+
+.gps-coords {
+    width: 140px;
+    margin-top: 4px;
+    padding: 3px 0;
+    font-size: 11px;
+    color: rgba(0, 220, 0, 0.85);
+    text-align: center;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    background: rgba(10, 14, 26, 0.9);
+    border: 1px solid var(--titan-border);
+    display: none; /* 默认隐藏 */
+}
+
+.gps-coords.visible {
+    display: block;
+}
+
+.gps-toggle {
+    width: 140px;
+    margin-top: 2px;
+    padding: 1px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0.4;
+    transition: opacity 0.2s ease;
+}
+
+.gps-toggle:hover {
+    opacity: 0.9;
+}
+
+.gps-toggle.active {
+    opacity: 0.8;
+    color: var(--titan-primary);
+}
+
+.gps-toggle svg {
+    width: 14px;
+    height: 14px;
 }
 
 .radar-svg {
