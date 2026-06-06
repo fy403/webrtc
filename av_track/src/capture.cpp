@@ -22,10 +22,11 @@
 Capture::Capture(bool debug_enabled, size_t decode_queue_capacity,
                  size_t encode_queue_capacity, size_t send_queue_capacity)
     : debug_enabled_(debug_enabled), is_running_(false), is_paused_(false),
-      decode_queue_(decode_queue_capacity), encode_queue_(encode_queue_capacity), 
-      send_queue_(send_queue_capacity) {
+      decode_queue_(decode_queue_capacity), filter_queue_(decode_queue_capacity),
+      encode_queue_(encode_queue_capacity), send_queue_(send_queue_capacity) {
   avdevice_register_all();
   decode_queue_.set_deleter([](AVPacket *packet) { av_packet_free(&packet); });
+  filter_queue_.set_deleter([](AVFrame *frame) { av_frame_free(&frame); });
   encode_queue_.set_deleter([](AVFrame *frame) { av_frame_free(&frame); });
   send_queue_.set_deleter([](AVPacket *packet) { av_packet_free(&packet); });
 }
@@ -74,6 +75,7 @@ void Capture::stop() {
 
   // 停止并清空各个队列，唤醒其中阻塞的线程
   decode_queue_.stop();
+  filter_queue_.stop();
   encode_queue_.stop();
   send_queue_.stop();
 
@@ -84,6 +86,10 @@ void Capture::stop() {
 
   if (decode_thread_.joinable()) {
     decode_thread_.join();
+  }
+
+  if (filter_thread_.joinable()) {
+    filter_thread_.join();
   }
 
   if (encode_thread_.joinable()) {
@@ -105,6 +111,7 @@ void Capture::pause_capture() {
 
   // 清空队列
   decode_queue_.clear();
+  filter_queue_.clear();
   encode_queue_.clear();
   send_queue_.clear();
 

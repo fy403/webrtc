@@ -13,7 +13,6 @@ if [ $# -ne 1 ]; then
     echo "Example: $0 /path/to/config.txt"
     exit 1
 fi
-
 CONFIG_FILE="$1"
 
 # Check if configuration file exists

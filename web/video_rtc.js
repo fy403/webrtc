@@ -299,14 +299,40 @@ window.addEventListener('load', () => {
 
     // 全局 V 键循环切换
     let qualityToastTimer = null;
-    function showQualityToast(preset) {
+    let qualityDisplayTimer = null;
+    let lastQualitySwitchTime = 0;
+    const MIN_SWITCH_INTERVAL = 3000; // 最小切换间隔 3 秒
+
+    function showQualityToast(preset, isWarning) {
         const toast = document.getElementById('qualityToast');
         if (!toast) return;
-        const mbps = (preset.bitrate / 1000000).toFixed(1);
-        toast.innerHTML = `<span class="toast-label">${preset.label}</span><span class="toast-info">${preset.fps}fps · ${mbps}Mbps</span>`;
+        if (isWarning) {
+            toast.innerHTML = `<span class="toast-label">⚠ 切换过于频繁</span><span class="toast-info">请间隔${Math.ceil(MIN_SWITCH_INTERVAL / 1000)}秒后再切换</span>`;
+            toast.classList.add('warning');
+        } else {
+            const mbps = (preset.bitrate / 1000000).toFixed(1);
+            toast.innerHTML = `<span class="toast-label">${preset.label}</span><span class="toast-info">${preset.fps}fps · ${mbps}Mbps</span>`;
+            toast.classList.remove('warning');
+        }
         toast.classList.add('show');
         if (qualityToastTimer) clearTimeout(qualityToastTimer);
-        qualityToastTimer = setTimeout(() => toast.classList.remove('show'), 2000);
+        qualityToastTimer = setTimeout(() => {
+            toast.classList.remove('show');
+            toast.classList.remove('warning');
+        }, 2000);
+    }
+
+    // 仅在 V 键切换时显示画质挡位，2s 后隐藏
+    function showQualityDisplay(presetKey) {
+        const preset = qualityPresets[presetKey];
+        if (!preset) return;
+        const qualityItem = document.getElementById('videoQualityStatItem');
+        const qualityLabel = document.getElementById('videoQualityPreset');
+        if (!qualityItem || !qualityLabel) return;
+        qualityLabel.textContent = preset.label;
+        qualityItem.style.display = '';
+        if (qualityDisplayTimer) clearTimeout(qualityDisplayTimer);
+        qualityDisplayTimer = setTimeout(() => { qualityItem.style.display = 'none'; }, 2000);
     }
 
     document.addEventListener('keydown', (e) => {
@@ -314,10 +340,23 @@ window.addEventListener('load', () => {
         const el = document.activeElement;
         if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
         e.preventDefault();
+
+        // 仅在全屏模式下限制切换频率
+        if (document.fullscreenElement) {
+            const now = Date.now();
+            if (now - lastQualitySwitchTime < MIN_SWITCH_INTERVAL) {
+                const defaultPreset = qualityPresets[getActivePreset() || 'medium'];
+                showQualityToast(defaultPreset, true);
+                return;
+            }
+            lastQualitySwitchTime = now;
+        }
+
         const curKey = getActivePreset() || 'medium';
         const curIdx = presetOrder.indexOf(curKey);
         const nextIdx = (curIdx + 1) % presetOrder.length;
         applyQualityPreset(presetOrder[nextIdx]);
+        showQualityDisplay(presetOrder[nextIdx]);
     });
 
     // 根据当前 fps/bitrate 匹配画质挡位

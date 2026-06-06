@@ -54,8 +54,6 @@ add_executable(webrtc_publisher
         src/opus_encoder.cpp
         src/opus_decoder.cpp
         src/debug_utils.cpp
-        src/parse_cl.cpp
-        src/getopt.cpp
         src/h264_encoder.cpp
         src/h265_encoder.cpp
         src/safe_queue.cpp

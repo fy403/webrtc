@@ -42,32 +42,21 @@ bool H264Encoder::open_encoder(int width, int height, int fps, int64_t bit_rate,
 
   if (is_hd) {
     // ---------- HD 高清场景 ----------
-    // 关键帧间隔加长（降低 I 帧占比，提升压缩率）
-    encoder_context_->gop_size = fps * 4;       // 4秒一个关键帧
-    encoder_context_->keyint_min = fps * 2;    // 最小间隔2秒
+    // 关键帧间隔适中（平衡压缩率与恢复速度）
+    encoder_context_->gop_size = fps * 2;       // 2秒一个关键帧
+    encoder_context_->keyint_min = fps;          // 最小1秒可插入I帧
     encoder_context_->max_b_frames = 0;        // 仍禁用B帧（延迟敏感）
     encoder_context_->has_b_frames = 0;
 
     // ========== Rockchip MPP 专用优化 ==========
-    // h264_rkmpp 编码器需要特殊参数设置 GOP
     if (codec_name_ == "h264_rkmpp" || codec_name_ == "hevc_rkmpp") {
-      // MPP 编码器：设置关键帧间隔（单位：帧数）
-      // rc_reenc = 0: 禁用重新编码（降低延迟）
-      // rc_mode = 1: CBR 模式（稳定码率）
-      // gop_size: 关键帧间隔
-      // 注意：Rockchip MPP 可能使用不同的参数名
-      av_opt_set_int(encoder_context_->priv_data, "gop_size", fps * 4, 0);
-      av_opt_set_int(encoder_context_->priv_data, "keyint_min", fps * 2, 0);
-      av_opt_set_int(encoder_context_->priv_data, "rc_mode", 1, 0);  // CBR
-      av_opt_set_int(encoder_context_->priv_data, "rc_reenc", 0, 0); // 禁用重编码
+      av_opt_set_int(encoder_context_->priv_data, "gop_size", fps * 2, 0);
+      av_opt_set_int(encoder_context_->priv_data, "keyint_min", fps, 0);
+      av_opt_set_int(encoder_context_->priv_data, "rc_mode", 1, 0);
+      av_opt_set_int(encoder_context_->priv_data, "rc_reenc", 0, 0);
       
-      // 尝试设置其他可能的参数名（Rockchip MPP 可能不支持标准参数名）
-      av_opt_set_int(encoder_context_->priv_data, "gop", fps * 4, 0);
-      av_opt_set_int(encoder_context_->priv_data, "i_interval", fps * 4, 0);
-      
-      std::cout << "Rockchip MPP encoder: trying to set GOP=" << fps * 4 
-                << ", keyint_min=" << fps * 2 << std::endl;
-      std::cout << "Note: Rockchip MPP may not support standard GOP parameters" << std::endl;
+      std::cout << "Rockchip MPP encoder: trying to set GOP=" << fps * 2 
+                << ", keyint_min=" << fps << std::endl;
     }
 
     if (bit_rate > 0) {
@@ -92,12 +81,19 @@ bool H264Encoder::open_encoder(int width, int height, int fps, int64_t bit_rate,
       std::cout << "Auto bitrate (HD): " << auto_bitrate / 1000 << " kbps" << std::endl;
     }
     encoder_context_->level = 42;
-  } else {
+    } else {
     // ---------- LOWLATENCY 低延时场景（默认）----------
-    encoder_context_->gop_size = fps * 2;
-    encoder_context_->keyint_min = fps;
+    // 低延时需要短 GOP：丢包后快速恢复，关键帧间隔短
+    encoder_context_->gop_size = fps;           // 1秒一个关键帧（快速恢复）
+    encoder_context_->keyint_min = (fps + 1) / 2;   // 最小0.5秒可插入I帧
     encoder_context_->max_b_frames = 0;
     encoder_context_->has_b_frames = 0;
+
+    if (codec_name_ == "h264_rkmpp" || codec_name_ == "hevc_rkmpp") {
+      av_opt_set_int(encoder_context_->priv_data, "gop_size", fps, 0);
+      av_opt_set_int(encoder_context_->priv_data, "keyint_min", (fps + 1) / 2, 0);
+      std::cout << "Rockchip MPP: GOP=" << fps << ", keyint_min=" << (fps + 1) / 2 << std::endl;
+    }
 
     if (bit_rate > 0) {
       encoder_context_->bit_rate = bit_rate;
@@ -159,15 +155,16 @@ bool H264Encoder::encode_frame(AVFrame *frame, AVPacket *packet) {
     frame->pts = pts++;
   }
 
-  // 确保时间戳连续递增（避免时间戳跳跃导致接收端解码问题）
-  static int64_t last_pts = -1;
-  if (frame && last_pts >= 0 && frame->pts > last_pts + 2) {
-    // 如果时间戳跳跃超过2帧，警告但不修正（避免破坏时序）
-    std::cerr << "⚠️ PTS jump detected: last=" << last_pts 
-              << ", current=" << frame->pts << std::endl;
-  }
-  if (frame) {
-    last_pts = frame->pts;
+  // 显式控制帧类型，强制 GOP（对 h264_rkmpp 尤其重要）
+  // 编码器内部 GOP 在 MPP 上不可靠，由我们手动管理 I/P 帧间隔
+  int target_gop = (encoder_context_->gop_size > 0)
+                        ? encoder_context_->gop_size : 60;
+  if (frame && (frame_count % target_gop == 0)) {
+    frame->pict_type = AV_PICTURE_TYPE_I;   // 强制 I 帧
+    frame->key_frame = 1;
+  } else {
+    frame->pict_type = AV_PICTURE_TYPE_P;  // P 帧
+    frame->key_frame = 0;
   }
 
   int ret = avcodec_send_frame(encoder_context_, frame);

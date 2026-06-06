@@ -2010,6 +2010,17 @@ body.mobile-layout {
     letter-spacing: 0.5px;
 }
 
+/* 画质切换警告样式（黄色背景） */
+.quality-toast.warning {
+    background: #FFC107;
+    color: #1a1a1a;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4), 0 0 16px rgba(255,193,7,0.5);
+}
+
+.quality-toast.warning .toast-label {
+    color: #1a1a1a;
+}
+
 .hexagon-pattern {
     position: fixed;
     top: 0;

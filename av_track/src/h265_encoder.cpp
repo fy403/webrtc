@@ -40,8 +40,8 @@ bool H265Encoder::open_encoder(int width, int height, int fps, int64_t bit_rate,
 
   if (is_hd) {
     // ---------- HD 高清场景 ----------
-    encoder_context_->gop_size = fps * 4;
-    encoder_context_->keyint_min = fps * 2;
+    encoder_context_->gop_size = fps * 2;       // 2秒一个关键帧
+    encoder_context_->keyint_min = fps;          // 最小1秒可插入I帧
     encoder_context_->max_b_frames = 0;
     encoder_context_->has_b_frames = 0;
 
@@ -63,10 +63,16 @@ bool H265Encoder::open_encoder(int width, int height, int fps, int64_t bit_rate,
       av_opt_set(encoder_context_->priv_data, "crf", "24", 0);
       std::cout << "H265 Auto bitrate (HD): " << auto_bitrate / 1000 << " kbps" << std::endl;
     }
+
+    if (codec_name_ == "h264_rkmpp" || codec_name_ == "hevc_rkmpp") {
+      av_opt_set_int(encoder_context_->priv_data, "gop_size", fps * 2, 0);
+      av_opt_set_int(encoder_context_->priv_data, "keyint_min", fps, 0);
+      std::cout << "Rockchip MPP: GOP=" << fps * 2 << ", keyint_min=" << fps << std::endl;
+    }
   } else {
     // ---------- LOWLATENCY 低延时场景（默认）----------
-    encoder_context_->gop_size = fps * 2;
-    encoder_context_->keyint_min = fps;
+    encoder_context_->gop_size = fps;           // 1秒一个关键帧
+    encoder_context_->keyint_min = (fps + 1) / 2;   // 最小0.5秒可插入I帧
     encoder_context_->max_b_frames = 0;
     encoder_context_->has_b_frames = 0;
 
@@ -87,6 +93,12 @@ bool H265Encoder::open_encoder(int width, int height, int fps, int64_t bit_rate,
       av_opt_set(encoder_context_->priv_data, "tune", "zerolatency", 0);
       av_opt_set(encoder_context_->priv_data, "crf", "28", 0);
       std::cout << "H265 Auto bitrate (LowLatency): " << auto_bitrate / 1000 << " kbps" << std::endl;
+    }
+
+    if (codec_name_ == "h264_rkmpp" || codec_name_ == "hevc_rkmpp") {
+      av_opt_set_int(encoder_context_->priv_data, "gop_size", fps, 0);
+      av_opt_set_int(encoder_context_->priv_data, "keyint_min", (fps + 1) / 2, 0);
+      std::cout << "Rockchip MPP: GOP=" << fps << ", keyint_min=" << (fps + 1) / 2 << std::endl;
     }
   }
 
@@ -118,9 +130,24 @@ void H265Encoder::close_encoder() {
 
 bool H265Encoder::encode_frame(AVFrame *frame, AVPacket *packet) {
   static int64_t pts = 0;
+  static int64_t frame_count = 0;
+  
   if (frame && frame->pts == AV_NOPTS_VALUE) {
     frame->pts = pts++;
   }
+
+  // 显式控制帧类型，强制 GOP（对 hevc_rkmpp 尤其重要）
+  // 编码器内部 GOP 在 MPP 上不可靠，由我们手动管理 I/P 帧间隔
+  int target_gop = (encoder_context_->gop_size > 0)
+                        ? encoder_context_->gop_size : 60;
+  if (frame && (frame_count % target_gop == 0)) {
+    frame->pict_type = AV_PICTURE_TYPE_I;   // 强制 I 帧
+    frame->key_frame = 1;
+  } else {
+    frame->pict_type = AV_PICTURE_TYPE_P;  // P 帧
+    frame->key_frame = 0;
+  }
+  frame_count++;
 
   int ret = avcodec_send_frame(encoder_context_, frame);
   if (ret < 0) return false;

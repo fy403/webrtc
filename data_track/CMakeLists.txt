@@ -33,7 +33,6 @@ add_executable(webrtc_publisher
         src/gsm_monitor.cpp
         src/main.cpp
         src/network_monitor.cpp
-        src/parse_cl.cpp
         src/rc_client.cpp
         src/service_monitor.cpp
         src/motor_controller.cpp

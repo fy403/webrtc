@@ -111,23 +111,23 @@ bool VideoCapturer::start() {
     av_dict_set(&options, "protocol_whitelist", "file,crypto,data,rtp,rtsp,udp,tcp", 0);
 
     if (is_rtsp) {
-      // RTSP 特定配置
-      av_dict_set(&options, "max_delay", "500000", 0);      // 0.5秒延迟
-      av_dict_set(&options, "reorder_queue_size", "0", 0); // 禁用重排序队列
-      av_dict_set(&options, "buffer_size", "1024000", 0);  // 1MB接收缓冲区
-      av_dict_set(&options, "rtsp_transport", "tcp", 0);   // 使用TCP传输（更稳定）
-      av_dict_set(&options, "stimeout", "5000000", 0);     // 5秒超时
+      // RTSP 特定配置（低延时优化）
+      av_dict_set(&options, "max_delay", "100000", 0);       // 100ms输入延迟
+      av_dict_set(&options, "reorder_queue_size", "0", 0);       // 禁用重排序队列
+      av_dict_set(&options, "buffer_size", "102400", 0);        // 100KB接收缓冲区
+      av_dict_set(&options, "rtsp_transport", "tcp", 0);         // 使用TCP传输
+      av_dict_set(&options, "stimeout", "5000000", 0);          // 5秒超时
     } else if (is_sdp) {
-      // SDP 文件特定配置
-      av_dict_set(&options, "max_delay", "500000", 0);      // 0.5秒延迟
-      av_dict_set(&options, "probesize", "10000000", 0);   // 探测10MB数据
+      // SDP 文件特定配置（低延时优化）
+      av_dict_set(&options, "max_delay", "100000", 0);        // 100ms输入延迟
+      av_dict_set(&options, "probesize", "10000000", 0);     // 探测10MB数据
       av_dict_set(&options, "analyzeduration", "10000000", 0); // 分析10秒
       av_dict_set(&options, "fflags", "+genpts+discardcorrupt", 0);
     } else {
-      // UDP 特定配置
-      av_dict_set(&options, "max_delay", "500000", 0);      // 0.5秒延迟
+      // UDP / 本地摄像头（低延时优化）
+      av_dict_set(&options, "max_delay", "100000", 0);        // 100ms输入延迟
       av_dict_set(&options, "reorder_queue_size", "0", 0); // 禁用重排序队列
-      av_dict_set(&options, "buffer_size", "1024000", 0);  // 1MB接收缓冲区
+      av_dict_set(&options, "buffer_size", "102400", 0);        // 100KB接收缓冲区
     }
 
     int ret = avformat_open_input(&format_context_, device_path.c_str(),
@@ -306,15 +306,6 @@ bool VideoCapturer::start() {
     encoder_out_width_ = encoder_context->width;
     encoder_out_height_ = encoder_context->height;
     encoder_out_pix_fmt_ = encoder_context->pix_fmt;
-    sws_context_ = sws_getContext(
-        codec_context_->width, codec_context_->height, codec_context_->pix_fmt,
-        encoder_out_width_, encoder_out_height_, encoder_out_pix_fmt_,
-        SWS_BILINEAR, nullptr, nullptr, nullptr);
-
-    if (!sws_context_) {
-      std::cerr << "Cannot create SwsContext" << std::endl;
-      return false;
-    }
 
     // 初始化 FPS 滤镜：当摄像头实际帧率与目标帧率不一致时自动补帧/丢帧
     if (!init_fps_filter(encoder_out_width_, encoder_out_height_, framerate_)) {
@@ -350,18 +341,18 @@ bool VideoCapturer::start() {
       std::cout << "CPU count: " << cpu_count << ", skipping CPU binding" << std::endl;
     }
   } else {
-    // 普通摄像头模式：启动所有线程
+    // 普通摄像头模式：启动所有线程（4线程流水线）
     decode_thread_ = std::thread(&VideoCapturer::decode_loop, this);
+    filter_thread_ = std::thread(&VideoCapturer::filter_loop, this);
     encode_thread_ = std::thread(&VideoCapturer::encode_loop, this);
-    send_thread_ = std::thread(&VideoCapturer::send_loop, this);
+    send_thread_   = std::thread(&VideoCapturer::send_loop, this);
 
     // 如果CPU数量大于等于4，则绑定线程到不同的CPU
     int cpu_count = get_cpu_count();
     if (cpu_count >= 4) {
       std::cout << "Detected " << cpu_count << " CPUs, binding threads to different CPUs" << std::endl;
       bind_thread_to_cpu(capture_thread_, 0); // 采集线程绑定到CPU 0
-      //    bind_thread_to_cpu(decode_thread_, 3);  // 解码线程绑定到CPU 3
-      //    bind_thread_to_cpu(encode_thread_, 1);  // 编码线程绑定到CPU 1
+      bind_thread_to_cpu(filter_thread_, 3);  // 滤镜线程绑定到CPU 3
       bind_thread_to_cpu(send_thread_, 2);    // 发送线程绑定到CPU 2
     } else {
       std::cout << "CPU count: " << cpu_count << ", skipping CPU binding" << std::endl;
@@ -861,113 +852,15 @@ void VideoCapturer::decode_loop() {
         break;
       }
 
-      // 保存前几帧用于调试
-      if (debug_enabled_) {
-        static int saved_count = 0;
-        if (saved_count < 5) {
-          std::stringstream filename;
-          filename << "captured_frame_" << saved_count << "_" << frame->width
-                   << "x" << frame->height << ".ppm";
-          DebugUtils::save_frame_to_ppm(frame, filename.str());
+      // 解码帧直接推入 filter_queue，由 filter_loop 线程处理
+      AVFrame *ref_frame = av_frame_alloc();
+      av_frame_ref(ref_frame, frame);
 
-          std::stringstream yuv_filename;
-          yuv_filename << "captured_frame_" << saved_count << ".yuv";
-          DebugUtils::save_frame_to_yuv(frame, yuv_filename.str());
-
-          saved_count++;
-        }
-      }
-
-      // 根据实际帧尺寸/像素格式检测是否需要重新创建 sws_context_
-      if (!sws_context_ || frame->width != codec_context_->width ||
-          frame->height != codec_context_->height ||
-          frame->format != codec_context_->pix_fmt) {
-        if (sws_context_) {
-          sws_freeContext(sws_context_);
-        }
-        sws_context_ = sws_getContext(
-            frame->width, frame->height, static_cast<AVPixelFormat>(frame->format),
-            encoder_out_width_, encoder_out_height_, encoder_out_pix_fmt_,
-            SWS_BILINEAR, nullptr, nullptr, nullptr);
-        if (!sws_context_) {
-          std::cerr << "Cannot recreate SwsContext for frame " << frame->width
-                    << "x" << frame->height << std::endl;
-          continue;
-        }
-      }
-
-      // Convert frame format and put in encode queue using frame pool
-      AVFrame *scaled_frame = acquire_scaled_frame();
-      if (!scaled_frame) {
+      if (!filter_queue_.try_push(ref_frame)) {
         if (debug_enabled_) {
-          std::cerr << "Failed to acquire scaled frame from pool, dropping frame"
-                    << std::endl;
+          std::cout << "Filter queue full, dropping decoded frame" << std::endl;
         }
-        continue;
-      }
-
-      sws_scale(sws_context_, frame->data, frame->linesize, 0, frame->height,
-                scaled_frame->data, scaled_frame->linesize);
-
-      if (fps_buffer_src_ && fps_buffer_sink_) {
-        // 使用 FPS 滤镜：补帧（摄像头fps < 目标）或丢帧（摄像头fps > 目标）
-        // 使用真实时间戳(微秒)作为 PTS，配合 time_base=1/1000000
-        // 让滤镜准确知道每帧的实际采集时刻，从而正确补帧
-        scaled_frame->pts = av_gettime_relative();
-
-        ret = av_buffersrc_add_frame_flags(fps_buffer_src_, scaled_frame, AV_BUFFERSRC_FLAG_KEEP_REF);
-        release_scaled_frame(scaled_frame);  // 滤镜会持有引用，可释放原始帧
-
-        if (ret < 0) {
-          if (debug_enabled_) {
-            std::cerr << "Error feeding frame to FPS filter: " << av_error_string(ret) << std::endl;
-          }
-          continue;
-        }
-
-        // 从滤镜输出端取出所有可用帧
-        while (is_running_) {
-          // 滤镜输出帧：直接用 av_frame_alloc，不走 frame pool
-          // （滤镜会写入自己内部分配的数据 buffer）
-          AVFrame *filtered_frame = av_frame_alloc();
-
-          ret = av_buffersink_get_frame(fps_buffer_sink_, filtered_frame);
-          if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-            av_frame_free(&filtered_frame);  // 无输出，直接释放
-            break;
-          } else if (ret < 0) {
-            av_frame_free(&filtered_frame);
-            break;
-          }
-
-          // 将滤镜输出帧放入编码队列
-          if (!encode_queue_.try_push(filtered_frame)) {
-            if (debug_enabled_) {
-              std::cout << "Video Encode queue full, dropping filtered frame"
-                        << std::endl;
-              std::cout << "Video Encode queue Len: " << encode_queue_.size()
-                        << ", Capacity: " << encode_queue_.capacity() << std::endl;
-            }
-            release_scaled_frame(filtered_frame);
-            encode_queue_.clear();
-            send_queue_.clear();
-          }
-          // filtered_frame 现在归 encode_loop 管理
-        }
-      }  else {
-        // 无 FPS 滤镜时：直接推入编码队列（原有逻辑）
-        scaled_frame->pts = frame->pts;
-        if (!encode_queue_.try_push(scaled_frame)) {
-          if (debug_enabled_) {
-            std::cout << "Video Encode queue full, dropping audio frame"
-                      << std::endl;
-            std::cout << "Video Encode queue Len: " << encode_queue_.size()
-                      << ", Capacity: " << encode_queue_.capacity() << std::endl;
-          }
-          release_scaled_frame(scaled_frame);
-          encode_queue_.clear();
-          send_queue_.clear();
-        }
+        av_frame_free(&ref_frame);
       }
     }
 
@@ -976,6 +869,97 @@ void VideoCapturer::decode_loop() {
 
   av_frame_free(&frame);
   std::cout << "Video Decode thread exiting" << std::endl;
+}
+
+void VideoCapturer::filter_loop() {
+  AVFrame *frame = nullptr;
+
+  while (is_running_) {
+    filter_queue_.wait_pop(frame);
+
+    if (!frame) {
+      if (!is_running_) break;
+      continue;
+    }
+
+    // 保存前几帧用于调试
+    if (debug_enabled_) {
+      static int saved_count = 0;
+      if (saved_count < 5) {
+        std::stringstream filename;
+        filename << "captured_frame_" << saved_count << "_" << frame->width
+                 << "x" << frame->height << ".ppm";
+        DebugUtils::save_frame_to_ppm(frame, filename.str());
+
+        std::stringstream yuv_filename;
+        yuv_filename << "captured_frame_" << saved_count << ".yuv";
+        DebugUtils::save_frame_to_yuv(frame, yuv_filename.str());
+
+        saved_count++;
+      }
+    }
+
+    if (fps_buffer_src_ && fps_buffer_sink_) {
+      // 使用 FPS 滤镜：补帧（摄像头fps < 目标）或丢帧（摄像头fps > 目标）
+      //  用真实时间戳(微秒)作为 PTS，配合 filter time_base=1/1000000
+      frame->pts = av_gettime_relative();
+
+      int ret = av_buffersrc_add_frame_flags(fps_buffer_src_, frame,
+                                             AV_BUFFERSRC_FLAG_KEEP_REF);
+      av_frame_free(&frame);  // 滤镜持有引用，释放原始帧
+
+      if (ret < 0) {
+        if (debug_enabled_) {
+          std::cerr << "Error feeding frame to FPS filter: "
+                    << av_error_string(ret) << std::endl;
+        }
+        continue;
+      }
+
+      // 从滤镜输出端取出所有可用帧
+      while (is_running_) {
+        AVFrame *filtered_frame = av_frame_alloc();
+
+        ret = av_buffersink_get_frame(fps_buffer_sink_, filtered_frame);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+          av_frame_free(&filtered_frame);
+          break;
+        } else if (ret < 0) {
+          av_frame_free(&filtered_frame);
+          break;
+        }
+
+        // 重置 PTS：FPS filter 输出微秒级 PTS，编码器 time_base 是帧为单位，
+        // 让编码器自己的帧计数器来分配 PTS，避免 GOP 被破坏
+        filtered_frame->pts = AV_NOPTS_VALUE;
+
+        if (!encode_queue_.try_push(filtered_frame)) {
+          if (debug_enabled_) {
+            std::cout << "Video Encode queue full, dropping filtered frame"
+                      << std::endl;
+            std::cout << "Video Encode queue Len: " << encode_queue_.size()
+                      << ", Capacity: " << encode_queue_.capacity() << std::endl;
+          }
+          av_frame_free(&filtered_frame);
+          encode_queue_.clear();
+          send_queue_.clear();
+        }
+      }
+    } else {
+      // 无 FPS 滤镜时：直接推入编码队列
+      frame->pts = AV_NOPTS_VALUE;
+      if (!encode_queue_.try_push(frame)) {
+        if (debug_enabled_) {
+          std::cout << "Video Encode queue full, dropping frame" << std::endl;
+        }
+        av_frame_free(&frame);
+        encode_queue_.clear();
+        send_queue_.clear();
+      }
+    }
+  }
+
+  std::cout << "Video Filter thread exiting" << std::endl;
 }
 
 void VideoCapturer::encode_loop() {

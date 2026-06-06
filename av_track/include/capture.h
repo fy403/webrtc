@@ -46,6 +46,7 @@ public:
 protected:
   virtual void capture_loop() = 0;
   virtual void decode_loop() {}
+  virtual void filter_loop() {}
   virtual void encode_loop() = 0;
   virtual void send_loop() = 0;
   void bind_thread_to_cpu(std::thread& thread, int cpu_id);
@@ -56,6 +57,7 @@ protected:
   std::atomic<bool> is_paused_ = true;
   std::thread capture_thread_;
   std::thread decode_thread_;
+  std::thread filter_thread_;
   std::thread encode_thread_;
   std::thread send_thread_;
   TrackCallback track_callback_;
@@ -77,6 +79,7 @@ protected:
 
   // Queues for async processing
   SafeQueue<AVPacket *> decode_queue_;
+  SafeQueue<AVFrame *> filter_queue_;  // decoded raw frames → filter thread
   SafeQueue<AVFrame *> encode_queue_;
   SafeQueue<AVPacket *> send_queue_;
 };

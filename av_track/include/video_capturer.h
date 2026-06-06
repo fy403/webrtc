@@ -43,6 +43,7 @@ public:
 private:
   void capture_loop() override;
   void decode_loop() override;
+  void filter_loop() override;  // FPS filter，从 filter_queue_ 拉到 encode_queue_
   void encode_loop() override;
   void send_loop() override;
 
