@@ -31,6 +31,7 @@ std::atomic<bool> g_ws_reconnect_running{false};
 std::shared_ptr<rtc::WebSocket> g_current_ws;
 std::string g_client_id;
 std::shared_ptr<Config> g_config = nullptr;
+std::shared_ptr<RCClient> g_client;  // 全局RCClient，重连时复用，避免重复创建线程和资源
 
 // WebSocket 心跳和超时检测
 std::shared_ptr<std::thread> g_ws_heartbeat_thread;
@@ -133,9 +134,9 @@ int main(int argc, char **argv) {
             std::cout << "CRSF Gimbal enabled" << std::endl;
         }
 
-        // 创建局部的 RCClient 实例，使用智能指针管理
-        std::shared_ptr<RCClient> client = std::make_shared<RCClient>(rcClientConfig);
-        client->stopAll();
+        // 创建全局的 RCClient 实例，供主循环和重连共用
+        g_client = std::make_shared<RCClient>(rcClientConfig);
+        g_client->stopAll();
         // rtc 初始化
         rtc::InitLogger(rtc::LogLevel::Info);
         rtc::Configuration iceConfig;
@@ -193,7 +194,7 @@ int main(int argc, char **argv) {
         auto wsFuture = wsPromise->get_future();
 
         // 设置 WebSocket 回调和消息处理（使用封装的函数）
-        setupWebSocketCallbacks(ws, wsPromise, client);
+        setupWebSocketCallbacks(ws, wsPromise, g_client);
 
         // 连接服务器
         std::string wsHost = g_config->get("webSocketServer", "localhost");
@@ -237,7 +238,7 @@ int main(int argc, char **argv) {
             // 每秒钟检查一次状态更新
             std::this_thread::sleep_for(std::chrono::seconds(1));
             // 在主线程中处理系统状态更新
-            client->sendSystemStatus();
+            g_client->sendSystemStatus();
         }
 
         std::cout << "Cleaning up..." << std::endl;
@@ -245,7 +246,7 @@ int main(int argc, char **argv) {
         stopWsHeartbeat();
         // 停止 WebSocket 重连线程
         stopWsReconnect();
-        client->stopAll();
+        g_client->stopAll();
         ws->close();
         dataChannelMap.clear();
         peerConnectionMap.clear();
@@ -558,21 +559,16 @@ void startWsReconnect() {
                 auto wsPromise = std::make_shared<std::promise<void>>();
                 auto wsFuture = wsPromise->get_future();
 
-                // 重新创建 RCClient
-                RCClientConfig rcClientConfig(
-                    g_config->get("usbDevice"),
-                    g_config->get("motorDriverType"),
-                    g_config->getAsInt("ttyBaudrate"),
-                    g_config->get("gsmPort"),
-                    g_config->getAsInt("gsmBaudrate"),
-                    g_config->get("gpsPort"),
-                    g_config->getAsInt("gpsBaudrate")
-                );
-                std::shared_ptr<RCClient> client = std::make_shared<RCClient>(rcClientConfig);
-                client->stopAll();
+                // 复用全局 RCClient，避免重复创建线程和串口资源
+                // g_client 在 main() 中创建，生命周期与进程一致
+                if (!g_client) {
+                    std::cerr << "FATAL: g_client is null, cannot reconnect" << std::endl;
+                    reconnecting = false;
+                    break;
+                }
 
-                // 设置 WebSocket 回调和消息处理（使用封装的函数）
-                setupWebSocketCallbacks(newWs, wsPromise, client);
+                // 设置 WebSocket 回调和消息处理（复用全局 client）
+                setupWebSocketCallbacks(newWs, wsPromise, g_client);
 
                 // 连接服务器
                 std::string wsHost = g_config->get("webSocketServer", "localhost");
