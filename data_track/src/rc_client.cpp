@@ -68,12 +68,12 @@ void RCClient::addDataChannel(const std::string &peer_id, std::shared_ptr<rtc::D
         return;
     }
 
-    // std::lock_guard<std::mutex> lock(data_channels_mutex_);
+    std::lock_guard<std::mutex> lock(data_channels_mutex_);
     data_channels_[peer_id] = dc;
 
     // 初始化健康检查状态
     {
-        // std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
+        std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
         DataChannelHealth health;
         health.last_heartbeat = std::chrono::steady_clock::now();
         health.is_alive = true;
@@ -88,7 +88,7 @@ void RCClient::addDataChannel(const std::string &peer_id, std::shared_ptr<rtc::D
 }
 
 void RCClient::removeDataChannel(const std::string &peer_id) {
-    // std::lock_guard<std::mutex> lock(data_channels_mutex_);
+    std::lock_guard<std::mutex> lock(data_channels_mutex_);
     auto it = data_channels_.find(peer_id);
     if (it != data_channels_.end()) {
         data_channels_.erase(it);
@@ -98,13 +98,13 @@ void RCClient::removeDataChannel(const std::string &peer_id) {
 
     // 移除健康检查状态
     {
-        // std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
+        std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
         channel_health_.erase(peer_id);
     }
 }
 
 size_t RCClient::getDataChannelCount() const {
-    // std::lock_guard<std::mutex> lock(data_channels_mutex_);
+    std::lock_guard<std::mutex> lock(data_channels_mutex_);
     return data_channels_.size();
 }
 
@@ -123,7 +123,7 @@ void RCClient::sendStatusFrame(const std::map<std::string, std::string> &statusD
 
     // 线程安全地遍历所有DataChannel并发送数据
     {
-        // std::lock_guard<std::mutex> lock(data_channels_mutex_);
+        std::lock_guard<std::mutex> lock(data_channels_mutex_);
         for (const auto &peer_channel: data_channels_) {
             const std::string &peer_id = peer_channel.first;
             const auto &dc = peer_channel.second;
@@ -283,7 +283,7 @@ void RCClient::parseFrame(const std::string &peer_id, const uint8_t *frame, size
 
             // 更新最后发送控制命令的peer_id
             {
-                // std::lock_guard<std::mutex> peer_id_lock(last_control_peer_id_mutex_);
+                std::lock_guard<std::mutex> peer_id_lock(last_control_peer_id_mutex_);
                 last_control_peer_id_ = peer_id;
             }
             {
@@ -295,7 +295,7 @@ void RCClient::parseFrame(const std::string &peer_id, const uint8_t *frame, size
         }
     } else {
         // 更新特定DataChannel的健康状态（控制包和心跳包都更新）
-        // std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
+        std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
         DataChannelHealth &health = channel_health_[peer_id];
         health.last_heartbeat = std::chrono::steady_clock::now();
         health.missed_heartbeat_count = 0;
@@ -316,13 +316,13 @@ void RCClient::healthCheckLoop() {
 
         // 获取最后发送控制命令的peer_id
         {
-            // std::lock_guard<std::mutex> peer_id_lock(last_control_peer_id_mutex_);
+            std::lock_guard<std::mutex> peer_id_lock(last_control_peer_id_mutex_);
             last_control_peer_to_check = last_control_peer_id_;
         }
 
         // 检查所有DataChannel的健康状态
         {
-            // std::lock_guard<std::mutex> lock(channel_health_mutex_);
+            std::lock_guard<std::mutex> lock(channel_health_mutex_);
             for (auto &peer_health: channel_health_) {
                 const std::string &peer_id = peer_health.first;
                 DataChannelHealth &health = peer_health.second;
