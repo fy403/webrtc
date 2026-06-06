@@ -54,6 +54,9 @@ public:
     /* Get configuration value as boolean */
     bool getAsBool(const std::string& key, bool defaultValue = false) const;
 
+    /* Get configuration value as float */
+    float getAsFloat(const std::string& key, float defaultValue = 0.0f) const;
+
     /* Check if a key exists */
     bool has(const std::string& key) const;
 

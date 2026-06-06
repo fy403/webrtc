@@ -70,17 +70,17 @@ public:
 
     // 俯仰（Tilt）通道配置
     uint8_t crsf_gimbal_tilt_channel = 3; // CRSF 俯仰通道编号（1-16）
-    uint16_t crsf_gimbal_tilt_min_pulse = 900; // 俯仰舵机最小脉冲宽度（微秒）
-    uint16_t crsf_gimbal_tilt_max_pulse = 2100; // 俯仰舵机最大脉冲宽度（微秒）
-    uint16_t crsf_gimbal_tilt_neutral_pulse = 1500; // 俯仰舵机中位脉冲宽度（微秒）
+    uint16_t crsf_gimbal_tilt_min_pulse = 500; // 俯仰舵机最小脉冲宽度（微秒），SG90对应~0°
+    uint16_t crsf_gimbal_tilt_max_pulse = 2500; // 俯仰舵机最大脉冲宽度（微秒），SG90对应~180°
+    uint16_t crsf_gimbal_tilt_neutral_pulse = 1500; // 俯仰舵机中位脉冲宽度（微秒），对应90°
     float crsf_gimbal_tilt_min_angle = -90.0f; // 俯仰最小角度（度）
     float crsf_gimbal_tilt_max_angle = 90.0f; // 俯仰最大角度（度）
 
     // 水平（Pan）通道配置
     uint8_t crsf_gimbal_pan_channel = 4; // CRSF 水平通道编号（1-16）
-    uint16_t crsf_gimbal_pan_min_pulse = 900; // 水平舵机最小脉冲宽度（微秒）
-    uint16_t crsf_gimbal_pan_max_pulse = 2100; // 水平舵机最大脉冲宽度（微秒）
-    uint16_t crsf_gimbal_pan_neutral_pulse = 1500; // 水平舵机中位脉冲宽度（微秒）
+    uint16_t crsf_gimbal_pan_min_pulse = 500; // 水平舵机最小脉冲宽度（微秒），SG90对应~0°
+    uint16_t crsf_gimbal_pan_max_pulse = 2500; // 水平舵机最大脉冲宽度（微秒），SG90对应~180°
+    uint16_t crsf_gimbal_pan_neutral_pulse = 1500; // 水平舵机中位脉冲宽度（微秒），对应90°
     float crsf_gimbal_pan_min_angle = -90.0f; // 水平最小角度（度）
     float crsf_gimbal_pan_max_angle = 90.0f; // 水平最大角度（度）
 

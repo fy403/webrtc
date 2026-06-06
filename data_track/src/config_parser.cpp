@@ -186,6 +186,34 @@ bool Config::getAsBool(const std::string& key, bool defaultValue) const
 
 /*----------------------------------------------------------------------------
 **
+** Config::getAsFloat()
+**
+** Get configuration value as float
+**
+**--------------------------------------------------------------------------*/
+
+float Config::getAsFloat(const std::string& key, float defaultValue) const
+{
+    auto it = _configMap.find(key);
+    if (it != _configMap.end())
+    {
+        try
+        {
+            return std::stof(it->second);
+        }
+        catch (const std::exception& e)
+        {
+            std::cerr << "Warning: Invalid float value for key '" << key
+                      << "': " << it->second << ", using default: " << defaultValue
+                      << std::endl;
+            return defaultValue;
+        }
+    }
+    return defaultValue;
+}
+
+/*----------------------------------------------------------------------------
+**
 ** Config::has()
 **
 ** Check if a key exists in configuration

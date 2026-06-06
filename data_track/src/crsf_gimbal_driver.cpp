@@ -55,9 +55,9 @@ void CRSFGimbalDriver::setChannelPWM(uint8_t ch_idx, uint16_t pwm_us) {
     if (!transport_) return;
 
     // PWM → CRSF channel value
-    // 使用 servomotor 标准范围 900-2100us 映射到 CRSF 172-1811
-    constexpr uint16_t PWM_MIN = 900;
-    constexpr uint16_t PWM_MAX = 2100;
+    // 使用 SG90 实际脉冲范围 500-2500us 映射到 CRSF 172-1811
+    constexpr uint16_t PWM_MIN = 500;
+    constexpr uint16_t PWM_MAX = 2500;
 
     uint16_t clamped = std::max(PWM_MIN, std::min(PWM_MAX, pwm_us));
     float ratio = static_cast<float>(clamped - PWM_MIN) / (PWM_MAX - PWM_MIN);

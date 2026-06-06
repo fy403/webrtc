@@ -17,16 +17,65 @@ turnPass=qwertyuiop               # TURN服务器密码
 
 # =============================================================================
 # Motor Controller Configuration (电机控制器配置)
+# 以下皆为默认值，如需要修改可删除注释内容
 # =============================================================================
 usbDevice=/dev/ttyS5            # 电机驱动板串口设备
 ttyBaudrate=420000                # 串口波特率
-motorDriverType=crsf               # 电机驱动类型：uart 或 crsf 或 pwm 或 dummy(调试用)
+motorDriverType=crsf               # 电机驱动类型：uart / crsf / pwm / dummy(调试用)
+# reverseTurnWhenBackward=true    # 后退时反转转向（默认true）
+
+# --- UART 驱动参数（motorDriverType=uart 时有效）---
+# motorBaudrate=115200            # 串口波特率（默认115200）
+# motorPwmForwardMax=3500         # PWM正向最大值（默认3500）
+# motorPwmReverseMax=-3500        # PWM反向最大值（默认-3500）
+# motorPwmNeutral=0               # PWM中位值（默认0）
+# motorFrontBackId=2              # 前后控制通道ID（默认2）
+# motorLeftRightId=4              # 左右转向通道ID（默认4）
+
+# --- CRSF 电机驱动参数（motorDriverType=crsf 时有效）---
+# crsfServoMinPulse=900           # 舵机最小脉冲μs（默认900）
+# crsfServoMaxPulse=2100          # 舵机最大脉冲μs（默认2100）
+# crsfServoNeutralPulse=1500      # 舵机中位脉冲μs（默认1500）
+# crsfServoMinAngle=0             # 舵机最小角度（默认0，0=转向马达模式）
+# crsfServoMaxAngle=0             # 舵机最大角度（默认0，0=转向马达模式）
+# crsfServoChannel=2              # CRSF舵机通道（默认2）
+# crsfEscMinPulse=900             # 电调最小脉冲μs（默认900）
+# crsfEscMaxPulse=2100            # 电调最大脉冲μs（默认2100）
+# crsfEscNeutralPulse=1510        # 电调中位脉冲μs（默认1510）
+# crsfEscReversible=true          # 电调是否支持倒转（默认true）
+# crsfEscChannel=1                # CRSF电调通道（默认1）
+
+# --- PWM 驱动参数（motorDriverType=pwm 时有效）---
+# pwmFrontBackChip=0              # 前后控制PWM芯片编号（默认0）
+# pwmLeftRightChip=1              # 左右转向PWM芯片编号（默认1）
+# pwmFrontBackChannel=0           # 前后控制PWM通道（默认0）
+# pwmLeftRightChannel=0           # 左右转向PWM通道（默认0）
+# pwmPeriodNs=20000000            # PWM周期ns，默认20ms=50Hz
+# pwmDutyMinNs=900000             # 最小占空比ns（默认900us）
+# pwmDutyMaxNs=2100000            # 最大占空比ns（默认2100us）
+# pwmDutyNeutralNs=1500000        # 中位占空比ns（默认1500us）
 
 # =============================================================================
 # CRSF Gimbal Configuration (CRSF云台配置，仅 motorDriverType=crsf 时有效)
-# 其余参数（通道、脉冲、角度等）使用 MotorControllerConfig 默认值
+# 以下皆为默认值，如需要修改可删除注释内容
 # =============================================================================
-enableGimbal=true                # 是否启用云台控制（true/false）
+enableGimbal=true                # 是否启用云台控制（true/false），默认false
+
+# 俯仰（Tilt）舵机配置
+# gimbalTiltChannel=3             # CRSF俯仰通道编号（默认3）
+# gimbalTiltMinPulse=500          # 俯仰最小脉冲μs（默认500，SG90 0°）
+# gimbalTiltMaxPulse=2500         # 俯仰最大脉冲μs（默认2500，SG90 180°）
+# gimbalTiltNeutralPulse=1500     # 俯仰中位脉冲μs（默认1500，90°）
+# gimbalTiltMinAngle=-90          # 俯仰最小角度（默认-90）
+# gimbalTiltMaxAngle=90           # 俯仰最大角度（默认90）
+
+# 水平（Pan）舵机配置
+# gimbalPanChannel=4              # CRSF水平通道编号（默认4）
+# gimbalPanMinPulse=500           # 水平最小脉冲μs（默认500，SG90 0°）
+# gimbalPanMaxPulse=2500          # 水平最大脉冲μs（默认2500，SG90 180°）
+# gimbalPanNeutralPulse=1500      # 水平中位脉冲μs（默认1500，90°）
+# gimbalPanMinAngle=-90           # 水平最小角度（默认-90）
+# gimbalPanMaxAngle=90            # 水平最大角度（默认90）
 
 # =============================================================================
 # GSM Module Configuration (4G模块配置)
