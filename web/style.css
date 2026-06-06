@@ -2373,6 +2373,73 @@ body.mobile-layout {
     background: rgba(255, 165, 0, 0.1);
 }
 
+/* 曲线选择器 */
+.curve-select-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.curve-select {
+    flex: 1;
+    background: var(--titan-bg-dark);
+    border: 1px solid var(--titan-border);
+    color: var(--titan-text);
+    border-radius: 0;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.curve-select:hover {
+    border-color: var(--titan-primary);
+}
+
+.curve-select:focus {
+    outline: none;
+    border-color: var(--titan-primary);
+    box-shadow: var(--titan-glow);
+}
+
+.btn-curve-edit {
+    background: transparent;
+    border: 1px solid var(--titan-border);
+    color: var(--titan-primary);
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-curve-edit:hover {
+    border-color: var(--titan-primary);
+    box-shadow: var(--titan-glow);
+    background: rgba(255, 165, 0, 0.1);
+}
+
+#curveGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#curveGroup label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--titan-primary);
+    letter-spacing: 2px;
+    text-shadow: 0 0 10px var(--titan-primary);
+}
+
 .modal-footer {
     display: flex;
     justify-content: flex-end;

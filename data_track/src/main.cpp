@@ -127,6 +127,12 @@ int main(int argc, char **argv) {
             g_config->getAsInt("gpsBaudrate") // SystemMonitor: GPS模块串口波特率
         );
 
+        // 加载 CRSF 云台配置（仅 CRSF 模式下有效，其余参数使用 MotorControllerConfig 默认值）
+        rcClientConfig.motor_controller_config.enable_gimbal = g_config->getAsBool("enableGimbal", false);
+        if (rcClientConfig.motor_controller_config.enable_gimbal) {
+            std::cout << "CRSF Gimbal enabled" << std::endl;
+        }
+
         // 创建局部的 RCClient 实例，使用智能指针管理
         std::shared_ptr<RCClient> client = std::make_shared<RCClient>(rcClientConfig);
         client->stopAll();

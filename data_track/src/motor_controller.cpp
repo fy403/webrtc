@@ -1,6 +1,8 @@
 #include "motor_controller.h"
 #include "uart_motor_driver.h"
 #include "crsf_motor_driver.h"
+#include "crsf_transport.h"
+#include "crsf_gimbal_driver.h"
 #include "pwm_motor_driver.h"
 #include "dummy_motor_driver.h"
 #include "rc_protocol_v2.h"
@@ -31,7 +33,17 @@ MotorController::MotorController(const MotorControllerConfig &config)
             throw std::runtime_error("Failed to connect to serial port");
         }
     } else if (config.motor_driver_type == "crsf") {
-        motor_driver = new CRSFMotorDriver(config.motor_driver_port,
+        // === CRSF 模式：创建共享 Transport 层 ===
+        // 1. 创建 CRSFTransport（独占串口 + 发送线程）
+        crsf_transport_ = std::make_shared<CRSFTransport>(config.motor_driver_port);
+
+        if (!crsf_transport_->connect()) {
+            throw std::runtime_error("Failed to connect CRSF transport");
+        }
+        std::cout << "CRSF Transport 初始化成功" << std::endl;
+
+        // 2. 创建电机驱动（共享 transport）
+        motor_driver = new CRSFMotorDriver(crsf_transport_,
                                            config.crsf_servo_min_pulse,
                                            config.crsf_servo_max_pulse,
                                            config.crsf_servo_neutral_pulse,
@@ -44,11 +56,34 @@ MotorController::MotorController(const MotorControllerConfig &config)
                                            config.crsf_esc_reversible,
                                            config.crsf_esc_channel);
 
-        // 尝试初始化 CRSF 驱动
         if (!motor_driver->connect()) {
-            throw std::runtime_error("Failed to connect to CRSF serial port");
+            throw std::runtime_error("Failed to connect CRSF motor driver");
         }
-        std::cout << "CRSF 驱动初始化成功" << std::endl;
+        std::cout << "CRSF 电机驱动初始化成功" << std::endl;
+
+        // 3. 如果配置启用云台，创建云台驱动（共享同一个 transport）
+        if (config.enable_gimbal) {
+            gimbal_driver_ = std::make_shared<CRSFGimbalDriver>(crsf_transport_,
+                                                                config.crsf_gimbal_tilt_min_pulse,
+                                                                config.crsf_gimbal_tilt_max_pulse,
+                                                                config.crsf_gimbal_tilt_neutral_pulse,
+                                                                config.crsf_gimbal_tilt_min_angle,
+                                                                config.crsf_gimbal_tilt_max_angle,
+                                                                config.crsf_gimbal_tilt_channel,
+                                                                config.crsf_gimbal_pan_min_pulse,
+                                                                config.crsf_gimbal_pan_max_pulse,
+                                                                config.crsf_gimbal_pan_neutral_pulse,
+                                                                config.crsf_gimbal_pan_min_angle,
+                                                                config.crsf_gimbal_pan_max_angle,
+                                                                config.crsf_gimbal_pan_channel);
+
+            gimbal_driver_->centerAll();
+            std::cout << "CRSF 云台驱动初始化成功（通道"
+                      << static_cast<int>(config.crsf_gimbal_tilt_channel) << "/"
+                      << static_cast<int>(config.crsf_gimbal_pan_channel) << "）" << std::endl;
+        } else {
+            std::cout << "CRSF 云台控制未启用" << std::endl;
+        }
     } else if (config.motor_driver_type == "dummy") {
         // 创建虚拟电机驱动器（用于调试，只打印信号不执行）
         motor_driver = new DummyMotorDriver("DummyMotor-" + config.motor_driver_port);
@@ -83,17 +118,10 @@ MotorController::MotorController(const MotorControllerConfig &config)
         std::cerr << "Unknown motor driver type: " << config.motor_driver_type << std::endl;
         throw std::runtime_error("Unknown motor driver type");
     }
-    // catch (const std::exception &e)
-    //  {
-    //      std::cerr << "错误: 串口初始化失败，使用模拟模式: " << e.what() << std::endl;
-    //      motor_driver = nullptr;
-    //      simulation_mode = true;
-    //  }
 
     // 设置电机中位
     setFrontBackSpeed(0);
     setLeftRightSpeed(0);
-    // std::this_thread::sleep_for(std::chrono::seconds(2));
     std::cout << "电机控制器初始化完成，设置为中位..." << std::endl;
 }
 
@@ -103,18 +131,26 @@ MotorController::~MotorController() {
         motor_driver->disconnect();
         delete motor_driver;
     }
+    // CRSFTransport 通过 shared_ptr 自动析构（停止发送线程）
+    // CRSFGimbalDriver 通过 shared_ptr 自动析构
 }
 
 
 void MotorController::stopAll() {
     setFrontBackSpeed(0);
     setLeftRightSpeed(0);
+    if (gimbal_driver_) {
+        gimbal_driver_->centerAll();
+    }
     //    std::cout << "已停止所有电机" << std::endl;
 }
 
 void MotorController::printStatus() {
-    std::cout << "前进电机: " << front_back_speed_ << "% | ";
-    std::cout << "转向电机: " << left_right_speed_ << "%" << std::endl;
+    std::cout << "前进电机: " << front_back_speed_ << "% | 转向电机: " << left_right_speed_ << "%";
+    if (config_.enable_gimbal) {
+        std::cout << " | 云台俯仰: " << tilt_percent_ << "% | 云台水平: " << pan_percent_ << "%";
+    }
+    std::cout << std::endl;
 }
 
 void MotorController::emergencyStop() {
@@ -123,36 +159,52 @@ void MotorController::emergencyStop() {
 }
 
 void MotorController::applyControl(const RCProtocolV2::ControlFrame &control_frame) {
-    // Channel 0 -> forward/backward, Channel 1 -> left/right
-    double forward = control_frame.channels[0];
-    double turn = control_frame.channels[1];
-
     constexpr double DEADZONE = 0.02;
     auto clamp_unit = [](double v) { return std::max(-1.0, std::min(1.0, v)); };
+    const auto to_percent = [](double v) { return static_cast<int>(std::round(v * 100.0)); };
+
+    // ========== 电机控制：根据配置通道读取 ControlFrame ==========
+    int esc_ch = config_.crsf_esc_channel - 1;     // 电调通道（前后）
+    int servo_ch = config_.crsf_servo_channel - 1;  // 舵机通道（左右）
+
+    double forward = control_frame.channels[esc_ch];
+    double turn = control_frame.channels[servo_ch];
 
     forward = clamp_unit(forward);
     turn = clamp_unit(turn);
 
-    if (std::fabs(forward) < DEADZONE) {
-        forward = 0.0;
-    }
-    if (std::fabs(turn) < DEADZONE) {
-        turn = 0.0;
-    }
+    if (std::fabs(forward) < DEADZONE) forward = 0.0;
+    if (std::fabs(turn) < DEADZONE) turn = 0.0;
 
-    // 当后退时，根据配置决定是否反转转向方向（因为车辆倒车时转向方向需要反转）
+    // 后退时根据配置反转转向方向
     if (forward < 0 && config_.reverse_turn_when_backward) {
         turn = -turn;
     }
 
+    setFrontBackSpeed(to_percent(forward));
+    setLeftRightSpeed(to_percent(turn));
 
-    const auto to_percent = [](double v) { return static_cast<int>(std::round(v * 100.0)); };
+    // ========== 云台控制：根据配置通道读取 ControlFrame ==========
+    if (gimbal_driver_ && config_.enable_gimbal) {
+        int tilt_ch = config_.crsf_gimbal_tilt_channel - 1;
+        int pan_ch = config_.crsf_gimbal_pan_channel - 1;
 
-    const int forward_percent = to_percent(forward);
-    const int turn_percent = to_percent(turn);
+        double tilt = control_frame.channels[tilt_ch];
+        double pan = control_frame.channels[pan_ch];
 
-    setFrontBackSpeed(forward_percent);
-    setLeftRightSpeed(turn_percent);
+        tilt = clamp_unit(tilt);
+        pan = clamp_unit(pan);
+
+        if (std::fabs(tilt) < DEADZONE) tilt = 0.0;
+        if (std::fabs(pan) < DEADZONE) pan = 0.0;
+
+        tilt_percent_ = to_percent(tilt);
+        pan_percent_ = to_percent(pan);
+
+        gimbal_driver_->setTiltPercent(tilt_percent_);
+        gimbal_driver_->setPanPercent(pan_percent_);
+    }
+
     printStatus();
 }
 

@@ -803,8 +803,17 @@
                             </div>
                         </div>
                     </div>
+                    <div class="form-group" id="curveGroup">
+                        <label>SPEED CURVE:</label>
+                        <div class="curve-select-row">
+                            <select class="curve-select" id="bindingCurveSelect">
+                                <option value="linear">LINEAR</option>
+                            </select>
+                            <button class="btn-curve-edit" id="bindingCurveEditBtn" title="Open Curve Editor">&#9998;</button>
+                        </div>
+                    </div>
                     <div class="binding-info">
-                        <strong>INSTRUCTIONS:</strong> Click on the key display area and press the desired key to bind. Use Single mode for on/off control or Continuous mode for variable control.
+                        <strong>INSTRUCTIONS:</strong> Click on the key display area and press the desired key to bind. Use Single mode for on/off control or Continuous mode for variable control. Select a speed curve to control how fast the value ramps up when holding keys.
                     </div>
                 </div>
             </div>
@@ -1082,6 +1091,10 @@
                 const valueInput = document.getElementById('bindingValue');
                 const minValueInput = document.getElementById('bindingMinValue');
                 const maxValueInput = document.getElementById('bindingMaxValue');
+                const curveSelect = document.getElementById('bindingCurveSelect');
+
+                // 刷新曲线下拉列表
+                refreshCurveSelect();
 
                 if (binding) {
                     typeSelect.value = binding.type;
@@ -1108,6 +1121,12 @@
                     valueInput.value = binding.value || 1.0;
                     minValueInput.value = binding.minValue !== undefined ? binding.minValue : -1.0;
                     maxValueInput.value = binding.maxValue !== undefined ? binding.maxValue : 1.0;
+                    // 设置曲线选择
+                    if (curveSelect && binding.curveId) {
+                        curveSelect.value = binding.curveId;
+                    } else if (curveSelect) {
+                        curveSelect.value = 'linear';
+                    }
                 } else {
                     typeSelect.value = 'single';
                     updateFormByType('single');
@@ -1117,6 +1136,26 @@
                     valueInput.value = 1.0;
                     minValueInput.value = -1.0;
                     maxValueInput.value = 1.0;
+                    if (curveSelect) curveSelect.value = 'linear';
+                }
+            }
+
+            // 刷新曲线下拉选项
+            function refreshCurveSelect() {
+                const curveSelect = document.getElementById('bindingCurveSelect');
+                if (!curveSelect || typeof speedCurveManager === 'undefined') return;
+                const currentVal = curveSelect.value;
+                curveSelect.innerHTML = '';
+                const allCurves = speedCurveManager.getAllCurves();
+                Object.keys(allCurves).forEach(id => {
+                    const opt = document.createElement('option');
+                    opt.value = id;
+                    opt.textContent = allCurves[id].name || id;
+                    curveSelect.appendChild(opt);
+                });
+                // 恢复选择
+                if (allCurves[currentVal]) {
+                    curveSelect.value = currentVal;
                 }
             }
 
@@ -1127,6 +1166,7 @@
                 const positiveKeyGroup = document.getElementById('positiveKeyGroup');
                 const valueGroup = document.getElementById('valueGroup');
                 const continuousRangeGroup = document.getElementById('continuousRangeGroup');
+                const curveGroup = document.getElementById('curveGroup');
 
                 if (type === 'single') {
                     singleKeyGroup.style.display = 'flex';
@@ -1134,12 +1174,14 @@
                     positiveKeyGroup.style.display = 'none';
                     valueGroup.style.display = 'flex';
                     continuousRangeGroup.style.display = 'none';
+                    if (curveGroup) curveGroup.style.display = 'flex';
                 } else if (type === 'continuous') {
                     singleKeyGroup.style.display = 'none';
                     negativeKeyGroup.style.display = 'flex';
                     positiveKeyGroup.style.display = 'flex';
                     valueGroup.style.display = 'none';
                     continuousRangeGroup.style.display = 'flex';
+                    if (curveGroup) curveGroup.style.display = 'flex';
                 }
             }
 
@@ -1162,11 +1204,6 @@
 
             // 删除绑定
             document.getElementById('deleteBinding').addEventListener('click', function() {
-                // 通道1和通道2为只读，禁止删除
-                if (currentChannelNum === 1 || currentChannelNum === 2) {
-                    alert('CH1 and CH2 are system default bindings, cannot be deleted');
-                    return;
-                }
                 if (!currentChannelNum || !window.channelKeyBinder) return;
 
                 if (confirm(`Are you sure you want to delete the binding for CH${currentChannelNum}?`)) {
@@ -1179,11 +1216,6 @@
 
             // 保存绑定
             document.getElementById('saveBinding').addEventListener('click', function() {
-                // 通道1和通道2为只读，禁止修改
-                if (currentChannelNum === 1 || currentChannelNum === 2) {
-                    alert('CH1 and CH2 are system default bindings, cannot be modified');
-                    return;
-                }
                 if (!currentChannelNum || !window.channelKeyBinder) return;
 
                 const type = document.getElementById('bindingTypeSelect').value;
@@ -1193,6 +1225,8 @@
                 const value = parseFloat(document.getElementById('bindingValue').value);
                 const minValue = parseFloat(document.getElementById('bindingMinValue').value);
                 const maxValue = parseFloat(document.getElementById('bindingMaxValue').value);
+                const curveSelect = document.getElementById('bindingCurveSelect');
+                const curveId = curveSelect ? curveSelect.value : 'linear';
 
                 if (type === 'single') {
                     if (!singleKey) {
@@ -1202,7 +1236,8 @@
                     const success = window.channelKeyBinder.setBinding(currentChannelNum, {
                         type: 'single',
                         key: singleKey,
-                        value: value
+                        value: value,
+                        curveId: curveId
                     });
                     if (!success) return; // 冲突检测失败，不关闭模态框
                 } else if (type === 'continuous') {
@@ -1215,7 +1250,8 @@
                         negativeKey: negativeKey,
                         positiveKey: positiveKey,
                         minValue: minValue,
-                        maxValue: maxValue
+                        maxValue: maxValue,
+                        curveId: curveId
                     });
                     if (!success) return; // 冲突检测失败，不关闭模态框
                 }
@@ -1247,6 +1283,27 @@
             // 按键类型改变
             document.getElementById('bindingTypeSelect').addEventListener('change', function() {
                 updateFormByType(this.value);
+            });
+
+            // 曲线编辑按钮
+            const curveEditBtn = document.getElementById('bindingCurveEditBtn');
+            if (curveEditBtn) {
+                curveEditBtn.addEventListener('click', function() {
+                    window.open('curve_editor.html', 'curveEditor', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+                });
+            }
+
+            // 监听 storage 变化，刷新曲线列表（当曲线编辑器保存后）
+            window.addEventListener('storage', function(e) {
+                if (e.key === 'customSpeedCurves') {
+                    if (typeof refreshCurveSelect === 'function') {
+                        refreshCurveSelect();
+                    }
+                    // 刷新 binder 中的曲线缓存
+                    if (window.channelKeyBinder && typeof window.channelKeyBinder.refreshCurves === 'function') {
+                        window.channelKeyBinder.refreshCurves();
+                    }
+                }
             });
 
             // 按键捕获功能

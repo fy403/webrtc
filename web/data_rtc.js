@@ -237,24 +237,26 @@ window.addEventListener('load', () => {
     }
 
     function dataSendSbus(forward, turn) {
+        // 始终更新通道显示（即使未连接也要反映当前值）
+        dataUpdateChannelDisplay();
+
         if (!dataCurrentDataChannel || dataCurrentDataChannel.readyState !== 'open') return;
         const limitedForward = dataApplyThrottleLimit(forward);
-        actualSentForward = limitedForward; // 保存实际发送的油门值
+        actualSentForward = limitedForward;
         uiSpeed = Math.round(Math.abs(limitedForward) * 100);
+        lastSentState = { forward: limitedForward, turn: turn || 0 };
         dataUpdateSystemStatusDisplay();
 
-        // 获取通道绑定的值
+        // ChannelKeyBinder 是全部16个通道的唯一数据源（包括 CH1/CH2）
         let channelValues = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         if (window.channelKeyBinder) {
             channelValues = window.channelKeyBinder.getAllChannelValues();
         }
 
         try {
-            // 使用新协议 RCProtocol v2，直接传输-1.0~1.0浮点数
-            // CH1, CH2 由控制器控制，其他通道由按键绑定控制
             const frame = RCProtocol.encode({
-                ch1: limitedForward,
-                ch2: turn || 0,
+                ch1: channelValues[0],
+                ch2: channelValues[1],
                 ch3: channelValues[2],
                 ch4: channelValues[3],
                 ch5: channelValues[4],
@@ -271,7 +273,6 @@ window.addEventListener('load', () => {
                 ch16: channelValues[15]
             });
             dataCurrentDataChannel.send(frame);
-            // 更新通道显示
             dataUpdateChannelDisplay();
         } catch (e) {
             console.error('Failed to send RC frame', e);
@@ -303,15 +304,10 @@ window.addEventListener('load', () => {
     }
 
     function initControllers() {
-        // Initialize curve manager and load saved curve
-        const currentSpeedCurve = speedCurveManager.getCurrentSpeedCurve() || DEFAULT_SPEED_CURVE;
-        const currentCurve = speedCurveManager.getCurrentCurve();
-        const curveName = currentCurve ? currentCurve.name : 'Default';
-        console.log('Loading speed curve:', speedCurveManager.currentCurveId, curveName);
-        updateStatus(`加速曲线: ${curveName}`);
-
+        // KeyboardController 仅用于 WASD 按键视觉反馈（通道条高亮）
+        // 实际数据由 ChannelKeyBinder 统一管理所有16个通道
         const keyboard = new KeyboardController({
-            curve: currentSpeedCurve,
+            curve: DEFAULT_SPEED_CURVE,
             onVisualChange: (state) => {
                 dataState.W = !!state.W?.pressed;
                 dataState.S = !!state.S?.pressed;
@@ -326,35 +322,12 @@ window.addEventListener('load', () => {
         controllerManager.register('keyboard', keyboard, 10);
         controllerManager.register('xbox', xbox, 8);
 
-        // Set up curve change callback - update keyboard curve when it changes
-        speedCurveManager.setOnChange((curve) => {
-            if (curve) {
-                // Update the keyboard controller's curve
-                keyboard.curve = new SpeedCurve(curve.points);
-                console.log('Speed curve updated:', curve.name);
-                if (typeof updateStatus === 'function') {
-                    updateStatus(`加速曲线已切换: ${curve.name}`);
-                }
-            }
-        });
-
-        // Listen for localStorage changes from curve editor page
+        // 监听曲线编辑器保存，刷新 binder 曲线缓存
         window.addEventListener('storage', (event) => {
-            if (event.key === 'speedCurveId' || event.key === 'customSpeedCurves') {
-                console.log('[Storage] Detected curve change:', event.key);
-                // Reload custom curves from localStorage
+            if (event.key === 'customSpeedCurves' && window.channelKeyBinder) {
                 speedCurveManager.reloadCustomCurves();
-                // Get the current curve
-                const currentCurveId = localStorage.getItem('speedCurveId') || 'linear';
-                const curve = speedCurveManager.getCurve(currentCurveId);
-                if (curve) {
-                    // Update the keyboard controller's curve
-                    keyboard.curve = new SpeedCurve(curve.points);
-                    console.log('[Storage] Speed curve reloaded:', curve.name);
-                    if (typeof updateStatus === 'function') {
-                        updateStatus(`加速曲线已更新: ${curve.name}`);
-                    }
-                }
+                window.channelKeyBinder.refreshCurves();
+                console.log('[Storage] Channel binder curves refreshed from editor');
             }
         });
 
@@ -431,19 +404,14 @@ window.addEventListener('load', () => {
         if (dataElements.keyD) dataElements.keyD.classList.toggle('active', dataState.D);
     }
 
-    // 更新SBUS通道显示
+    // 更新SBUS通道显示（全部来自 ChannelKeyBinder）
     function dataUpdateChannelDisplay() {
-        // 如果没有通道绑定器，使用默认值
         let values = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         if (window.currentChannelValues) {
             values = window.currentChannelValues;
         } else if (window.channelKeyBinder) {
             values = window.channelKeyBinder.getAllChannelValues();
         }
-
-        // 更新 CH1 和 CH2 为当前的控制器值
-        values[0] = lastSentState.forward || 0;
-        values[1] = lastSentState.turn || 0;
 
         for (let i = 0; i < 16; i++) {
             const channelNum = i + 1;
@@ -879,21 +847,18 @@ window.addEventListener('load', () => {
     // 初始化油门比例仪表盘到0%
     updateThrottleGauge(0);
 
-    // 初始化通道按键绑定器
+    // 初始化通道按键绑定器（全部16个通道的唯一数据源）
     if (typeof ChannelKeyBinder !== 'undefined') {
         window.channelKeyBinder = new ChannelKeyBinder();
         window.channelKeyBinder.loadFromConfig();
         window.channelKeyBinder.start();
 
-        // 当通道值变化时，立即发送新的 SBUS 帧
+        // 通道值变化时立即发送 SBUS 帧
         window.channelKeyBinder.setOnValueChange(() => {
-            if (lastSentState) {
-                // 使用最后发送的 forward 和 turn 值
-                dataSendSbus(lastSentState.forward, lastSentState.turn);
-            }
+            dataSendSbus(lastSentState.forward, lastSentState.turn);
         });
 
-        console.log('通道按键绑定器已启动');
+        console.log('ChannelKeyBinder started — single source of truth for all 16 channels');
     }
 
     // Send peer_close on page unload

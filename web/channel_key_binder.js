@@ -3,19 +3,69 @@
   class ChannelKeyBinder {
     constructor() {
       this.bindings = {};
-      this.keyStates = {};
       this.channelValues = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-      this.activeKey = null;
-      this.activeChannel = null;
+      this.keyPressTimestamps = {};   // keyCode -> timestamp when first pressed
+      this.activeDirection = {};      // channelNum -> 1 or -1 (direction of active key)
       this.onValueChange = null;
       this.keydownHandler = null;
       this.keyupHandler = null;
+      this._tick = this._tick.bind(this);
+      this._running = false;
+      this._previousValues = [...this.channelValues]; // for change detection
     }
 
     // 初始化绑定配置
     init(bindings) {
       this.bindings = bindings || {};
+
+      // 迁移：CH1/CH2 为 null 时填入默认 WASD 绑定（CH1=前后W/S, CH2=左右A/D）
+      const defaults = {
+        ch1: { type: 'continuous', negativeKey: 'KeyS', positiveKey: 'KeyW', minValue: -1.0, maxValue: 1.0, startValue: 0, curveId: 'linear' },
+        ch2: { type: 'continuous', negativeKey: 'KeyA', positiveKey: 'KeyD', minValue: -1.0, maxValue: 1.0, startValue: 0, curveId: 'linear' },
+      };
+      let migrated = false;
+      for (const [key, def] of Object.entries(defaults)) {
+        if (!this.bindings[key]) {
+          this.bindings[key] = def;
+          migrated = true;
+        }
+      }
+      // 为缺少 curveId 的绑定补全
+      for (let i = 1; i <= 16; i++) {
+        const b = this.bindings[`ch${i}`];
+        if (b && !b.curveId) b.curveId = 'linear';
+      }
+      if (migrated) {
+        console.log('[ChannelKeyBinder] Migrated CH1/CH2 to default WASD bindings');
+        try { ConfigManager.updateChannelBindings(this.bindings); } catch(e) {}
+      }
+
+      this._buildCurveCache();
       console.log('通道按键绑定已初始化:', this.bindings);
+    }
+
+    // 为每条绑定预构建 SpeedCurve
+    _buildCurveCache() {
+      this._curveCache = {};
+      for (let i = 1; i <= 16; i++) {
+        const binding = this.bindings[`ch${i}`];
+        if (!binding) continue;
+        this._curveCache[i] = this._getCurveForChannel(i);
+      }
+    }
+
+    // 获取通道对应的 SpeedCurve
+    _getCurveForChannel(channelNum) {
+      const binding = this.bindings[`ch${channelNum}`];
+      if (!binding) return global.DEFAULT_SPEED_CURVE || new SpeedCurve([]);
+      const curveId = binding.curveId;
+      if (!curveId) return global.DEFAULT_SPEED_CURVE || new SpeedCurve([]);
+      // 从 speedCurveManager 获取曲线
+      if (global.speedCurveManager) {
+        const curve = global.speedCurveManager.getCurve(curveId);
+        if (curve) return new SpeedCurve(curve.points);
+      }
+      return global.DEFAULT_SPEED_CURVE || new SpeedCurve([]);
     }
 
     // 加载配置
@@ -31,19 +81,21 @@
 
     // 启动键盘监听
     start() {
-      if (this.keydownHandler || this.keyupHandler) {
-        return; // 已经启动
-      }
+      if (this._running) return;
 
       this.keydownHandler = (e) => this._handleKeydown(e);
       this.keyupHandler = (e) => this._handleKeyup(e);
 
       window.addEventListener('keydown', this.keydownHandler);
       window.addEventListener('keyup', this.keyupHandler);
+
+      this._running = true;
+      requestAnimationFrame(this._tick);
     }
 
     // 停止键盘监听
     stop() {
+      this._running = false;
       if (this.keydownHandler) {
         window.removeEventListener('keydown', this.keydownHandler);
         this.keydownHandler = null;
@@ -61,33 +113,28 @@
 
       const code = e.code;
 
-      // 查找是否有绑定到这个键的通道
       for (let i = 1; i <= 16; i++) {
         const binding = this.bindings[`ch${i}`];
         if (!binding) continue;
 
         if (binding.type === 'single') {
-          // 一档模式：按下置为 value，不按为 0
-          if (binding.key === code) {
+          if (binding.key === code && !this.keyPressTimestamps[code]) {
             e.preventDefault();
-            this.channelValues[i - 1] = binding.value;
-            this._notifyValueChange();
+            this.keyPressTimestamps[code] = performance.now();
+            this.activeDirection[i] = 1;
             return;
           }
         } else if (binding.type === 'continuous') {
-          // 连续模式：指定范围
-          if (binding.negativeKey === code) {
+          if (binding.negativeKey === code && !this.keyPressTimestamps[code]) {
             e.preventDefault();
-            this.keyStates[code] = true;
-            this.activeChannel = i;
-            this._updateContinuousValue(i, -1);
+            this.keyPressTimestamps[code] = performance.now();
+            this.activeDirection[i] = -1;
             return;
           }
-          if (binding.positiveKey === code) {
+          if (binding.positiveKey === code && !this.keyPressTimestamps[code]) {
             e.preventDefault();
-            this.keyStates[code] = true;
-            this.activeChannel = i;
-            this._updateContinuousValue(i, 1);
+            this.keyPressTimestamps[code] = performance.now();
+            this.activeDirection[i] = 1;
             return;
           }
         }
@@ -98,42 +145,33 @@
     _handleKeyup(e) {
       const code = e.code;
 
-      // 检查是否是一档模式的键
       for (let i = 1; i <= 16; i++) {
         const binding = this.bindings[`ch${i}`];
         if (!binding) continue;
 
         if (binding.type === 'single') {
-          // 一档模式：不按为 0
           if (binding.key === code) {
             e.preventDefault();
-            this.channelValues[i - 1] = 0;
-            this._notifyValueChange();
+            delete this.keyPressTimestamps[code];
+            delete this.activeDirection[i];
+            // 值由 tick 衰减到 0
             return;
           }
         }
-      }
-
-      // 检查是否是连续模式的键
-      for (let i = 1; i <= 16; i++) {
-        const binding = this.bindings[`ch${i}`];
-        if (!binding) continue;
 
         if (binding.type === 'continuous') {
           if (binding.negativeKey === code || binding.positiveKey === code) {
-            this.keyStates[code] = false;
+            delete this.keyPressTimestamps[code];
             // 检查该通道是否还有其他键被按下
-            const hasNegative = this.keyStates[binding.negativeKey];
-            const hasPositive = this.keyStates[binding.positiveKey];
+            const negStillDown = this.keyPressTimestamps[binding.negativeKey] !== undefined;
+            const posStillDown = this.keyPressTimestamps[binding.positiveKey] !== undefined;
 
-            if (!hasNegative && !hasPositive) {
-              // 没有按键，重置为起始点
-              this.channelValues[i - 1] = binding.startValue || 0;
-              this._notifyValueChange();
-            } else if (hasNegative) {
-              this._updateContinuousValue(i, -1);
-            } else if (hasPositive) {
-              this._updateContinuousValue(i, 1);
+            if (!negStillDown && !posStillDown) {
+              delete this.activeDirection[i];
+            } else if (negStillDown) {
+              this.activeDirection[i] = -1;
+            } else if (posStillDown) {
+              this.activeDirection[i] = 1;
             }
             return;
           }
@@ -141,21 +179,98 @@
       }
     }
 
-    // 更新连续模式值
-    _updateContinuousValue(channelNum, direction) {
-      const binding = this.bindings[`ch${channelNum}`];
-      if (!binding) return;
+    // 每帧 tick：根据按键时长 + 曲线计算并更新通道值
+    _tick() {
+      const now = performance.now();
+      let changed = false;
 
-      const minValue = binding.minValue !== undefined ? binding.minValue : -1.0;
-      const maxValue = binding.maxValue !== undefined ? binding.maxValue : 1.0;
+      for (let i = 1; i <= 16; i++) {
+        const binding = this.bindings[`ch${i}`];
+        if (!binding) {
+          // 无绑定的通道归零
+          if (Math.abs(this.channelValues[i - 1]) > 0.001) {
+            this.channelValues[i - 1] = 0;
+            changed = true;
+          }
+          continue;
+        }
 
-      if (direction === -1) {
-        this.channelValues[channelNum - 1] = minValue;
-      } else {
-        this.channelValues[channelNum - 1] = maxValue;
+        const direction = this.activeDirection[i];
+
+        if (binding.type === 'single') {
+          if (direction === 1) {
+            // 一档模式：查找到该按键的时间戳
+            let elapsed = 0;
+            if (binding.key && this.keyPressTimestamps[binding.key]) {
+              elapsed = now - this.keyPressTimestamps[binding.key];
+            }
+            const curve = this._curveCache[i] || global.DEFAULT_SPEED_CURVE;
+            const factor = curve.sample(elapsed);
+            const targetVal = binding.value * factor;
+            if (Math.abs(targetVal - this.channelValues[i - 1]) > 0.001) {
+              this.channelValues[i - 1] = targetVal;
+              changed = true;
+            }
+          } else {
+            // 按键释放，快速衰减到 0
+            if (Math.abs(this.channelValues[i - 1]) > 0.001) {
+              const decay = Math.max(0, Math.abs(this.channelValues[i - 1]) - 0.15);
+              if (decay < 0.001) {
+                this.channelValues[i - 1] = 0;
+              } else {
+                this.channelValues[i - 1] = Math.sign(this.channelValues[i - 1]) * decay;
+              }
+              changed = true;
+            }
+          }
+        } else if (binding.type === 'continuous') {
+          if (direction) {
+            // 连续模式：计算按住时长，从曲线获取因子
+            let elapsed = 0;
+            const lookupKey = direction === 1 ? binding.positiveKey : binding.negativeKey;
+            if (lookupKey && this.keyPressTimestamps[lookupKey]) {
+              elapsed = now - this.keyPressTimestamps[lookupKey];
+            }
+            const curve = this._curveCache[i] || global.DEFAULT_SPEED_CURVE;
+            const factor = curve.sample(elapsed); // 0..1
+
+            const minValue = binding.minValue !== undefined ? binding.minValue : -1.0;
+            const maxValue = binding.maxValue !== undefined ? binding.maxValue : 1.0;
+
+            let targetVal;
+            if (direction === -1) {
+              targetVal = minValue * factor;
+            } else {
+              targetVal = maxValue * factor;
+            }
+            if (Math.abs(targetVal - this.channelValues[i - 1]) > 0.001) {
+              this.channelValues[i - 1] = targetVal;
+              changed = true;
+            }
+          } else {
+            // 没有按键，衰减到起始值
+            const startValue = binding.startValue !== undefined ? binding.startValue : 0;
+            if (Math.abs(this.channelValues[i - 1] - startValue) > 0.001) {
+              const diff = startValue - this.channelValues[i - 1];
+              const step = diff * 0.3; // 快速向起始值衰减
+              if (Math.abs(step) < 0.001) {
+                this.channelValues[i - 1] = startValue;
+              } else {
+                this.channelValues[i - 1] += step;
+              }
+              changed = true;
+            }
+          }
+        }
       }
 
-      this._notifyValueChange();
+      if (changed) {
+        this._notifyValueChange();
+      }
+
+      if (this._running) {
+        requestAnimationFrame(this._tick);
+      }
     }
 
     // 通知值变化
@@ -178,19 +293,17 @@
 
     // 检查按键冲突
     checkKeyConflict(channelNum, newBinding) {
-      if (!newBinding) return null; // 清除绑定不检查冲突
-      
+      if (!newBinding) return null;
+
       const conflicts = [];
       const newKeys = [];
-      
-      // 收集新绑定的所有按键
+
       if (newBinding.type === 'single') {
         if (newBinding.key) newKeys.push(newBinding.key);
       } else if (newBinding.type === 'continuous') {
         if (newBinding.negativeKey) newKeys.push(newBinding.negativeKey);
         if (newBinding.positiveKey) newKeys.push(newBinding.positiveKey);
-        
-        // 检查内部冲突：连续模式的负值和正值不能相同
+
         if (newBinding.negativeKey && newBinding.positiveKey && newBinding.negativeKey === newBinding.positiveKey) {
           conflicts.push({
             channel: channelNum,
@@ -200,27 +313,18 @@
           });
         }
       }
-      
-      // 如果有内部冲突，直接返回
-      if (conflicts.length > 0) {
-        return conflicts[0];
-      }
-      
-      // 检查所有新按键是否与现有按键冲突
+
+      if (conflicts.length > 0) return conflicts[0];
+
       for (const newKey of newKeys) {
-        // 检查所有通道（包括自身通道的其他按键）
         for (let i = 1; i <= 16; i++) {
-          // 如果是自身通道，需要检查是否与同通道的其他按键冲突
           if (i === channelNum) {
             const existingBinding = this.bindings[`ch${i}`];
             if (!existingBinding) continue;
-            
-            // 同通道内冲突检测
+
             if (newBinding.type === 'continuous' && existingBinding.type === 'continuous') {
-              // 连续模式内部：负值和正值不能相同（前面已检查）
-              // 这里不需要额外检查，因为前面已经检查过
+              // skip
             } else {
-              // 检查新按键是否与同通道的其他模式按键冲突
               const existingKeys = [];
               if (existingBinding.type === 'single' && existingBinding.key) {
                 existingKeys.push(existingBinding.key);
@@ -228,8 +332,7 @@
                 if (existingBinding.negativeKey) existingKeys.push(existingBinding.negativeKey);
                 if (existingBinding.positiveKey) existingKeys.push(existingBinding.positiveKey);
               }
-              
-              // 如果新按键已经在同通道的其他按键中，说明冲突
+
               if (existingKeys.includes(newKey)) {
                 conflicts.push({
                   channel: i,
@@ -237,17 +340,15 @@
                   type: 'same-channel',
                   message: `按键 ${this.formatKeyName(newKey)} 在当前通道的其他模式中已使用`
                 });
-                break; // 找到一个冲突就够了
+                break;
               }
             }
-            continue; // 自身通道的同模式冲突已在上面处理
+            continue;
           }
-          
-          // 检查其他通道的冲突
+
           const existingBinding = this.bindings[`ch${i}`];
           if (!existingBinding) continue;
-          
-          // 检查一档模式冲突
+
           if (existingBinding.type === 'single' && existingBinding.key === newKey) {
             conflicts.push({
               channel: i,
@@ -255,10 +356,9 @@
               type: 'single',
               message: `按键 ${this.formatKeyName(newKey)} 已被通道${i}的一档模式占用`
             });
-            break; // 找到一个冲突就够了
+            break;
           }
-          
-          // 检查连续模式冲突
+
           if (existingBinding.type === 'continuous') {
             if (existingBinding.negativeKey === newKey) {
               conflicts.push({
@@ -267,7 +367,7 @@
                 type: 'continuous-negative',
                 message: `按键 ${this.formatKeyName(newKey)} 已被通道${i}的连续模式负值占用`
               });
-              break; // 找到一个冲突就够了
+              break;
             }
             if (existingBinding.positiveKey === newKey) {
               conflicts.push({
@@ -276,18 +376,15 @@
                 type: 'continuous-positive',
                 message: `按键 ${this.formatKeyName(newKey)} 已被通道${i}的连续模式正值占用`
               });
-              break; // 找到一个冲突就够了
+              break;
             }
           }
         }
-        
-        // 如果找到冲突就跳出外层循环
-        if (conflicts.length > 0) {
-          break;
-        }
+
+        if (conflicts.length > 0) break;
       }
-      
-      return conflicts.length > 0 ? conflicts[0] : null; // 返回第一个冲突
+
+      return conflicts.length > 0 ? conflicts[0] : null;
     }
 
     // 格式化按键名
@@ -298,15 +395,16 @@
 
     // 设置通道绑定
     setBinding(channelNum, binding) {
-      // 检查按键冲突
       const conflict = this.checkKeyConflict(channelNum, binding);
       if (conflict) {
         console.warn(`按键冲突: ${conflict.message}`);
         alert(`按键冲突: ${conflict.message}`);
         return false;
       }
-      
+
       this.bindings[`ch${channelNum}`] = binding;
+      // 重建该通道的曲线缓存
+      this._curveCache[channelNum] = this._getCurveForChannel(channelNum);
       // 保存到配置
       ConfigManager.updateChannelBindings({ [`ch${channelNum}`]: binding });
       return true;
@@ -320,10 +418,16 @@
     // 清除通道绑定
     clearBinding(channelNum) {
       this.bindings[`ch${channelNum}`] = null;
+      delete this._curveCache[channelNum];
+      delete this.activeDirection[channelNum];
       this.channelValues[channelNum - 1] = 0;
       this._notifyValueChange();
-      // 保存到配置
       ConfigManager.updateChannelBindings({ [`ch${channelNum}`]: null });
+    }
+
+    // 刷新曲线缓存（曲线管理器更新后调用）
+    refreshCurves() {
+      this._buildCurveCache();
     }
   }
 

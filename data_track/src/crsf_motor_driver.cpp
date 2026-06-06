@@ -1,17 +1,9 @@
 #include "crsf_motor_driver.h"
 #include <iostream>
-#include <cstring>
-#include <chrono>
 #include <algorithm>
-#include <unistd.h>
-#include <time.h>
-#include <errno.h>
+#include <cmath>
 
-// CRSF协议相关定义
-#define CRSF_FRAME_SIZE_MAX 64
-#define CRSF_FRAMETYPE_RC_CHANNELS_PACKED 0x16
-
-CRSFMotorDriver::CRSFMotorDriver(const std::string &port,
+CRSFMotorDriver::CRSFMotorDriver(std::shared_ptr<CRSFTransport> transport,
                                  uint16_t servo_min_pulse,
                                  uint16_t servo_max_pulse,
                                  uint16_t servo_neutral_pulse,
@@ -23,8 +15,7 @@ CRSFMotorDriver::CRSFMotorDriver(const std::string &port,
                                  uint16_t esc_neutral_pulse,
                                  bool esc_reversible,
                                  uint8_t esc_channel)
-    : port_(port),
-      serial_(std::make_unique<SerialPort>(port)),
+    : transport_(std::move(transport)),
       servo_config_(std::make_unique<ServoConfig>(
           servo_min_pulse, servo_max_pulse, servo_neutral_pulse,
           servo_min_angle, servo_max_angle, servo_channel,
@@ -32,9 +23,7 @@ CRSFMotorDriver::CRSFMotorDriver(const std::string &port,
       esc_config_(std::make_unique<ESCConfig>(
           esc_min_pulse, esc_max_pulse, esc_neutral_pulse,
           esc_reversible, esc_channel, "CRSF ESC")),
-      crsf_config_(std::make_unique<CRSFConfig>()),
-      running_(false) {
-    channels_.resize(crsf_config_->channel_count, crsf_config_->channel_neutral);
+      crsf_config_(std::make_unique<CRSFConfig>()) {
 }
 
 CRSFMotorDriver::~CRSFMotorDriver() {
@@ -42,112 +31,12 @@ CRSFMotorDriver::~CRSFMotorDriver() {
 }
 
 bool CRSFMotorDriver::connect() {
-    if (!serial_->openPort()) {
-        return false;
-    }
-
-    // 启动后台发送线程
-    running_ = true;
-    send_thread_ = std::thread(&CRSFMotorDriver::sendThreadFunc, this);
-
-    std::cout << "CRSF Motor Driver connected successfully" << std::endl;
-    return true;
+    // Transport 生命周期由 MotorController 管理，这里无需操作
+    return (transport_ != nullptr);
 }
 
 void CRSFMotorDriver::disconnect() {
-    if (running_) {
-        running_ = false;
-        if (send_thread_.joinable()) {
-            send_thread_.join();
-        }
-    }
-}
-
-uint8_t CRSFMotorDriver::calculateCRC8(const uint8_t *data, size_t length) {
-    uint8_t crc = 0;
-    for (size_t i = 0; i < length; i++) {
-        crc ^= data[i];
-        for (int j = 0; j < 8; j++) {
-            if (crc & 0x80) {
-                crc = (crc << 1) ^ 0xD5;
-            } else {
-                crc = crc << 1;
-            }
-        }
-    }
-    return crc;
-}
-
-void CRSFMotorDriver::packChannels11bit(uint8_t *buffer, const std::vector<uint16_t> &ch_values, int num_channels) {
-    memset(buffer, 0, 22);
-
-    int bit_index = 0;
-    for (int i = 0; i < num_channels && i < 16; i++) {
-        uint16_t value = (i < static_cast<int>(ch_values.size())) ? ch_values[i] : crsf_config_->channel_neutral;
-        value &= 0x07FF; // 确保值在11位范围内 (0-2047)
-
-        for (int bit = 0; bit < 11; bit++) {
-            int byte_idx = bit_index >> 3;
-            int bit_in_byte = bit_index & 0x07;
-
-            if (value & (1 << bit)) {
-                buffer[byte_idx] |= (1 << bit_in_byte);
-            }
-            bit_index++;
-        }
-    }
-}
-
-void CRSFMotorDriver::createChannelsFrame(uint8_t *buffer, size_t &length) {
-    buffer[0] = crsf_config_->sync_byte;
-    buffer[1] = 24; // 数据长度: 22字节payload + 1字节type + 1字节CRC = 24
-    buffer[2] = CRSF_FRAMETYPE_RC_CHANNELS_PACKED;
-
-    packChannels11bit(&buffer[3], channels_, 16);
-
-    uint8_t crc = calculateCRC8(&buffer[2], 23); // type + 22字节payload
-    buffer[25] = crc;
-
-    length = 26; // 整个帧长度: sync(1) + len(1) + type(1) + payload(22) + crc(1) = 26
-}
-
-void CRSFMotorDriver::sendThreadFunc() {
-    uint8_t frame[CRSF_FRAME_SIZE_MAX];
-    size_t length;
-
-    const long period_nsec = 20000000; // 20ms = 20000000 纳秒
-
-    struct timespec next_time;
-    clock_gettime(CLOCK_MONOTONIC, &next_time);
-
-    while (running_) {
-        {
-            std::lock_guard<std::mutex> lock(channels_mutex_);
-            createChannelsFrame(frame, length);
-        }
-
-        serial_->writeData(frame, length);
-
-        // 计算下一次发送时间（绝对时间）
-        next_time.tv_nsec += period_nsec;
-        if (next_time.tv_nsec >= 1000000000) {
-            next_time.tv_sec += next_time.tv_nsec / 1000000000;
-            next_time.tv_nsec = next_time.tv_nsec % 1000000000;
-        }
-
-        // 使用clock_nanosleep精确等待到下一个周期
-        struct timespec remaining;
-        int ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_time, &remaining);
-
-        while (ret == EINTR && running_) {
-            ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_time, &remaining);
-        }
-
-        if (ret != 0 && ret != EINTR) {
-            std::cerr << "clock_nanosleep error: " << strerror(ret) << std::endl;
-            break;
-        }
-    }
+    // Transport 生命周期由 MotorController 管理，这里无需操作
 }
 
 uint16_t CRSFMotorDriver::servoPwmToChannel(uint16_t pwm_us) {
@@ -185,9 +74,8 @@ void CRSFMotorDriver::setThrottlePWM(uint16_t pwm_us) {
         pwm_us = max_pw;
 
     uint8_t ch_idx = esc_config_->channel - 1;
-    if (ch_idx < channels_.size()) {
-        std::lock_guard<std::mutex> lock(channels_mutex_);
-        channels_[ch_idx] = escPwmToChannel(pwm_us);
+    if (transport_) {
+        transport_->setChannel(ch_idx, escPwmToChannel(pwm_us));
     }
 }
 
@@ -199,9 +87,8 @@ void CRSFMotorDriver::setServoAngle(float angle) {
 
     uint16_t pwm_us = angleToPWM(angle);
     uint8_t ch_idx = servo_config_->channel - 1;
-    if (ch_idx < channels_.size()) {
-        std::lock_guard<std::mutex> lock(channels_mutex_);
-        channels_[ch_idx] = servoPwmToChannel(pwm_us);
+    if (transport_) {
+        transport_->setChannel(ch_idx, servoPwmToChannel(pwm_us));
     }
 }
 
@@ -242,7 +129,6 @@ void CRSFMotorDriver::setLeftRightPercent(int percent) {
     // 判断转向类型：舵机还是马达
     if (isSteeringServo()) {
         // 舵机控制左右：将百分比转换为角度
-        // 假设 0% = 中间角度，-100% = 最小角度，+100% = 最大角度
         int clamped = std::max(-100, std::min(100, percent));
 
         float min_angle = servo_config_->min_angle;
@@ -285,8 +171,7 @@ void CRSFMotorDriver::setSteeringMotor(int percent) {
     // 将PWM值设置到转向通道
     uint16_t clamped_pwm = std::max(min_pw, std::min(max_pw, pwm_us));
     uint8_t ch_idx = servo_config_->channel - 1;
-    if (ch_idx < channels_.size()) {
-        std::lock_guard<std::mutex> lock(channels_mutex_);
-        channels_[ch_idx] = servoPwmToChannel(clamped_pwm);
+    if (transport_) {
+        transport_->setChannel(ch_idx, servoPwmToChannel(clamped_pwm));
     }
 }

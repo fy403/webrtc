@@ -18,21 +18,27 @@ turnPass=qwertyuiop               # TURN服务器密码
 # =============================================================================
 # Motor Controller Configuration (电机控制器配置)
 # =============================================================================
-usbDevice=/dev/ttyUSB0            # 电机驱动板串口设备
-ttyBaudrate=115200                # 串口波特率
-motorDriverType=dummy               # 电机驱动类型：uart 或 crsf 或 pwm 或 dummy(调试用)
+usbDevice=/dev/ttyS5            # 电机驱动板串口设备
+ttyBaudrate=420000                # 串口波特率
+motorDriverType=crsf               # 电机驱动类型：uart 或 crsf 或 pwm 或 dummy(调试用)
+
+# =============================================================================
+# CRSF Gimbal Configuration (CRSF云台配置，仅 motorDriverType=crsf 时有效)
+# 其余参数（通道、脉冲、角度等）使用 MotorControllerConfig 默认值
+# =============================================================================
+enableGimbal=true                # 是否启用云台控制（true/false）
 
 # =============================================================================
 # GSM Module Configuration (4G模块配置)
 # =============================================================================
-gsmPort=/dev/ttyACM0              # 4G模块串口设备
-gsmBaudrate=115200                # 4G模块波特率
+# gsmPort=/dev/ttyACM0              # 4G模块串口设备
+# gsmBaudrate=115200                # 4G模块波特率
 
 # =============================================================================
 # GPS Module Configuration (GPS模块配置) 必须支持NMEA协议
 # =============================================================================
-gpsPort=/dev/ttyS5                # GPS模块串口设备（可选）
-gpsBaudrate=38400                 # GPS模块波特率
+# gpsPort=/dev/ttyS5                # GPS模块串口设备（可选）
+# gpsBaudrate=38400                 # GPS模块波特率
 
 # =============================================================================
 # Restart Configuration (重启配置)
