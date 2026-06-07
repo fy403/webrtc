@@ -68,19 +68,19 @@ CONFIG_ABS_PATH=$(realpath "$CONFIG_FILE")
 CONFIG_DIR=$(dirname "$CONFIG_ABS_PATH")
 CONFIG_FILENAME=$(basename "$CONFIG_ABS_PATH")
 
-# IMX419 sensor pipeline configuration (MUST run on host, before container starts)
+# Stop existing container first (release /dev/video0 before reconfiguring ISP)
+docker rm -f $CONTAINER_NAME >/dev/null 2>&1 || true
+
+# IMX419 sensor pipeline configuration (MUST run on host, after container stopped)
 VIDEO_TYPE=$(parse_config "videoType" "$CONFIG_FILE")
 if [ "$VIDEO_TYPE" = "imx419" ]; then
     echo "=============================================="
     echo " IMX419 sensor detected, configuring ISP pipeline (host-side)..."
     echo "=============================================="
     SCRIPT_DIR=$(dirname "$(realpath "$0")")
-    "$SCRIPT_DIR/imx219-config-tool.sh" set 1080p
+    "$SCRIPT_DIR/imx219-config-tool.sh" set 1080p || echo "[WARNING] IMX419 pipeline config had issues (non-fatal)"
     echo ""
 fi
-
-# Stop existing container
-docker rm -f $CONTAINER_NAME >/dev/null 2>&1
 
 # Run container
 docker run -d \
