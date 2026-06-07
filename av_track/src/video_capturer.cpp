@@ -532,50 +532,58 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
   encode_queue_.clear();
   send_queue_.clear();
 
-  // 关闭旧编码器
-  encoder_->close_encoder();
+  // ===== 关键修复：持有 encoder_mutex_ 保护编码器关闭/重开 =====
+  // 防止 encode_loop 线程正在使用 encoder 时被 close_encoder 破坏上下文
+  {
+    std::lock_guard<std::mutex> lock(encoder_mutex_);
 
-  // 使用新参数重新打开编码器
-  if (!encoder_->open_encoder(width, height, actual_fps, actual_bitrate, profile_)) {
-    std::cerr << "Failed to reconfigure encoder" << std::endl;
-    resume_capture();
-    return;
-  }
+    // 关闭旧编码器
+    encoder_->close_encoder();
 
-  // 更新编码器输出参数（SwsContext可能在分辨率不变时不需要重建）
-  AVCodecContext *encoder_context = encoder_->get_context();
-  if (!encoder_context) {
-    std::cerr << "Encoder context is null after reconfiguration" << std::endl;
-    resume_capture();
-    return;
-  }
-
-  bool resolution_changed = (encoder_out_width_ != encoder_context->width ||
-                             encoder_out_height_ != encoder_context->height ||
-                             encoder_out_pix_fmt_ != encoder_context->pix_fmt);
-  encoder_out_width_ = encoder_context->width;
-  encoder_out_height_ = encoder_context->height;
-  encoder_out_pix_fmt_ = encoder_context->pix_fmt;
-
-  if (resolution_changed && codec_context_) {
-    // 只有在分辨率变化时才重建 SwsContext
-    if (sws_context_) {
-      sws_freeContext(sws_context_);
-      sws_context_ = nullptr;
-    }
-    sws_context_ = sws_getContext(
-        codec_context_->width, codec_context_->height, codec_context_->pix_fmt,
-        encoder_out_width_, encoder_out_height_, encoder_out_pix_fmt_,
-        SWS_BILINEAR, nullptr, nullptr, nullptr);
-    if (!sws_context_) {
-      std::cerr << "Cannot recreate SwsContext after reconfigure" << std::endl;
+    // 使用新参数重新打开编码器
+    if (!encoder_->open_encoder(width, height, actual_fps, actual_bitrate, profile_)) {
+      std::cerr << "Failed to reconfigure encoder" << std::endl;
       resume_capture();
       return;
     }
-  }
 
-  // 重新初始化 FPS 滤镜
+    // 更新编码器输出参数（SwsContext可能在分辨率不变时不需要重建）
+    AVCodecContext *encoder_context = encoder_->get_context();
+    if (!encoder_context) {
+      std::cerr << "Encoder context is null after reconfiguration" << std::endl;
+      resume_capture();
+      return;
+    }
+
+    bool resolution_changed = (encoder_out_width_ != encoder_context->width ||
+                               encoder_out_height_ != encoder_context->height ||
+                               encoder_out_pix_fmt_ != encoder_context->pix_fmt);
+    encoder_out_width_ = encoder_context->width;
+    encoder_out_height_ = encoder_context->height;
+    encoder_out_pix_fmt_ = encoder_context->pix_fmt;
+
+    if (resolution_changed && codec_context_) {
+      // 只有在分辨率变化时才重建 SwsContext
+      if (sws_context_) {
+        sws_freeContext(sws_context_);
+        sws_context_ = nullptr;
+      }
+      sws_context_ = sws_getContext(
+          codec_context_->width, codec_context_->height, codec_context_->pix_fmt,
+          encoder_out_width_, encoder_out_height_, encoder_out_pix_fmt_,
+          SWS_BILINEAR, nullptr, nullptr, nullptr);
+      if (!sws_context_) {
+        std::cerr << "Cannot recreate SwsContext after reconfigure" << std::endl;
+        resume_capture();
+        return;
+      }
+    }
+  } // encoder_mutex_ 释放
+
+  // ===== 关键修复：持有 filter_mutex_ 保护 FPS 滤镜重建 =====
+  // 防止 filter_loop 线程正在使用 fps_buffer_* 时被清理
   if (fps != -1) {
+    std::lock_guard<std::mutex> lock(filter_mutex_);
     if (!init_fps_filter(encoder_out_width_, encoder_out_height_, actual_fps)) {
       std::cout << "Warning: FPS filter re-init failed, using raw framerate" << std::endl;
     }
@@ -899,11 +907,20 @@ void VideoCapturer::filter_loop() {
       }
     }
 
-    if (fps_buffer_src_ && fps_buffer_sink_) {
+    // 持锁检查并访问 FPS 滤镜，防止 reconfigure 在检查后
+    // 调用 cleanup_fps_filter 释放正在使用的滤镜
+    bool use_fps_filter;
+    {
+      std::lock_guard<std::mutex> lock(filter_mutex_);
+      use_fps_filter = (fps_buffer_src_ && fps_buffer_sink_);
+    }
+
+    if (use_fps_filter) {
       // 使用 FPS 滤镜：补帧（摄像头fps < 目标）或丢帧（摄像头fps > 目标）
       //  用真实时间戳(微秒)作为 PTS，配合 filter time_base=1/1000000
       frame->pts = av_gettime_relative();
 
+      std::lock_guard<std::mutex> lock(filter_mutex_);
       int ret = av_buffersrc_add_frame_flags(fps_buffer_src_, frame,
                                              AV_BUFFERSRC_FLAG_KEEP_REF);
       av_frame_free(&frame);  // 滤镜持有引用，释放原始帧
@@ -978,7 +995,12 @@ void VideoCapturer::encode_loop() {
       continue;
     }
 
-    bool encoded = encoder_->encode_frame(frame, packet);
+    // 持锁保护 encode 操作，确保 reconfigure 的 close/open 不会并发破坏编码器上下文
+    bool encoded;
+    {
+      std::lock_guard<std::mutex> lock(encoder_mutex_);
+      encoded = encoder_->encode_frame(frame, packet);
+    }
     // 使用 frame pool 复用内存
     release_scaled_frame(frame);
 

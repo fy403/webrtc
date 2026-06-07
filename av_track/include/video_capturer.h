@@ -84,6 +84,10 @@ private:
   bool init_fps_filter(int width, int height, int fps);
   void cleanup_fps_filter();
 
+  // 互斥锁保护 reconfiguration 期间对 encoder 和 fps filter 的并发访问
+  std::mutex encoder_mutex_;
+  std::mutex filter_mutex_;
+
   std::shared_ptr<rtc::Track> track_;
 };
 
