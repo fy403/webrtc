@@ -299,7 +299,6 @@ window.addEventListener('load', () => {
 
     // 全局 V 键循环切换
     let qualityToastTimer = null;
-    let qualityDisplayTimer = null;
     let lastQualitySwitchTime = 0;
     const MIN_SWITCH_INTERVAL = 3000; // 最小切换间隔 3 秒
 
@@ -322,7 +321,7 @@ window.addEventListener('load', () => {
         }, 2000);
     }
 
-    // 仅在 V 键切换时显示画质挡位，2s 后隐藏
+    // 显示当前画质挡位，持续显示直到下次切换
     function showQualityDisplay(presetKey) {
         const preset = qualityPresets[presetKey];
         if (!preset) return;
@@ -331,8 +330,7 @@ window.addEventListener('load', () => {
         if (!qualityItem || !qualityLabel) return;
         qualityLabel.textContent = preset.label;
         qualityItem.style.display = '';
-        if (qualityDisplayTimer) clearTimeout(qualityDisplayTimer);
-        qualityDisplayTimer = setTimeout(() => { qualityItem.style.display = 'none'; }, 2000);
+        // 不再自动隐藏，保持持续显示
     }
 
     document.addEventListener('keydown', (e) => {
