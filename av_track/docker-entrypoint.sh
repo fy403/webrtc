@@ -48,21 +48,6 @@ main() {
         sleep 1
     fi
 
-    # IMX419 sensor pipeline configuration (uses IMX219 tool as compatible)
-    VIDEO_TYPE=$(get_config "videoType" "")
-    if [ "$VIDEO_TYPE" = "imx419" ]; then
-        echo "$(date): IMX419 sensor detected, configuring pipeline for 1080p..."
-        set +e  # 管线配置失败不应终止容器
-        ./imx219-config-tool.sh set 1080p
-        CONFIG_EXIT=$?
-        set -e
-        if [ "$CONFIG_EXIT" -ne 0 ]; then
-            echo "$(date): WARNING - IMX419 pipeline config exited with code $CONFIG_EXIT, continuing anyway..."
-        else
-            echo "$(date): IMX419 pipeline config OK"
-        fi
-    fi
-
     # Start RTC stream with config file
     while true; do
         echo "$(date): Starting RTC stream..."

@@ -116,18 +116,18 @@ with open('/etc/iqfiles/imx219_RADXA-CAMERA-8M_default.json', 'r') as f:
 
 sc = data['sensor_calib']
 
-# 核心修复: 限制模拟增益 ≤ 4x (原 11x)
-sc['CISGainSet']['CISAgainRange']['Max'] = 4
+# 核心修复: 限制模拟增益 ≤ 2x (原 11x，太阳下必须有上限)
+sc['CISGainSet']['CISAgainRange']['Max'] = 2
 sc['Gain2Reg']['GainRange'] = [1, 67, 256, 0, 1, 256, 43663]
 sc['CISMinFps'] = 20
 
-# AE route: 优先延长曝光，延迟增益提升
+# AE route: 强光下压缩曝光时间，限制增益
 mc = data['main_scene'][0]['sub_scene'][0]['scene_isp21']
 la = mc['ae_calib']['LinearAeCtrl']
 la['Route'] = {
-    "TimeDot": [0, 0.01, 0.02, 0.033, 0.05, 0.1],
+    "TimeDot": [0, 0.001, 0.002, 0.004, 0.007, 0.01],
     "TimeDot_len": 6,
-    "GainDot": [1, 1, 1.5, 2, 3, 4],
+    "GainDot": [1, 1, 1.2, 1.5, 1.7, 2],
     "GainDot_len": 6,
     "IspDGainDot": [1, 1, 1, 1, 1, 1],
     "IspDGainDot_len": 6,
@@ -135,11 +135,12 @@ la['Route'] = {
     "PIrisDot_len": 6
 }
 la['StrategyMode'] = 'AECV2_STRATEGY_MODE_HIGHLIGHT'
-la['ToleranceIn'] = 5
-la['ToleranceOut'] = 10
-la['Evbias'] = 25  # +0.25 EV
+la['ToleranceIn'] = 3
+la['ToleranceOut'] = 8
+la['Evbias'] = -50  # -0.5 EV 强光压制
+la['AecMeasType'] = 'AECV2_MEASURETYPE_MEAN'
 
-mc['ae_calib']['CommCtrl']['AecSpeed']['DampOver'] = 0.3
+mc['ae_calib']['CommCtrl']['AecSpeed']['DampOver'] = 0.7
 mc['ae_calib']['CommCtrl']['AecSpeed']['DampUnder'] = 0.3
 mc['ae_calib']['CommCtrl']['AecAntiFlicker']['enable'] = 0
 
@@ -339,9 +340,11 @@ cmd_set() {
         info "全部完成！ ${WIDTH}x${HEIGHT} — 管线已配置 + 水平条纹已修复"
         echo ""
         echo "  修改内容:"
-        echo "    ✓ 模拟增益: 11x → 4x (核心: 消除水平条纹)"
-        echo "    ✓ AE 策略: LOWLIGHT → HIGHLIGHT_FIRST (优先延曝光)"
-        echo "    ✓ EV 补偿: +0.25 (防欠曝)"
+        echo "    ✓ 模拟增益: 11x → 2x (消除水平条纹 + 防太阳过曝)"
+        echo "    ✓ 最大曝光: 100ms → 10ms (强光压制)"
+        echo "    ✓ AE 策略: LOWLIGHT → HIGHLIGHT_FIRST"
+        echo "    ✓ EV 补偿: -0.50 (强光负补偿)"
+        echo "    ✓ 过曝阻尼: 0.3 → 0.7 (快速降曝)"
         echo "    ✓ 防闪烁: 已禁用"
         echo ""
         echo "  ⚠ 请重启编码应用以使用新参数。"
@@ -472,7 +475,7 @@ try:
     mc = d['main_scene'][0]['sub_scene'][0]['scene_isp21']
     la = mc['ae_calib']['LinearAeCtrl']
     af = mc['ae_calib']['CommCtrl']['AecAntiFlicker']
-    print(f'  模拟增益上限: {ac[\"Max\"]} (修复后应为 4)')
+    print(f'  模拟增益上限: {ac[\"Max\"]} (修复后应为 2)')
     print(f'  AE 策略: {la[\"StrategyMode\"]}')
     print(f'  EV 补偿: {la[\"Evbias\"]}')
     print(f'  防闪烁: {\"开\" if af[\"enable\"] else \"关\"}')
