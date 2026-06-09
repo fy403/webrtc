@@ -1,5 +1,5 @@
 // RC Protocol v2 - 完全替代SBUS的新协议
-// 直接传输-1.0~1.0浮点数，无需转换
+// 直接传输 raw PWM 值 (1000~2000, 中位 1500)，无需转换
 
 (function(global) {
   'use strict';
@@ -26,7 +26,7 @@
 
   /**
    * 编码控制消息
-   * @param {Object} channels - 通道值 {ch1: -1.0~1.0, ch2: -1.0~1.0, ...}
+   * @param {Object} channels - 通道值 raw PWM (e.g. 1000~2000, neutral=1500)
    * @returns {Uint8Array} - 编码后的数据包（71字节）
    */
   function encode(channels) {
@@ -68,8 +68,8 @@
 
     // 16个通道，每个4字节float32（大端序）
     for (let i = 0; i < 16; i++) {
-      const value = channels['ch' + (i + 1)] || 0;
-      const clampedValue = Math.max(-1.0, Math.min(1.0, value));
+      const value = channels['ch' + (i + 1)] || 1500;
+      const clampedValue = Math.max(1000, Math.min(2000, value));
       view.setFloat32(7 + i * 4, clampedValue, false); // big-endian
     }
 
@@ -77,7 +77,7 @@
     if (msgType === PROTOCOL.CONTROL_MSG) {
       global.currentChannelValues = [];
       for (let i = 0; i < 16; i++) {
-        const value = channels['ch' + (i + 1)] || 0;
+        const value = channels['ch' + (i + 1)] || 1500;
         global.currentChannelValues.push(value);
       }
     }
@@ -87,6 +87,6 @@
 
   // 导出
   global.RCProtocol = { encode, encodeHeartbeat, PROTOCOL };
-  global.currentChannelValues = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  global.currentChannelValues = [1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500];
 
 })(window);

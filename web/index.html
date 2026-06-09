@@ -774,8 +774,8 @@
                     <div class="form-group">
                         <label>BINDING TYPE:</label>
                         <select class="binding-type-select" id="bindingTypeSelect">
-                            <option value="single">SECOND (PRESS=1, RELEASE=0)</option>
-                            <option value="continuous">THIRD GEAR(NEG=-1, RELESE=0, POS=1)</option>
+                            <option value="single">SINGLE (ON/OFF)</option>
+                            <option value="continuous">CONTINUOUS (MIN/MAX)</option>
                         </select>
                     </div>
                     <div class="form-group" id="singleKeyGroup">
@@ -792,20 +792,32 @@
                     </div>
                     <div class="form-group" id="valueGroup">
                         <label>VALUE:</label>
-                        <input type="number" class="range-input" id="bindingValue" value="1.0" step="0.1" min="0.1" max="1.0">
+                        <input type="number" class="range-input" id="bindingValue" value="2000" step="1" min="1000" max="2000">
                     </div>
                     <div class="form-group" id="continuousRangeGroup" style="display: none;">
                         <label>VALUE RANGE:</label>
                         <div class="range-inputs">
                             <div>
                                 <label>MIN:</label>
-                                <input type="number" class="range-input" id="bindingMinValue" value="-1.0" step="0.1" min="-1.0" max="0">
+                                <input type="number" class="range-input" id="bindingMinValue" value="1000" step="1" min="1000" max="2000">
                             </div>
                             <div>
                                 <label>MAX:</label>
-                                <input type="number" class="range-input" id="bindingMaxValue" value="1.0" step="0.1" min="0" max="1.0">
+                                <input type="number" class="range-input" id="bindingMaxValue" value="2000" step="1" min="1000" max="2000">
                             </div>
                         </div>
+                    </div>
+                    <div class="form-group" id="neutralValueGroup">
+                        <label>NEUTRAL VALUE:</label>
+                        <input type="number" class="range-input" id="bindingNeutralValue" value="1500" step="1" min="1000" max="2000">
+                    </div>
+                    <div class="form-group" id="invertGroup">
+                        <label>INVERT:</label>
+                        <label class="switch-label">
+                            <input type="checkbox" id="bindingInvert">
+                            <span class="switch-slider"></span>
+                            <span class="switch-text">Reverse direction (mirror around neutral)</span>
+                        </label>
                     </div>
                     <div class="form-group" id="curveGroup">
                         <label>SPEED CURVE:</label>
@@ -1122,9 +1134,17 @@
                         positiveKeyDisplay.textContent = 'CLICK TO SET';
                     }
 
-                    valueInput.value = binding.value || 1.0;
-                    minValueInput.value = binding.minValue !== undefined ? binding.minValue : -1.0;
-                    maxValueInput.value = binding.maxValue !== undefined ? binding.maxValue : 1.0;
+                    valueInput.value = binding.value !== undefined ? binding.value : 2000;
+                    minValueInput.value = binding.minValue !== undefined ? binding.minValue : 1000;
+                    maxValueInput.value = binding.maxValue !== undefined ? binding.maxValue : 2000;
+                    const neutralInput = document.getElementById('bindingNeutralValue');
+                    if (neutralInput) {
+                        neutralInput.value = binding.neutralValue !== undefined ? binding.neutralValue : 1500;
+                    }
+                    const invertInput = document.getElementById('bindingInvert');
+                    if (invertInput) {
+                        invertInput.checked = binding.invert === true;
+                    }
                     // 设置曲线选择
                     if (curveSelect && binding.curveId) {
                         curveSelect.value = binding.curveId;
@@ -1137,9 +1157,13 @@
                     singleKeyDisplay.textContent = 'CLICK TO SET';
                     negativeKeyDisplay.textContent = 'CLICK TO SET';
                     positiveKeyDisplay.textContent = 'CLICK TO SET';
-                    valueInput.value = 1.0;
-                    minValueInput.value = -1.0;
-                    maxValueInput.value = 1.0;
+                    valueInput.value = 2000;
+                    minValueInput.value = 1000;
+                    maxValueInput.value = 2000;
+                    const neutralInput = document.getElementById('bindingNeutralValue');
+                    if (neutralInput) neutralInput.value = 1500;
+                    const invertInput = document.getElementById('bindingInvert');
+                    if (invertInput) invertInput.checked = false;
                     if (curveSelect) curveSelect.value = 'linear';
                 }
             }
@@ -1171,6 +1195,8 @@
                 const valueGroup = document.getElementById('valueGroup');
                 const continuousRangeGroup = document.getElementById('continuousRangeGroup');
                 const curveGroup = document.getElementById('curveGroup');
+                const neutralValueGroup = document.getElementById('neutralValueGroup');
+                const invertGroup = document.getElementById('invertGroup');
 
                 if (type === 'single') {
                     singleKeyGroup.style.display = 'flex';
@@ -1179,6 +1205,8 @@
                     valueGroup.style.display = 'flex';
                     continuousRangeGroup.style.display = 'none';
                     if (curveGroup) curveGroup.style.display = 'flex';
+                    if (neutralValueGroup) neutralValueGroup.style.display = 'flex';
+                    if (invertGroup) invertGroup.style.display = 'flex';
                 } else if (type === 'continuous') {
                     singleKeyGroup.style.display = 'none';
                     negativeKeyGroup.style.display = 'flex';
@@ -1186,6 +1214,8 @@
                     valueGroup.style.display = 'none';
                     continuousRangeGroup.style.display = 'flex';
                     if (curveGroup) curveGroup.style.display = 'flex';
+                    if (neutralValueGroup) neutralValueGroup.style.display = 'flex';
+                    if (invertGroup) invertGroup.style.display = 'flex';
                 }
             }
 
@@ -1229,6 +1259,8 @@
                 const value = parseFloat(document.getElementById('bindingValue').value);
                 const minValue = parseFloat(document.getElementById('bindingMinValue').value);
                 const maxValue = parseFloat(document.getElementById('bindingMaxValue').value);
+                const neutralValue = parseFloat(document.getElementById('bindingNeutralValue').value);
+                const invert = document.getElementById('bindingInvert').checked;
                 const curveSelect = document.getElementById('bindingCurveSelect');
                 const curveId = curveSelect ? curveSelect.value : 'linear';
 
@@ -1241,6 +1273,9 @@
                         type: 'single',
                         key: singleKey,
                         value: value,
+                        neutralValue: neutralValue,
+                        startValue: neutralValue,
+                        invert: invert,
                         curveId: curveId
                     });
                     if (!success) return; // 冲突检测失败，不关闭模态框
@@ -1255,6 +1290,9 @@
                         positiveKey: positiveKey,
                         minValue: minValue,
                         maxValue: maxValue,
+                        neutralValue: neutralValue,
+                        startValue: neutralValue,
+                        invert: invert,
                         curveId: curveId
                     });
                     if (!success) return; // 冲突检测失败，不关闭模态框

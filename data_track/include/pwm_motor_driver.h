@@ -33,59 +33,55 @@ public:
     PwmMotorDriver(int front_back_chip = 0,
                    int left_right_chip = 1,
                    uint64_t period_ns = 20000000,
-                   uint64_t duty_min_ns = 1000000,
-                   uint64_t duty_max_ns = 2000000,
-                   uint64_t duty_neutral_ns = 1500000,
                    int front_back_channel = 0,
-                   int left_right_channel = 0);
+                   int left_right_channel = 0,
+                   int proto_forward_idx = 0,
+                   int proto_turn_idx = 1,
+                   uint16_t neutral_pwm = 1500);
 
     ~PwmMotorDriver() override;
 
     // 实现纯虚函数
     bool connect() override;
     void disconnect() override;
-    void setMotorPercent(int motor_id, int percent) override;
-    void setFrontBackPercent(int percent) override;
-    void setLeftRightPercent(int percent) override;
+    void applyControl(const RCProtocolV2::ControlFrame& frame) override;
+    void stopAll() override;
 
 private:
-    int front_back_chip_;        // 前后控制PWM芯片编号
-    int left_right_chip_;        // 左右转向PWM芯片编号
-    uint64_t period_ns_;        // PWM周期（纳秒）
-    uint64_t duty_min_ns_;      // 最小占空比（反向最大）
-    uint64_t duty_max_ns_;      // 最大占空比（正向最大）
-    uint64_t duty_neutral_ns_;  // 中性位置占空比（停止）
-    int front_back_channel_;    // 前后控制通道
-    int left_right_channel_;    // 左右转向通道
-    
-    // 当前占空比
-    int front_back_duty_;      // 前后控制占空比 (-100 ~ 100)
-    int left_right_duty_;      // 左右转向占空比 (-100 ~ 100)
-    
-    // 初始化标志
-    bool front_back_initialized_;   // 前后控制初始化标志
-    bool left_right_initialized_;   // 左右转向初始化标志
+    int front_back_chip_;
+    int left_right_chip_;
+    uint64_t period_ns_;
+    int front_back_channel_;
+    int left_right_channel_;
+    int proto_forward_idx_;          // 协议通道索引：前后控制
+    int proto_turn_idx_;             // 协议通道索引：左右转向
+
+    uint16_t front_back_duty_;      // 前后 raw PWM
+    uint16_t left_right_duty_;      // 左右 raw PWM
+
+    uint16_t neutral_pwm_;             // 协议中位值 (us)，来自配置
+    bool front_back_initialized_;
+    bool left_right_initialized_;
 
     // 私有方法
     bool exportPwmChannel(int chip, int channel);
     void unexportPwmChannel(int chip, int channel);
     bool setPeriod(int chip, int channel, uint64_t period_ns);
-    bool setDutyCycle(int chip, int channel, uint64_t duty_ns);
+    bool setDutyCycleNs(int chip, int channel, uint64_t duty_ns);
     bool setPolarity(int chip, int channel, const std::string& polarity);
     bool enablePwm(int chip, int channel, bool enable);
     std::string getPwmBasePath(int chip) const;
-    
-    // 将百分比转换为占空比纳秒值
-    uint64_t percentToDutyNs(int percent) const;
-    
-    // 应用指定通道的占空比
-    // is_front_back: true=前后控制, false=左右转向
+
+    // raw PWM (1000~2000us) → duty_cycle_ns
+    static uint64_t pwmToDutyNs(uint16_t pwm_us);
+
+    void setMotorPWM(int motor_id, uint16_t pwm_us);
+    void setFrontBackPWM(uint16_t pwm_us);
+    void setLeftRightPWM(uint16_t pwm_us);
+
     bool applyChannelDuty(bool is_front_back);
-    
-    // 写入sysfs文件
+
     static bool writeSysfs(const std::string& path, const std::string& value);
-    
-    // 读取sysfs文件
     static std::string readSysfs(const std::string& path);
 };
 

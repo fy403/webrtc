@@ -3,7 +3,7 @@
   class ChannelKeyBinder {
     constructor() {
       this.bindings = {};
-      this.channelValues = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      this.channelValues = [1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500];
       this.keyPressTimestamps = {};   // keyCode -> timestamp when first pressed
       this.activeDirection = {};      // channelNum -> 1 or -1 (direction of active key)
       this.onValueChange = null;
@@ -20,8 +20,8 @@
 
       // 迁移：CH1/CH2 为 null 时填入默认 WASD 绑定（CH1=前后W/S, CH2=左右A/D）
       const defaults = {
-        ch1: { type: 'continuous', negativeKey: 'KeyS', positiveKey: 'KeyW', minValue: -1.0, maxValue: 1.0, startValue: 0, curveId: 'linear' },
-        ch2: { type: 'continuous', negativeKey: 'KeyA', positiveKey: 'KeyD', minValue: -1.0, maxValue: 1.0, startValue: 0, curveId: 'linear' },
+        ch1: { type: 'continuous', negativeKey: 'KeyS', positiveKey: 'KeyW', minValue: 1000, maxValue: 2000, startValue: 1500, neutralValue: 1500, invert: false, curveId: 'linear' },
+        ch2: { type: 'continuous', negativeKey: 'KeyA', positiveKey: 'KeyD', minValue: 1000, maxValue: 2000, startValue: 1500, neutralValue: 1500, invert: false, curveId: 'linear' },
       };
       let migrated = false;
       for (const [key, def] of Object.entries(defaults)) {
@@ -30,10 +30,29 @@
           migrated = true;
         }
       }
-      // 为缺少 curveId 的绑定补全
+      // 迁移旧格式：将 -1~1 百分比格式自动升级为 1000~2000 raw PWM
+      let upgraded = false;
       for (let i = 1; i <= 16; i++) {
         const b = this.bindings[`ch${i}`];
-        if (b && !b.curveId) b.curveId = 'linear';
+        if (!b) continue;
+        // 检测旧格式：maxValue <= 1.0 说明是 -1~1 百分比
+        if (b.maxValue !== undefined && b.maxValue <= 1.0) {
+          b.minValue = 1000;
+          b.maxValue = 2000;
+          b.startValue = 1500;
+          if (b.neutralValue === undefined || b.neutralValue <= 0) b.neutralValue = 1500;
+          if (b.type === 'single' && b.value !== undefined && b.value <= 1.0) b.value = 2000;
+          upgraded = true;
+        }
+        // 补全缺失字段
+        if (!b.curveId) b.curveId = 'linear';
+        if (b.neutralValue === undefined) b.neutralValue = 1500;
+        if (b.invert === undefined) b.invert = false;
+        if (b.startValue === undefined) b.startValue = 1500;
+      }
+      if (upgraded) {
+        console.log('[ChannelKeyBinder] Upgraded old -1~1 bindings to 1000~2000 raw PWM');
+        try { ConfigManager.updateChannelBindings(this.bindings); } catch(e) {}
       }
       if (migrated) {
         console.log('[ChannelKeyBinder] Migrated CH1/CH2 to default WASD bindings');
@@ -187,14 +206,21 @@
       for (let i = 1; i <= 16; i++) {
         const binding = this.bindings[`ch${i}`];
         if (!binding) {
-          // 无绑定的通道归零
-          if (Math.abs(this.channelValues[i - 1]) > 0.001) {
-            this.channelValues[i - 1] = 0;
+          // 无绑定的通道回归默认中位 1500
+          if (Math.abs(this.channelValues[i - 1] - 1500) > 0.5) {
+            const diff = 1500 - this.channelValues[i - 1];
+            const step = diff * 0.3;
+            if (Math.abs(step) < 1) {
+              this.channelValues[i - 1] = 1500;
+            } else {
+              this.channelValues[i - 1] += step;
+            }
             changed = true;
           }
           continue;
         }
 
+        const neutralValue = binding.neutralValue !== undefined ? binding.neutralValue : 1500;
         const direction = this.activeDirection[i];
 
         if (binding.type === 'single') {
@@ -206,19 +232,25 @@
             }
             const curve = this._curveCache[i] || global.DEFAULT_SPEED_CURVE;
             const factor = curve.sample(elapsed);
-            const targetVal = binding.value * factor;
-            if (Math.abs(targetVal - this.channelValues[i - 1]) > 0.001) {
+            const rawValue = binding.value;
+            let targetVal = binding.value * factor + neutralValue * (1 - factor);
+            // 应用 invert 翻转
+            if (binding.invert) {
+              targetVal = 2 * neutralValue - targetVal;
+            }
+            if (Math.abs(targetVal - this.channelValues[i - 1]) > 0.5) {
               this.channelValues[i - 1] = targetVal;
               changed = true;
             }
           } else {
-            // 按键释放，快速衰减到 0
-            if (Math.abs(this.channelValues[i - 1]) > 0.001) {
-              const decay = Math.max(0, Math.abs(this.channelValues[i - 1]) - 0.15);
-              if (decay < 0.001) {
-                this.channelValues[i - 1] = 0;
+            // 按键释放，衰减到 neutralValue
+            if (Math.abs(this.channelValues[i - 1] - neutralValue) > 0.5) {
+              const diff = neutralValue - this.channelValues[i - 1];
+              const step = diff * 0.3;
+              if (Math.abs(step) < 1) {
+                this.channelValues[i - 1] = neutralValue;
               } else {
-                this.channelValues[i - 1] = Math.sign(this.channelValues[i - 1]) * decay;
+                this.channelValues[i - 1] += step;
               }
               changed = true;
             }
@@ -234,27 +266,30 @@
             const curve = this._curveCache[i] || global.DEFAULT_SPEED_CURVE;
             const factor = curve.sample(elapsed); // 0..1
 
-            const minValue = binding.minValue !== undefined ? binding.minValue : -1.0;
-            const maxValue = binding.maxValue !== undefined ? binding.maxValue : 1.0;
+            const minValue = binding.minValue !== undefined ? binding.minValue : 1000;
+            const maxValue = binding.maxValue !== undefined ? binding.maxValue : 2000;
 
             let targetVal;
             if (direction === -1) {
-              targetVal = minValue * factor;
+              targetVal = minValue * factor + neutralValue * (1 - factor);
             } else {
-              targetVal = maxValue * factor;
+              targetVal = maxValue * factor + neutralValue * (1 - factor);
             }
-            if (Math.abs(targetVal - this.channelValues[i - 1]) > 0.001) {
+            // 应用 invert 翻转
+            if (binding.invert) {
+              targetVal = 2 * neutralValue - targetVal;
+            }
+            if (Math.abs(targetVal - this.channelValues[i - 1]) > 0.5) {
               this.channelValues[i - 1] = targetVal;
               changed = true;
             }
           } else {
-            // 没有按键，衰减到起始值
-            const startValue = binding.startValue !== undefined ? binding.startValue : 0;
-            if (Math.abs(this.channelValues[i - 1] - startValue) > 0.001) {
-              const diff = startValue - this.channelValues[i - 1];
-              const step = diff * 0.3; // 快速向起始值衰减
-              if (Math.abs(step) < 0.001) {
-                this.channelValues[i - 1] = startValue;
+            // 没有按键，衰减到 neutralValue
+            if (Math.abs(this.channelValues[i - 1] - neutralValue) > 0.5) {
+              const diff = neutralValue - this.channelValues[i - 1];
+              const step = diff * 0.3;
+              if (Math.abs(step) < 1) {
+                this.channelValues[i - 1] = neutralValue;
               } else {
                 this.channelValues[i - 1] += step;
               }
@@ -420,7 +455,7 @@
       this.bindings[`ch${channelNum}`] = null;
       delete this._curveCache[channelNum];
       delete this.activeDirection[channelNum];
-      this.channelValues[channelNum - 1] = 0;
+      this.channelValues[channelNum - 1] = 1500;
       this._notifyValueChange();
       ConfigManager.updateChannelBindings({ [`ch${channelNum}`]: null });
     }

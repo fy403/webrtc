@@ -9,6 +9,7 @@
 #include <mutex>
 #include <cstdint>
 #include <vector>
+#include <algorithm>
 
 /**
  * CRSFTransport - CRSF 协议底层通信层
@@ -18,6 +19,7 @@
  * - 维护16通道共享缓冲区（channels_）
  * - 独立发送线程，每20ms从channels_打包完整CRSF frames并发送
  * - 提供线程安全的 setChannel() 接口供上层多driver共用
+ * - 提供基于默认PWM范围的通道设置方法（setChannelPWM / setChannelByPercent）
  *
  * 生命周期：由 MotorController 创建并管理（shared_ptr），注入给各上层driver
  */
@@ -43,11 +45,23 @@ public:
     void disconnect();
 
     /**
-     * 设置某个 CRSF 通道的值（线程安全）
+     * 设置某个 CRSF 通道的原始值（线程安全）
      * @param ch_index 通道索引（0-based，对应 CRSF channel 1-16）
      * @param value 通道值（CRSF原始范围，如 172-1811）
      */
     void setChannel(uint8_t ch_index, uint16_t value);
+
+    // ========== PWM 映射接口 ==========
+    //
+    // channels 层直接传输 raw PWM (1000~2000, 中位 1500)，
+    // 默认通道直接使用该值映射到 CRSF 原始通道值。
+
+    /**
+     * 通过 PWM 脉宽设置通道值（映射到 CRSF 原始值）
+     * @param ch_index 通道索引（0-based）
+     * @param pwm_us   PWM 脉宽（微秒），自动钳位到 [1000, 2000]
+     */
+    void setChannelPWM(uint8_t ch_index, uint16_t pwm_us);
 
     /**
      * 获取发送线程运行状态
@@ -61,6 +75,13 @@ private:
     std::mutex channels_mutex_;         // 保护 channels_ 的读写
     std::thread send_thread_;           // 发送线程
     std::atomic<bool> running_;         // 发送线程运行标志
+
+    // ---------- 默认 PWM 映射参数 ----------
+    // 已简化：协议层直接传输 1000~2000 raw PWM，使用硬编码常量替代可配参数
+
+    // CRSF 通道范围常量（协议标准）
+    static constexpr uint16_t CRSF_CH_MIN = 172;
+    static constexpr uint16_t CRSF_CH_MAX = 1811;
 
     // CRSF 协议帧大小常量
     static constexpr size_t CRSF_FRAME_SIZE_MAX = 64;

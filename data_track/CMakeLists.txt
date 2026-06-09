@@ -37,10 +37,8 @@ add_executable(webrtc_publisher
         src/service_monitor.cpp
         src/motor_controller.cpp
         src/system_monitor.cpp
-        src/uart_motor_driver.cpp
         src/crsf_transport.cpp
-        src/crsf_motor_driver.cpp
-        src/crsf_gimbal_driver.cpp
+        src/crsf_driver.cpp
         src/pwm_motor_driver.cpp
         src/dummy_motor_driver.cpp
         src/gps_nmea_monitor.cpp

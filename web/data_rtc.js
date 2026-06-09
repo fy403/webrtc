@@ -248,10 +248,16 @@ window.addEventListener('load', () => {
         dataUpdateSystemStatusDisplay();
 
         // ChannelKeyBinder 是全部16个通道的唯一数据源（包括 CH1/CH2）
-        let channelValues = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let channelValues = [1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500];
         if (window.channelKeyBinder) {
             channelValues = window.channelKeyBinder.getAllChannelValues();
         }
+
+        // 将 ControllerManager 输出的 forward/turn (-1~1) 转换为 raw PWM 写入 CH1/CH2
+        const rawForward = 1500 + (lastSentState.forward || 0) * 500;
+        const rawTurn = 1500 + (lastSentState.turn || 0) * 500;
+        channelValues[0] = Math.max(1000, Math.min(2000, rawForward));
+        channelValues[1] = Math.max(1000, Math.min(2000, rawTurn));
 
         try {
             const frame = RCProtocol.encode({
@@ -406,7 +412,7 @@ window.addEventListener('load', () => {
 
     // 更新SBUS通道显示（全部来自 ChannelKeyBinder）
     function dataUpdateChannelDisplay() {
-        let values = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let values = [1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500];
         if (window.currentChannelValues) {
             values = window.currentChannelValues;
         } else if (window.channelKeyBinder) {
@@ -415,20 +421,32 @@ window.addEventListener('load', () => {
 
         for (let i = 0; i < 16; i++) {
             const channelNum = i + 1;
-            const value = values[i] || 0;
+            const value = values[i] || 1500;
             const fillElement = document.getElementById(`channel${channelNum}Fill`);
             const valueElement = document.getElementById(`channel${channelNum}Value`);
 
+            // 获取该通道的 neutralValue（从 binding 中读取，默认 1500）
+            let neutralValue = 1500;
+            if (window.channelKeyBinder) {
+                const binding = window.channelKeyBinder.getBinding(channelNum);
+                if (binding && binding.neutralValue !== undefined) {
+                    neutralValue = binding.neutralValue;
+                }
+            }
+
             if (fillElement && valueElement) {
-                // 设置填充样式
-                if (value > 0) {
+                // 以 neutralValue 为中心显示
+                const diff = value - neutralValue;
+                const range = 500; // 1000~2000 范围半宽
+
+                if (diff > 0.5) {
                     fillElement.className = 'channel-bar-fill positive';
-                    fillElement.style.height = `${value * 50}%`;
+                    fillElement.style.height = `${Math.min(diff / range * 50, 50)}%`;
                     fillElement.style.bottom = '50%';
                     fillElement.style.top = 'auto';
-                } else if (value < 0) {
+                } else if (diff < -0.5) {
                     fillElement.className = 'channel-bar-fill negative';
-                    fillElement.style.height = `${Math.abs(value) * 50}%`;
+                    fillElement.style.height = `${Math.min(Math.abs(diff) / range * 50, 50)}%`;
                     fillElement.style.top = '50%';
                     fillElement.style.bottom = 'auto';
                 } else {
@@ -438,8 +456,8 @@ window.addEventListener('load', () => {
                     fillElement.style.bottom = 'auto';
                 }
 
-                // 更新数值显示
-                valueElement.textContent = value.toFixed(2);
+                // 显示整数 raw PWM 值
+                valueElement.textContent = value.toFixed(0);
             }
         }
     }

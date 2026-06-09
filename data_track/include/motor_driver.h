@@ -6,6 +6,9 @@
 #include <iostream>
 #include <cstdint>
 
+// 前置声明，避免基类头文件依赖协议细节
+namespace RCProtocolV2 { struct ControlFrame; }
+
 class MotorDriver {
 public:
     MotorDriver() = default;
@@ -16,13 +19,12 @@ public:
 
     virtual void disconnect() = 0;
 
-    // 传入单路百分比（-100~100），由驱动内部维护/组合并下发
-    virtual void setMotorPercent(int motor_id, int percent) = 0;
+    // 接收原始控制帧，由各驱动自行决定如何解析通道和映射
+    // （CRSF 驱动通过 CRSFController 单独处理，不使用此接口）
+    virtual void applyControl(const RCProtocolV2::ControlFrame& frame) = 0;
 
-    // 面向前后/左右的语义化接口，由驱动内部持有 motor_id
-    virtual void setFrontBackPercent(int percent) = 0;
-
-    virtual void setLeftRightPercent(int percent) = 0;
+    // 停止所有电机，默认空实现（CRSF 路径由 CRSFController::stopAll() 接管）
+    virtual void stopAll() {}
 };
 
 #endif // MOTOR_DRIVER_H

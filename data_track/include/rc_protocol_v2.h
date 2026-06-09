@@ -23,7 +23,7 @@ namespace RCProtocolV2 {
         uint8_t magic2; // 0x55
         uint8_t type; // 0x01
         uint32_t sequence; // 帧序列号（无符号32位）
-        float channels[16]; // -1.0 ~ +1.0
+        float channels[16]; // raw PWM values (1000~2000, neutral=1500)
 
         // 序列化
         void serialize(uint8_t *buffer) const {

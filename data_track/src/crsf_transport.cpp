@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <errno.h>
+#include <cmath>
 
 CRSFTransport::CRSFTransport(const std::string &port)
     : port_(port)
@@ -46,6 +47,20 @@ void CRSFTransport::setChannel(uint8_t ch_index, uint16_t value) {
         std::lock_guard<std::mutex> lock(channels_mutex_);
         channels_[ch_index] = value;
     }
+}
+
+void CRSFTransport::setChannelPWM(uint8_t ch_index, uint16_t pwm_us) {
+    // 钳位到 1000~2000 范围
+    constexpr uint16_t PWM_MIN = 1000;
+    constexpr uint16_t PWM_MAX = 2000;
+    pwm_us = std::max(PWM_MIN, std::min(PWM_MAX, pwm_us));
+
+    // PWM → CRSF 通道原始值（线性映射）
+    float ratio = static_cast<float>(pwm_us - PWM_MIN) / static_cast<float>(PWM_MAX - PWM_MIN);
+    uint16_t channel_value = static_cast<uint16_t>(CRSF_CH_MIN +
+        ratio * (CRSF_CH_MAX - CRSF_CH_MIN));
+
+    setChannel(ch_index, channel_value);
 }
 
 bool CRSFTransport::isRunning() const {

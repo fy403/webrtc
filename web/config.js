@@ -57,8 +57,8 @@ const ConfigManager = {
         },
     // 通道按键绑定配置（ChannelKeyBinder 是唯一数据源）
     channelBindings: {
-        ch1: { type: 'continuous', negativeKey: 'KeyS', positiveKey: 'KeyW', minValue: -1.0, maxValue: 1.0, startValue: 0, curveId: 'linear' },
-        ch2: { type: 'continuous', negativeKey: 'KeyA', positiveKey: 'KeyD', minValue: -1.0, maxValue: 1.0, startValue: 0, curveId: 'linear' },
+        ch1: { type: 'continuous', negativeKey: 'KeyS', positiveKey: 'KeyW', minValue: 1000, maxValue: 2000, startValue: 1500, neutralValue: 1500, invert: false, curveId: 'linear' },
+        ch2: { type: 'continuous', negativeKey: 'KeyA', positiveKey: 'KeyD', minValue: 1000, maxValue: 2000, startValue: 1500, neutralValue: 1500, invert: false, curveId: 'linear' },
         ch3: null,
         ch4: null,
         ch5: null,

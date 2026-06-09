@@ -1,7 +1,6 @@
 #include "dummy_motor_driver.h"
+#include "rc_protocol_v2.h"
 #include <iostream>
-#include <chrono>
-#include <iomanip>
 
 DummyMotorDriver::DummyMotorDriver(const std::string &name)
     : name_(name), connected_(false) {
@@ -28,37 +27,13 @@ void DummyMotorDriver::disconnect() {
     }
 }
 
-void DummyMotorDriver::setMotorPercent(int motor_id, int percent) {
-    printMotorCommand("setMotorPercent", motor_id, percent);
+void DummyMotorDriver::applyControl(const RCProtocolV2::ControlFrame &frame) {
+    for (int i = 0; i < 16; i++) {
+        std::cout << "CH" << (i + 1) << "=" << static_cast<uint16_t>(frame.channels[i]) << " ";
+    }
+    std::cout << std::endl;
 }
 
-void DummyMotorDriver::setFrontBackPercent(int percent) {
-    printControlCommand("FrontBack", percent);
-}
-
-void DummyMotorDriver::setLeftRightPercent(int percent) {
-    printControlCommand("LeftRight", percent);
-}
-
-void DummyMotorDriver::printMotorCommand(const std::string &command, int motor_id, int percent) {
-    auto now = std::chrono::system_clock::now();
-    auto time = std::chrono::system_clock::to_time_t(now);
-
-    //     std::cout << "[" << std::put_time(std::localtime(&time), "%H:%M:%S") << "] "
-    //               << "[DummyMotor] " << command
-    //               << " - Motor ID: " << motor_id
-    //               << ", Percent: " << percent
-    //               << "%, Connected: " << (connected_ ? "Yes" : "No")
-    //               << std::endl;
-}
-
-void DummyMotorDriver::printControlCommand(const std::string &direction, int percent) {
-    auto now = std::chrono::system_clock::now();
-    auto time = std::chrono::system_clock::to_time_t(now);
-
-    //     std::cout << "[" << std::put_time(std::localtime(&time), "%H:%M:%S") << "] "
-    //               << "[DummyMotor] " << direction
-    //               << " control - Percent: " << percent
-    //               << "%, Connected: " << (connected_ ? "Yes" : "No")
-    //               << std::endl;
+void DummyMotorDriver::stopAll() {
+    std::cout << "[DummyMotor] stopAll" << std::endl;
 }

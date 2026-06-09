@@ -129,56 +129,22 @@ int main(int argc, char **argv) {
         );
 
         // 加载通用电机配置（覆盖 .h 默认值）
+        // 注意：百分比中间层已全部移除，协议直接传输 raw PWM 1000~2000
         auto& mcfg = rcClientConfig.motor_controller_config;
-        mcfg.reverse_turn_when_backward = g_config->getAsBool("reverseTurnWhenBackward", true);
-        // UART 驱动参数
-        mcfg.motor_driver_baudrate  = g_config->getAsInt("motorBaudrate", 115200);
-        mcfg.motor_pwm_forward_max  = static_cast<int16_t>(g_config->getAsInt("motorPwmForwardMax", 3500));
-        mcfg.motor_pwm_reverse_max  = static_cast<int16_t>(g_config->getAsInt("motorPwmReverseMax", -3500));
-        mcfg.motor_pwm_neutral      = static_cast<int16_t>(g_config->getAsInt("motorPwmNeutral", 0));
-        mcfg.motor_front_back_id    = g_config->getAsInt("motorFrontBackId", 2);
-        mcfg.motor_left_right_id    = g_config->getAsInt("motorLeftRightId", 4);
-        // CRSF 电机驱动参数
-        mcfg.crsf_servo_min_pulse     = static_cast<uint16_t>(g_config->getAsInt("crsfServoMinPulse", 900));
-        mcfg.crsf_servo_max_pulse     = static_cast<uint16_t>(g_config->getAsInt("crsfServoMaxPulse", 2100));
-        mcfg.crsf_servo_neutral_pulse = static_cast<uint16_t>(g_config->getAsInt("crsfServoNeutralPulse", 1500));
-        mcfg.crsf_servo_min_angle     = g_config->getAsFloat("crsfServoMinAngle", 0.0f);
-        mcfg.crsf_servo_max_angle     = g_config->getAsFloat("crsfServoMaxAngle", 0.0f);
-        mcfg.crsf_servo_channel       = static_cast<uint8_t>(g_config->getAsInt("crsfServoChannel", 2));
-        mcfg.crsf_esc_min_pulse       = static_cast<uint16_t>(g_config->getAsInt("crsfEscMinPulse", 900));
-        mcfg.crsf_esc_max_pulse       = static_cast<uint16_t>(g_config->getAsInt("crsfEscMaxPulse", 2100));
-        mcfg.crsf_esc_neutral_pulse   = static_cast<uint16_t>(g_config->getAsInt("crsfEscNeutralPulse", 1510));
-        mcfg.crsf_esc_reversible      = g_config->getAsBool("crsfEscReversible", true);
-        mcfg.crsf_esc_channel         = static_cast<uint8_t>(g_config->getAsInt("crsfEscChannel", 1));
         // PWM 电机驱动参数
         mcfg.pwm_front_back_chip        = g_config->getAsInt("pwmFrontBackChip", 0);
         mcfg.pwm_left_right_chip        = g_config->getAsInt("pwmLeftRightChip", 1);
         mcfg.pwm_front_back_channel     = g_config->getAsInt("pwmFrontBackChannel", 0);
         mcfg.pwm_left_right_channel     = g_config->getAsInt("pwmLeftRightChannel", 0);
         mcfg.pwm_period_ns             = static_cast<uint64_t>(g_config->getAsInt("pwmPeriodNs", 20000000));
-        mcfg.pwm_duty_min_ns           = static_cast<uint64_t>(g_config->getAsInt("pwmDutyMinNs", 900000));
-        mcfg.pwm_duty_max_ns           = static_cast<uint64_t>(g_config->getAsInt("pwmDutyMaxNs", 2100000));
-        mcfg.pwm_duty_neutral_ns       = static_cast<uint64_t>(g_config->getAsInt("pwmDutyNeutralNs", 1500000));
+        // 协议通道索引映射
+        mcfg.pwm_proto_forward_idx     = g_config->getAsInt("pwmProtoForwardIdx", 0);
+        mcfg.pwm_proto_turn_idx        = g_config->getAsInt("pwmProtoTurnIdx", 1);
+        // CRSF 中位值
+        mcfg.crsf_neutral_pwm         = static_cast<uint16_t>(g_config->getAsInt("crsfNeutralPwm", 1500));
+        mcfg.pwm_neutral_pwm          = static_cast<uint16_t>(g_config->getAsInt("pwmNeutralPwm", 1500));
 
-        // 加载 CRSF 云台配置（仅 CRSF 模式下有效，其余参数使用 MotorControllerConfig 默认值）
-        mcfg.enable_gimbal = g_config->getAsBool("enableGimbal", false);
-        if (mcfg.enable_gimbal) {
-            std::cout << "CRSF Gimbal enabled" << std::endl;
-            // 俯仰（Tilt）配置
-            mcfg.crsf_gimbal_tilt_channel       = static_cast<uint8_t>(g_config->getAsInt("gimbalTiltChannel", 3));
-            mcfg.crsf_gimbal_tilt_min_pulse     = static_cast<uint16_t>(g_config->getAsInt("gimbalTiltMinPulse", 500));
-            mcfg.crsf_gimbal_tilt_max_pulse     = static_cast<uint16_t>(g_config->getAsInt("gimbalTiltMaxPulse", 2500));
-            mcfg.crsf_gimbal_tilt_neutral_pulse = static_cast<uint16_t>(g_config->getAsInt("gimbalTiltNeutralPulse", 1500));
-            mcfg.crsf_gimbal_tilt_min_angle     = g_config->getAsFloat("gimbalTiltMinAngle", -90.0f);
-            mcfg.crsf_gimbal_tilt_max_angle     = g_config->getAsFloat("gimbalTiltMaxAngle", 90.0f);
-            // 水平（Pan）配置
-            mcfg.crsf_gimbal_pan_channel       = static_cast<uint8_t>(g_config->getAsInt("gimbalPanChannel", 4));
-            mcfg.crsf_gimbal_pan_min_pulse     = static_cast<uint16_t>(g_config->getAsInt("gimbalPanMinPulse", 500));
-            mcfg.crsf_gimbal_pan_max_pulse     = static_cast<uint16_t>(g_config->getAsInt("gimbalPanMaxPulse", 2500));
-            mcfg.crsf_gimbal_pan_neutral_pulse = static_cast<uint16_t>(g_config->getAsInt("gimbalPanNeutralPulse", 1500));
-            mcfg.crsf_gimbal_pan_min_angle     = g_config->getAsFloat("gimbalPanMinAngle", -90.0f);
-            mcfg.crsf_gimbal_pan_max_angle     = g_config->getAsFloat("gimbalPanMaxAngle", 90.0f);
-        }
+
 
         // 创建全局的 RCClient 实例，供主循环和重连共用
         g_client = std::make_shared<RCClient>(rcClientConfig);
