@@ -34,7 +34,8 @@ MotorController::MotorController(const MotorControllerConfig &config)
                                           config.pwm_left_right_channel,
                                           config.pwm_proto_forward_idx,
                                           config.pwm_proto_turn_idx,
-                                          config.pwm_neutral_pwm);
+                                          config.pwm_front_back_neutral_pwm,
+                                          config.pwm_left_right_neutral_pwm);
 
         // 尝试初始化 PWM 驱动
         if (!motor_driver->connect()) {

@@ -91,11 +91,12 @@
     const isCustom = curve?.isCustom;
 
     if (isCustom) {
-      // Update custom curve
+      // 深拷贝 editingPoints，防止共享引用导致后续拖拽污染已保存数据
+      const pointsCopy = JSON.parse(JSON.stringify(editingPoints));
       speedCurveManager.updateCustomCurve(currentCurveId, {
         name: document.getElementById('curveName').value,
         description: document.getElementById('curveDesc').value,
-        points: editingPoints
+        points: pointsCopy
       });
       // Apply the updated curve
       speedCurveManager.setCurve(currentCurveId);
@@ -108,22 +109,9 @@
 
     renderCurveList();
 
-    // Trigger a storage event manually to notify other pages (in case the browser doesn't fire it automatically)
-    // Use setTimeout to ensure the localStorage write is complete
-    setTimeout(() => {
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: 'speedCurveId',
-        newValue: speedCurveManager.currentCurveId,
-        url: window.location.href
-      }));
-      // Also trigger for custom curves if applicable
-      if (isCustom) {
-        window.dispatchEvent(new StorageEvent('storage', {
-          key: 'customSpeedCurves',
-          url: window.location.href
-        }));
-      }
-    }, 100);
+    // Notify other windows: StorageEvent is dispatched by the browser automatically
+    // when localStorage changes. No manual dispatchEvent needed.
+    // The opener/main page listens for 'storage' events on 'customSpeedCurves'.
   }
   
   function resetCurve() {
@@ -540,6 +528,10 @@
   }
   
   function handleMouseUp() {
+    if (isDragging) {
+      // 拖拽结束自动保存
+      saveCurve();
+    }
     isDragging = false;
     dragPointIndex = -1;
     canvas.style.cursor = 'crosshair';

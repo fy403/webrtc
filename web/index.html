@@ -1172,6 +1172,10 @@
             function refreshCurveSelect() {
                 const curveSelect = document.getElementById('bindingCurveSelect');
                 if (!curveSelect || typeof speedCurveManager === 'undefined') return;
+                // 强制从 localStorage 重新加载自定义曲线，确保显示最新
+                if (speedCurveManager.reloadCustomCurves) {
+                    speedCurveManager.reloadCustomCurves();
+                }
                 const currentVal = curveSelect.value;
                 curveSelect.innerHTML = '';
                 const allCurves = speedCurveManager.getAllCurves();
@@ -1338,6 +1342,10 @@
             // 监听 storage 变化，刷新曲线列表（当曲线编辑器保存后）
             window.addEventListener('storage', function(e) {
                 if (e.key === 'customSpeedCurves') {
+                    // 先重新加载自定义曲线，再刷新下拉列表和缓存
+                    if (typeof speedCurveManager !== 'undefined' && speedCurveManager.reloadCustomCurves) {
+                        speedCurveManager.reloadCustomCurves();
+                    }
                     if (typeof refreshCurveSelect === 'function') {
                         refreshCurveSelect();
                     }

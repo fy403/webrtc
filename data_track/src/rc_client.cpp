@@ -293,8 +293,10 @@ void RCClient::parseFrame(const std::string &peer_id, const uint8_t *frame, size
                 motor_controller_->applyControl(control_frame);
             }
         }
-    } else {
-        // 更新特定DataChannel的健康状态（控制包和心跳包都更新）
+    }
+
+    // 控制包和心跳包都更新健康状态（统一放在外面）
+    {
         std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
         DataChannelHealth &health = channel_health_[peer_id];
         health.last_heartbeat = std::chrono::steady_clock::now();

@@ -24,7 +24,7 @@ public:
 
 private:
     std::shared_ptr<CRSFTransport> transport_;
-    uint16_t neutral_pwm_;              // CRSF 中位值 (us)，来自配置
+    uint16_t neutral_pwm_[16];            // 每个通道的中位值 (us)，来自配置
     uint16_t last_pwm_[16] = {};
 };
 

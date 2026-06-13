@@ -140,9 +140,14 @@ int main(int argc, char **argv) {
         // 协议通道索引映射
         mcfg.pwm_proto_forward_idx     = g_config->getAsInt("pwmProtoForwardIdx", 0);
         mcfg.pwm_proto_turn_idx        = g_config->getAsInt("pwmProtoTurnIdx", 1);
-        // CRSF 中位值
-        mcfg.crsf_neutral_pwm         = static_cast<uint16_t>(g_config->getAsInt("crsfNeutralPwm", 1500));
-        mcfg.pwm_neutral_pwm          = static_cast<uint16_t>(g_config->getAsInt("pwmNeutralPwm", 1500));
+        // CRSF 各通道中位值
+        for (int i = 0; i < 16; i++) {
+            std::string key = "crsfNeutralPwm_" + std::to_string(i + 1);
+            mcfg.crsf_neutral_pwm[i] = static_cast<uint16_t>(g_config->getAsInt(key, 1500));
+        }
+        // PWM 前后/左右中位值
+        mcfg.pwm_front_back_neutral_pwm = static_cast<uint16_t>(g_config->getAsInt("pwmFrontBackNeutralPwm", 1500));
+        mcfg.pwm_left_right_neutral_pwm = static_cast<uint16_t>(g_config->getAsInt("pwmLeftRightNeutralPwm", 1500));
 
 
 

@@ -25,13 +25,31 @@ motorDriverType=crsf               # 电机驱动类型：crsf / pwm / dummy(调
 
 # =============================================================================
 # CRSF 驱动参数（motorDriverType=crsf 时有效）
+# 每个通道可单独设置中位值，默认均为 1500us
 # =============================================================================
-# crsfNeutralPwm=1500                # CRSF 协议中位值 (us)，默认 1500
+# crsfNeutralPwm_1=1500              # CH1 中位值 (us)
+# crsfNeutralPwm_2=1500              # CH2 中位值 (us)
+# crsfNeutralPwm_3=1500              # CH3 中位值 (us)
+# crsfNeutralPwm_4=1500              # CH4 中位值 (us)
+# crsfNeutralPwm_5=1500              # CH5 中位值 (us)
+# crsfNeutralPwm_6=1500              # CH6 中位值 (us)
+# crsfNeutralPwm_7=1500              # CH7 中位值 (us)
+# crsfNeutralPwm_8=1500              # CH8 中位值 (us)
+# crsfNeutralPwm_9=1500              # CH9 中位值 (us)
+# crsfNeutralPwm_10=1500             # CH10 中位值 (us)
+# crsfNeutralPwm_11=1500             # CH11 中位值 (us)
+# crsfNeutralPwm_12=1500             # CH12 中位值 (us)
+# crsfNeutralPwm_13=1500             # CH13 中位值 (us)
+# crsfNeutralPwm_14=1500             # CH14 中位值 (us)
+# crsfNeutralPwm_15=1500             # CH15 中位值 (us)
+# crsfNeutralPwm_16=1500             # CH16 中位值 (us)
 
 # =============================================================================
 # PWM 驱动参数（motorDriverType=pwm 时有效）
+# 前后和左右可单独设置中位值，默认均为 1500us
 # =============================================================================
-# pwmNeutralPwm=1500                 # PWM 协议中位值 (us)，默认 1500
+# pwmFrontBackNeutralPwm=1500        # 前后通道中位值 (us)
+# pwmLeftRightNeutralPwm=1500        # 左右通道中位值 (us)
 # pwmFrontBackChip=0              # 前后控制PWM芯片编号（默认0）
 # pwmLeftRightChip=1              # 左右转向PWM芯片编号（默认1）
 # pwmFrontBackChannel=0           # 前后控制PWM通道（默认0）

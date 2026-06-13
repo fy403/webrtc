@@ -17,7 +17,8 @@ PwmMotorDriver::PwmMotorDriver(int front_back_chip,
                                int left_right_channel,
                                int proto_forward_idx,
                                int proto_turn_idx,
-                               uint16_t neutral_pwm)
+                               uint16_t front_back_neutral,
+                               uint16_t left_right_neutral)
     : front_back_chip_(front_back_chip),
       left_right_chip_(left_right_chip),
       period_ns_(period_ns),
@@ -25,9 +26,10 @@ PwmMotorDriver::PwmMotorDriver(int front_back_chip,
       left_right_channel_(left_right_channel),
       proto_forward_idx_(proto_forward_idx),
       proto_turn_idx_(proto_turn_idx),
-      neutral_pwm_(neutral_pwm),
-      front_back_duty_(neutral_pwm),
-      left_right_duty_(neutral_pwm),
+      front_back_neutral_pwm_(front_back_neutral),
+      left_right_neutral_pwm_(left_right_neutral),
+      front_back_duty_(front_back_neutral),
+      left_right_duty_(left_right_neutral),
       front_back_initialized_(false),
       left_right_initialized_(false) {
 
@@ -61,7 +63,7 @@ bool PwmMotorDriver::connect() {
             return false;
         }
         setPolarity(front_back_chip_, front_back_channel_, "normal");
-        setDutyCycleNs(front_back_chip_, front_back_channel_, pwmToDutyNs(neutral_pwm_));
+        setDutyCycleNs(front_back_chip_, front_back_channel_, pwmToDutyNs(front_back_neutral_pwm_));
         if (!enablePwm(front_back_chip_, front_back_channel_, true)) {
             std::cerr << "Failed to enable front/back PWM channel" << std::endl;
             return false;
@@ -81,7 +83,7 @@ bool PwmMotorDriver::connect() {
             return false;
         }
         setPolarity(left_right_chip_, left_right_channel_, "normal");
-        setDutyCycleNs(left_right_chip_, left_right_channel_, pwmToDutyNs(neutral_pwm_));
+        setDutyCycleNs(left_right_chip_, left_right_channel_, pwmToDutyNs(left_right_neutral_pwm_));
         if (!enablePwm(left_right_chip_, left_right_channel_, true)) {
             std::cerr << "Failed to enable left/right PWM channel" << std::endl;
             return false;
@@ -98,7 +100,7 @@ void PwmMotorDriver::disconnect() {
     std::cout << "正在关闭PWM电机驱动器..." << std::endl;
 
     if (front_back_initialized_) {
-        setDutyCycleNs(front_back_chip_, front_back_channel_, pwmToDutyNs(neutral_pwm_));
+        setDutyCycleNs(front_back_chip_, front_back_channel_, pwmToDutyNs(front_back_neutral_pwm_));
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         enablePwm(front_back_chip_, front_back_channel_, false);
         unexportPwmChannel(front_back_chip_, front_back_channel_);
@@ -106,7 +108,7 @@ void PwmMotorDriver::disconnect() {
     }
 
     if (left_right_initialized_) {
-        setDutyCycleNs(left_right_chip_, left_right_channel_, pwmToDutyNs(neutral_pwm_));
+        setDutyCycleNs(left_right_chip_, left_right_channel_, pwmToDutyNs(left_right_neutral_pwm_));
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         enablePwm(left_right_chip_, left_right_channel_, false);
         unexportPwmChannel(left_right_chip_, left_right_channel_);
@@ -158,16 +160,16 @@ void PwmMotorDriver::applyControl(const RCProtocolV2::ControlFrame &frame) {
     double forward = frame.channels[proto_forward_idx_];
     double turn    = frame.channels[proto_turn_idx_];
 
-    if (std::fabs(forward - neutral_pwm_) < DEADZONE_US) forward = neutral_pwm_;
-    if (std::fabs(turn    - neutral_pwm_) < DEADZONE_US) turn    = neutral_pwm_;
+    if (std::fabs(forward - front_back_neutral_pwm_) < DEADZONE_US) forward = front_back_neutral_pwm_;
+    if (std::fabs(turn    - left_right_neutral_pwm_) < DEADZONE_US) turn    = left_right_neutral_pwm_;
 
     setFrontBackPWM(static_cast<uint16_t>(forward));
     setLeftRightPWM(static_cast<uint16_t>(turn));
 }
 
 void PwmMotorDriver::stopAll() {
-    setFrontBackPWM(neutral_pwm_);
-    setLeftRightPWM(neutral_pwm_);
+    setFrontBackPWM(front_back_neutral_pwm_);
+    setLeftRightPWM(left_right_neutral_pwm_);
 }
 
 bool PwmMotorDriver::applyChannelDuty(bool is_front_back) {

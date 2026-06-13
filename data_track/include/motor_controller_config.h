@@ -12,10 +12,13 @@ public:
     int motor_driver_baudrate = 115200;
 
     // ========== CRSF 驱动 ==========
-    uint16_t crsf_neutral_pwm = 1500;   // CRSF 协议默认中位值 (us)
+    // CRSF 16通道各自的中位值 (us)，索引0对应CH1
+    uint16_t crsf_neutral_pwm[16] = {1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500,
+                                      1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500};
 
     // ========== PWM 驱动 ==========
-    uint16_t pwm_neutral_pwm = 1500;    // PWM 协议默认中位值 (us)
+    uint16_t pwm_front_back_neutral_pwm = 1500;   // 前后通道中位值 (us)
+    uint16_t pwm_left_right_neutral_pwm = 1500;   // 左右通道中位值 (us)
 
     // ========== PWM 驱动 ==========
     int pwm_front_back_chip = 0;

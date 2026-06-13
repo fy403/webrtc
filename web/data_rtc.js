@@ -207,6 +207,7 @@ window.addEventListener('load', () => {
     let lastSentState = { forward: 0, turn: 0 };
     let actualSentForward = 0; // 实际发送的油门值（经过限幅）
     let heartbeatInterval = null;
+    let controlInterval = null; // 定时发送控制帧，确保长按时持续发送
 
     // SBUS control pipeline
     const controllerManager = new ControllerManager((state) => {
@@ -253,11 +254,16 @@ window.addEventListener('load', () => {
             channelValues = window.channelKeyBinder.getAllChannelValues();
         }
 
-        // 将 ControllerManager 输出的 forward/turn (-1~1) 转换为 raw PWM 写入 CH1/CH2
-        const rawForward = 1500 + (lastSentState.forward || 0) * 500;
-        const rawTurn = 1500 + (lastSentState.turn || 0) * 500;
-        channelValues[0] = Math.max(1000, Math.min(2000, rawForward));
-        channelValues[1] = Math.max(1000, Math.min(2000, rawTurn));
+        // CH1/CH2：如果 ChannelKeyBinder 已绑定（含曲线），使用其计算值；
+        // 否则用 ControllerManager 的 forward/turn 线性映射
+        if (!window.channelKeyBinder || !window.channelKeyBinder.getBinding(1)) {
+            const rawForward = 1500 + (lastSentState.forward || 0) * 500;
+            channelValues[0] = Math.max(1000, Math.min(2000, rawForward));
+        }
+        if (!window.channelKeyBinder || !window.channelKeyBinder.getBinding(2)) {
+            const rawTurn = 1500 + (lastSentState.turn || 0) * 500;
+            channelValues[1] = Math.max(1000, Math.min(2000, rawTurn));
+        }
 
         try {
             const frame = RCProtocol.encode({
@@ -306,6 +312,26 @@ window.addEventListener('load', () => {
         if (heartbeatInterval) {
             clearInterval(heartbeatInterval);
             heartbeatInterval = null;
+        }
+    }
+
+    // 定时发送控制帧：只在有实际操作时持续发送（非中位），确保长按时数据不中断
+    function startControlLoop() {
+        if (controlInterval) clearInterval(controlInterval);
+        controlInterval = setInterval(() => {
+            if (dataCurrentDataChannel && dataCurrentDataChannel.readyState === 'open') {
+                // 只有非中位（有操作）时才发送控制帧
+                if (lastSentState.forward !== 0 || lastSentState.turn !== 0) {
+                    dataSendSbus(lastSentState.forward, lastSentState.turn);
+                }
+            }
+        }, 50); // 20Hz
+    }
+
+    function stopControlLoop() {
+        if (controlInterval) {
+            clearInterval(controlInterval);
+            controlInterval = null;
         }
     }
 
@@ -882,6 +908,7 @@ window.addEventListener('load', () => {
     // Send peer_close on page unload
     window.addEventListener('beforeunload', () => {
         stopHeartbeat();
+        stopControlLoop();
         dataStopAutoReconnect(); // 页面卸载时停止自动重连
         dataStopWsReconnect(); // 页面卸载时停止 WebSocket 重连
         dataSendPeerClose();
@@ -1037,9 +1064,12 @@ window.addEventListener('load', () => {
             updateStatus(`Data channel open with ${id}`);
             dataCurrentDataChannel = dc;
             dataUpdateConnStatus('connected', 'CONNECTED');
-            dc.send(`Hello from ${dataLocalId}`);
-            // 启动心跳机制
+            // 重连时复位状态并发送中位值，防止残留旧值
+            lastSentState = { forward: 0, turn: 0 };
+            dataSendSbus(0, 0);
+            // 启动心跳和控制循环
             startHeartbeat();
+            startControlLoop();
             dataStopAutoReconnect(); // 数据通道打开，停止自动重连
         };
         dc.onclose = () => {
@@ -1047,8 +1077,9 @@ window.addEventListener('load', () => {
             if (dataCurrentDataChannel === dc) {
                 dataCurrentDataChannel = null;
                 dataUpdateConnStatus('disconnected', 'DISCONNECTED');
-                // 停止心跳机制
+                // 停止心跳和控制循环
                 stopHeartbeat();
+                stopControlLoop();
                 // 启动自动重连
                 if (dataSignalingWs) {
                     dataStartAutoReconnect(dataSignalingWs, id);

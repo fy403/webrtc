@@ -37,7 +37,8 @@ public:
                    int left_right_channel = 0,
                    int proto_forward_idx = 0,
                    int proto_turn_idx = 1,
-                   uint16_t neutral_pwm = 1500);
+                   uint16_t front_back_neutral = 1500,
+                   uint16_t left_right_neutral = 1500);
 
     ~PwmMotorDriver() override;
 
@@ -59,7 +60,8 @@ private:
     uint16_t front_back_duty_;      // 前后 raw PWM
     uint16_t left_right_duty_;      // 左右 raw PWM
 
-    uint16_t neutral_pwm_;             // 协议中位值 (us)，来自配置
+    uint16_t front_back_neutral_pwm_;    // 前后通道中位值 (us)
+    uint16_t left_right_neutral_pwm_;    // 左右通道中位值 (us)
     bool front_back_initialized_;
     bool left_right_initialized_;
 
