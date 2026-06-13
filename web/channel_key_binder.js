@@ -141,6 +141,7 @@
             e.preventDefault();
             this.keyPressTimestamps[code] = performance.now();
             this.activeDirection[i] = 1;
+            console.log(`[Binder] CH${i} single key: ${code}, target=${binding.value}`);
             return;
           }
         } else if (binding.type === 'continuous') {
@@ -148,12 +149,14 @@
             e.preventDefault();
             this.keyPressTimestamps[code] = performance.now();
             this.activeDirection[i] = -1;
+            console.log(`[Binder] CH${i} NEGATIVE: ${code}, range=${binding.minValue}~${binding.neutralValue}`);
             return;
           }
           if (binding.positiveKey === code && !this.keyPressTimestamps[code]) {
             e.preventDefault();
             this.keyPressTimestamps[code] = performance.now();
             this.activeDirection[i] = 1;
+            console.log(`[Binder] CH${i} POSITIVE: ${code}, range=${binding.neutralValue}~${binding.maxValue}`);
             return;
           }
         }
@@ -173,13 +176,14 @@
             e.preventDefault();
             delete this.keyPressTimestamps[code];
             delete this.activeDirection[i];
-            // 值由 tick 衰减到 0
+            console.log(`[Binder] CH${i} keyup: ${code}, decaying to neutral`);
             return;
           }
         }
 
         if (binding.type === 'continuous') {
           if (binding.negativeKey === code || binding.positiveKey === code) {
+            console.log(`[Binder] CH${i} keyup: ${code} (${code === binding.negativeKey ? 'NEG' : 'POS'})`);
             delete this.keyPressTimestamps[code];
             // 检查该通道是否还有其他键被按下
             const negStillDown = this.keyPressTimestamps[binding.negativeKey] !== undefined;
@@ -187,10 +191,13 @@
 
             if (!negStillDown && !posStillDown) {
               delete this.activeDirection[i];
+              console.log(`[Binder] CH${i} all keys released, decaying to neutral=${binding.neutralValue}`);
             } else if (negStillDown) {
               this.activeDirection[i] = -1;
+              console.log(`[Binder] CH${i} switched to NEGATIVE: ${binding.negativeKey}`);
             } else if (posStillDown) {
               this.activeDirection[i] = 1;
+              console.log(`[Binder] CH${i} switched to POSITIVE: ${binding.positiveKey}`);
             }
             return;
           }
