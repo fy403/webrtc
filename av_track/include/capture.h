@@ -52,6 +52,10 @@ protected:
   void bind_thread_to_cpu(std::thread& thread, int cpu_id);
   int get_cpu_count();
 
+  // 发送线程池：并发执行多个peer回调，避免慢peer阻塞快peer
+  void init_send_pool(size_t num_threads = 0);  // 0=自动检测
+  void stop_send_pool();
+
   bool debug_enabled_;
   std::atomic<bool> is_running_ = false;
   std::atomic<bool> is_paused_ = true;
@@ -82,6 +86,10 @@ protected:
   SafeQueue<AVFrame *> filter_queue_;  // decoded raw frames → filter thread
   SafeQueue<AVFrame *> encode_queue_;
   SafeQueue<AVPacket *> send_queue_;
+
+  // 发送线程池：任务队列 + 工作线程
+  SafeQueue<std::function<void()>> send_task_queue_;
+  std::vector<std::thread> send_workers_;
 };
 
 #endif // CAPTURE_H

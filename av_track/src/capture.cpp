@@ -23,7 +23,8 @@ Capture::Capture(bool debug_enabled, size_t decode_queue_capacity,
                  size_t encode_queue_capacity, size_t send_queue_capacity)
     : debug_enabled_(debug_enabled), is_running_(false), is_paused_(false),
       decode_queue_(decode_queue_capacity), filter_queue_(decode_queue_capacity),
-      encode_queue_(encode_queue_capacity), send_queue_(send_queue_capacity) {
+      encode_queue_(encode_queue_capacity), send_queue_(send_queue_capacity),
+      send_task_queue_(256) {
   avdevice_register_all();
   decode_queue_.set_deleter([](AVPacket *packet) { av_packet_free(&packet); });
   filter_queue_.set_deleter([](AVFrame *frame) { av_frame_free(&frame); });
@@ -100,6 +101,9 @@ void Capture::stop() {
     send_thread_.join();
   }
 
+  // 停止发送线程池（必须在 send_thread_ join 之后，确保不会再有新任务提交）
+  stop_send_pool();
+
   // Encoder context is managed by the Encoder class
   if (encoder_) {
     encoder_->close_encoder();
@@ -151,4 +155,39 @@ void Capture::bind_thread_to_cpu(std::thread& thread, int cpu_id) {
   // 非Linux系统不执行绑定操作
   std::cout << "CPU binding is only supported on Linux systems" << std::endl;
 #endif
+}
+
+void Capture::init_send_pool(size_t num_threads) {
+  // 先停止已有线程池（支持 re-init）
+  stop_send_pool();
+
+  if (num_threads == 0) {
+    num_threads = std::thread::hardware_concurrency();
+    if (num_threads == 0) num_threads = 2;
+    if (num_threads > 4) num_threads = 4;  // 发送线程不宜过多
+  }
+
+  for (size_t i = 0; i < num_threads; ++i) {
+    send_workers_.emplace_back([this, i]() {
+      std::function<void()> task;
+      while (send_task_queue_.wait_pop(task), task || is_running_) {
+        if (task) {
+          task();
+        }
+      }
+    });
+  }
+
+  std::cout << "Send thread pool started with " << num_threads << " workers" << std::endl;
+}
+
+void Capture::stop_send_pool() {
+  send_task_queue_.stop();
+
+  for (auto &worker : send_workers_) {
+    if (worker.joinable()) {
+      worker.join();
+    }
+  }
+  send_workers_.clear();
 }

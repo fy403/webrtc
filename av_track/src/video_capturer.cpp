@@ -317,6 +317,9 @@ bool VideoCapturer::start() {
   // 等待 track_callback_ 设置后再启动采集线程
   capture_thread_ = std::thread(&VideoCapturer::capture_loop, this);
 
+  // 初始化发送线程池（必须在 send_thread_ 之前，因为 send_loop 会向池提交任务）
+  init_send_pool(4);
+
   if (is_udp_stream_) {
     // 网络流模式（UDP/RTSP/SDP）：只启动采集和发送线程
     bool is_rtsp = (device_.substr(0, 7) == "rtsp://");
@@ -1020,12 +1023,6 @@ void VideoCapturer::encode_loop() {
 }
 
 void VideoCapturer::send_loop() {
-  // 发送节流：控制发送节奏，避免网络突发
-  static auto last_send_time = std::chrono::steady_clock::now();
-  static int64_t bytes_sent_in_window = 0;
-  static constexpr int64_t kMaxBytesPerWindow = 150000; // 每 100ms 窗口最大发送量 (约 12Mbps)
-  static constexpr int64_t kWindowDurationUs = 100000;   // 窗口时长 100ms
-
   while (is_running_) {
     AVPacket *packet = nullptr;
 
@@ -1045,49 +1042,47 @@ void VideoCapturer::send_loop() {
       break;
     }
 
-    // ========== 发送节流（Pacing）：平滑网络输出 ==========
-    auto now = std::chrono::steady_clock::now();
-    auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(now - last_send_time).count();
-
-    // 检查是否需要重置窗口或等待
-    if (elapsed_us >= kWindowDurationUs) {
-      // 新窗口开始，重置计数器
-      last_send_time = now;
-      bytes_sent_in_window = 0;
-    } else if (bytes_sent_in_window + packet->size > kMaxBytesPerWindow && !is_fake_camera_) {
-      // 本窗口剩余空间不足（仅对真实摄像头生效，fake camera 已有 capture pacing）
-      int64_t wait_time = kWindowDurationUs - elapsed_us;
-      if (wait_time > 0) {
-        std::this_thread::sleep_for(std::chrono::microseconds(wait_time));
-        // 重置窗口
-        last_send_time = std::chrono::steady_clock::now();
-        bytes_sent_in_window = 0;
+    // ===== 细粒度锁：快照拷贝回调列表，锁外执行网络I/O =====
+    std::vector<TrackCallback> callbacks_snapshot;
+    {
+      std::lock_guard<std::mutex> lock(callbacks_mutex_);
+      callbacks_snapshot.reserve(track_callbacks_.size());
+      for (const auto &pair : track_callbacks_) {
+        if (pair.second) {
+          callbacks_snapshot.push_back(pair.second);
+        }
       }
     }
 
-    bytes_sent_in_window += packet->size;
+    if (callbacks_snapshot.empty()) {
+      if (debug_enabled_) {
+        std::cout << "Drop packet! No callback set." << std::endl;
+      }
+      av_packet_free(&packet);
+      continue;
+    }
 
-    // Send data to all registered callbacks (multiple peer support)
-    auto data = reinterpret_cast<const std::byte *>(packet->data);
+    // 拷贝包数据到 shared_ptr，避免 packet 生命周期问题
+    auto shared_data = std::make_shared<std::vector<uint8_t>>(
+        packet->data, packet->data + packet->size);
     size_t data_size = packet->size;
 
-    // 使用互斥锁保护callbacks map的访问
-    std::lock_guard<std::mutex> lock(callbacks_mutex_);
-
-    for (const auto &pair : track_callbacks_) {
-      if (pair.second) {
-        pair.second(data, data_size);
-      }
+    if (debug_enabled_) {
+      std::cout << "Video sent: size=" << data_size
+                << ", Callbacks: " << callbacks_snapshot.size() << std::endl;
     }
 
-    if (debug_enabled_ && !track_callbacks_.empty()) {
-      std::cout << "Video sent: size=" << packet->size
-                << ", Callbacks: " << track_callbacks_.size() << std::endl;
-    } else if (debug_enabled_) {
-      std::cout << "Drop packet! No callback set." << std::endl;
-    }
-
+    // 提前释放 AVPacket（数据已由 shared_ptr 持有）
     av_packet_free(&packet);
+
+    // ===== 线程池并发发送：每个 peer 独立任务，慢 peer 不阻塞快 peer =====
+    for (auto &cb : callbacks_snapshot) {
+      send_task_queue_.wait_push(
+          [cb = std::move(cb), shared_data, data_size]() {
+            cb(reinterpret_cast<const std::byte *>(shared_data->data()),
+               data_size);
+          });
+    }
   }
   std::cout << "Video Send thread exiting" << std::endl;
 }
