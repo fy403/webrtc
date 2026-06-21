@@ -107,23 +107,41 @@ bool H265Encoder::open_encoder(int width, int height, int fps, int64_t bit_rate,
 
     encoder_context_->bit_rate = final_bitrate;
     encoder_context_->rc_max_rate = final_bitrate * 1.2;
-    // ⚡ VBV 缓冲区缩小到 1 帧大小
-    encoder_context_->rc_buffer_size = final_bitrate / fps;
-    if (encoder_context_->rc_buffer_size < 1000) {
-      encoder_context_->rc_buffer_size = 1000;
+
+    // ========== VBV 缓冲区：根据编码器类型分别设置 ==========
+    // 硬件编码器（hevc_rkmpp）需要足够大的缓冲区容纳 I 帧
+    if (is_hw_encoder) {
+      // 硬件编码器：至少 3 帧大小（约 100ms）
+      encoder_context_->rc_buffer_size = final_bitrate / fps * 3;
+      if (encoder_context_->rc_buffer_size < 300000) {
+        encoder_context_->rc_buffer_size = 300000;
+      }
+    } else {
+      // 软编码器（libx265）：可用较小缓冲区
+      encoder_context_->rc_buffer_size = final_bitrate / fps;
+      if (encoder_context_->rc_buffer_size < 1000) {
+        encoder_context_->rc_buffer_size = 1000;
+      }
     }
 
-    av_opt_set(encoder_context_->priv_data, "preset", "ultrafast", 0);
-    av_opt_set(encoder_context_->priv_data, "tune", "zerolatency", 0);
+    // ========== libx265 专属选项（仅软编码器生效）==========
+    // ⚠️ preset/tune/crf 是 libx265 参数，不能设置到 hevc_rkmpp 的 priv_data
+    if (!is_hw_encoder) {
+      av_opt_set(encoder_context_->priv_data, "preset", "ultrafast", 0);
+      av_opt_set(encoder_context_->priv_data, "tune", "zerolatency", 0);
+      if (bit_rate <= 0) {
+        av_opt_set(encoder_context_->priv_data, "crf", "28", 0);
+      }
+    }
 
     if (bit_rate <= 0) {
-      av_opt_set(encoder_context_->priv_data, "crf", "28", 0);
       std::cout << "H265 Auto bitrate (LowLatency): " << final_bitrate / 1000 << " kbps" << std::endl;
     }
 
     std::cout << "H265 VBV buffer: " << encoder_context_->rc_buffer_size
               << " bits (~" << (encoder_context_->rc_buffer_size * 1000 / final_bitrate)
-              << "ms buffering)" << std::endl;
+              << "ms buffering)"
+              << (is_hw_encoder ? " [HW]" : " [SW]") << std::endl;
   }
 
   std::cout << "Profile: " << profile

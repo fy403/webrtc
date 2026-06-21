@@ -128,10 +128,6 @@ bool AudioCapturer::start() {
   capture_thread_ = std::thread(&AudioCapturer::capture_loop, this);
   decode_thread_ = std::thread(&AudioCapturer::decode_loop, this);
   encode_thread_ = std::thread(&AudioCapturer::encode_loop, this);
-
-  // 初始化发送线程池（必须在 send_thread_ 之前，因为 send_loop 会向池提交任务）
-  init_send_pool(2);
-
   send_thread_ = std::thread(&AudioCapturer::send_loop, this);
 
   // 如果CPU数量大于等于4，则绑定线程到不同的CPU
@@ -327,46 +323,26 @@ void AudioCapturer::send_loop() {
       break;
     }
 
-    // ===== 细粒度锁：快照拷贝回调列表，锁外执行网络I/O =====
-    std::vector<TrackCallback> callbacks_snapshot;
-    {
-      std::lock_guard<std::mutex> lock(callbacks_mutex_);
-      callbacks_snapshot.reserve(track_callbacks_.size());
-      for (const auto &pair : track_callbacks_) {
-        if (pair.second) {
-          callbacks_snapshot.push_back(pair.second);
-        }
-      }
-    }
-
-    if (callbacks_snapshot.empty()) {
-      if (debug_enabled_) {
-        std::cout << "Drop packet! No callback set." << std::endl;
-      }
-      av_packet_free(&packet);
-      continue;
-    }
-
-    // 拷贝包数据到 shared_ptr
-    auto shared_data = std::make_shared<std::vector<uint8_t>>(
-        packet->data, packet->data + packet->size);
+    // Send data to all registered callbacks (multiple peer support)
+    auto data = reinterpret_cast<const std::byte *>(packet->data);
     size_t data_size = packet->size;
+
+    // 使用互斥锁保护callbacks map的访问
+    std::lock_guard<std::mutex> lock(callbacks_mutex_);
+
+    for (const auto &pair : track_callbacks_) {
+      if (pair.second) {
+        pair.second(data, data_size);
+      }
+    }
 
     if (debug_enabled_ && !track_callbacks_.empty()) {
       std::cout << "Send encoded packet: size=" << packet->size
                 << ", Send queue Len: " << send_queue_.size()
-                << ", Callbacks: " << callbacks_snapshot.size() << std::endl;
+                << ", Callbacks: " << track_callbacks_.size() << std::endl;
+    } else if (debug_enabled_) {
+      std::cout << "Drop packet! No callback set." << std::endl;
     }
-
     av_packet_free(&packet);
-
-    // ===== 线程池并发发送 =====
-    for (auto &cb : callbacks_snapshot) {
-      send_task_queue_.wait_push(
-          [cb = std::move(cb), shared_data, data_size]() {
-            cb(reinterpret_cast<const std::byte *>(shared_data->data()),
-               data_size);
-          });
-    }
   }
 }

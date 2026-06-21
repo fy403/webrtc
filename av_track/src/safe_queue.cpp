@@ -124,3 +124,4 @@ template <typename T> void SafeQueue<T>::stop() {
 // 显式实例化常用的类型，避免链接错误
 template class SafeQueue<struct AVPacket*>;
 template class SafeQueue<struct AVFrame*>;
+template class SafeQueue<std::function<void()>>;

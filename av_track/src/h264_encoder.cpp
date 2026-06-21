@@ -125,26 +125,44 @@ bool H264Encoder::open_encoder(int width, int height, int fps, int64_t bit_rate,
     encoder_context_->bit_rate = final_bitrate;
     // rc_max_rate = 目标码率 × 1.2（低延时场景不需要过大波动）
     encoder_context_->rc_max_rate = final_bitrate * 1.2;
-    // ⚡ 关键优化：VBV 缓冲区缩小到仅 1 帧大小
-    // 原来 bit_rate/4 对应 ~250ms 缓冲，现在 bit_rate/fps 仅 ~4ms
-    encoder_context_->rc_buffer_size = final_bitrate / fps;
-    // 安全下限：至少 1Kbit，避免某些编码器把 0 当无限制
-    if (encoder_context_->rc_buffer_size < 1000) {
-      encoder_context_->rc_buffer_size = 1000;
+
+    // ========== VBV 缓冲区：根据编码器类型分别设置 ==========
+    // 硬件编码器（rkmpp）需要足够大的缓冲区容纳 I 帧，
+    // 软编码器（libx264）可以用更小缓冲区实现低延时
+    if (is_hw_encoder) {
+      // 硬件编码器：至少 3 帧大小（约 100ms），确保 I 帧能完整编码
+      encoder_context_->rc_buffer_size = final_bitrate / fps * 3;
+      if (encoder_context_->rc_buffer_size < 300000) {
+        encoder_context_->rc_buffer_size = 300000;  // 至少 300Kbit
+      }
+    } else {
+      // 软编码器：可用较小缓冲区，但不能小于 1 帧大小
+      encoder_context_->rc_buffer_size = final_bitrate / fps;
+      if (encoder_context_->rc_buffer_size < 1000) {
+        encoder_context_->rc_buffer_size = 1000;
+      }
     }
 
-    av_opt_set(encoder_context_->priv_data, "preset", "ultrafast", 0);
-    av_opt_set(encoder_context_->priv_data, "tune", "zerolatency", 0);
-    av_opt_set(encoder_context_->priv_data, "profile", "baseline", 0);
+    // ========== libx264 专属选项（仅软编码器生效）==========
+    // ⚠️ preset/tune/profile/crf 是 libx264 参数，
+    //    绝不能设置到 h264_rkmpp/hevc_rkmpp 的 priv_data 上！
+    if (!is_hw_encoder) {
+      av_opt_set(encoder_context_->priv_data, "preset", "ultrafast", 0);
+      av_opt_set(encoder_context_->priv_data, "tune", "zerolatency", 0);
+      av_opt_set(encoder_context_->priv_data, "profile", "baseline", 0);
+      if (bit_rate <= 0) {
+        av_opt_set(encoder_context_->priv_data, "crf", "23", 0);
+      }
+    }
 
     if (bit_rate <= 0) {
-      av_opt_set(encoder_context_->priv_data, "crf", "23", 0);
       std::cout << "Auto bitrate (LowLatency): " << final_bitrate / 1000 << " kbps" << std::endl;
     }
 
     std::cout << "VBV buffer: " << encoder_context_->rc_buffer_size 
               << " bits (~" << (encoder_context_->rc_buffer_size * 1000 / final_bitrate) 
-              << "ms buffering)" << std::endl;
+              << "ms buffering)" 
+              << (is_hw_encoder ? " [HW]" : " [SW]") << std::endl;
 
     encoder_context_->level = 31;
   }
