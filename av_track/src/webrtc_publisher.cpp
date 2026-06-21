@@ -399,9 +399,13 @@ WebRTCPublisher::WebRTCPublisher(const std::string &client_id, Config *config)
   config_->display();
   
   int framerate = config_->getAsInt("framerate", 30);
-  // 低延时：队列容量 = fps + 4 ≈ 4-5帧缓冲(~130-167ms)
-  // 原来是 framerate * 2 = 60帧(2秒)，对低延时场景太大
-  size_t queue_size = framerate + 4;
+  // 低延时优化：将队列容量从 fps+4 (34帧≈1.1秒) 缩小到 fps/5+2 (8帧≈0.26秒)
+  // 配合 try_push + clear 策略，满队列时会主动清空旧帧，优先保证低延时
+  // 原来 framerate * 2 = 60帧(2秒) 对低延时场景太大
+  size_t queue_size = (framerate / 5) + 2;
+  if (queue_size < 3) queue_size = 3;   // 最少 3 帧缓冲
+  std::cout << "Queue size for low latency: " << queue_size 
+            << " frames (~" << (queue_size * 1000 / framerate) << "ms max buffering)" << std::endl;
   
   // Initialize video capturer
   std::string videoDevice = config_->get("videoDevice", "");

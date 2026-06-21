@@ -21,5 +21,8 @@ private:
   std::string codec_name_;    // 编码器名称 (libx265, hevc_rkmpp 等)
   AVCodecContext *encoder_context_;
   const AVCodec *codec_;
+
+  // 编码帧计数（每次 open_encoder 时重置）
+  int64_t frame_count_ = 0;
 };
 #endif // H265_ENCODER_H

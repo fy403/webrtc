@@ -19,5 +19,10 @@ private:
   std::string codec_name_;    // 编码器名称 (libx264, h264_rkmpp 等)
   AVCodecContext *encoder_context_;
   const AVCodec *codec_;
+
+  // 编码帧计数（每次 open_encoder 时重置）
+  int64_t frame_count_ = 0;
+  int64_t keyframe_count_ = 0;
+  int64_t last_keyframe_pts_ = -1;
 };
 #endif // H264_ENCODER_H

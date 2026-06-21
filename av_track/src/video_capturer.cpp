@@ -1008,11 +1008,23 @@ void VideoCapturer::encode_loop() {
     release_scaled_frame(frame);
 
     if (encoded) {
-      // Put packet in send queue
-      // Clone packet for sending thread
+      // Put packet in send queue（非阻塞推入，满则清空队列减少堆积延迟）
       AVPacket *clone_packet = av_packet_alloc();
       av_packet_ref(clone_packet, packet);
-        send_queue_.wait_push(clone_packet);
+
+      if (!send_queue_.try_push(clone_packet)) {
+        if (debug_enabled_) {
+          std::cout << "Video Send queue full, clearing to reduce latency" << std::endl;
+        }
+        av_packet_free(&clone_packet);
+        send_queue_.clear();  // 清空旧数据，优先保证低延时
+        // 清空后重试一次
+        AVPacket *retry_packet = av_packet_alloc();
+        av_packet_ref(retry_packet, packet);
+        if (!send_queue_.try_push(retry_packet)) {
+          av_packet_free(&retry_packet);
+        }
+      }
 
       av_packet_unref(packet);
     }
