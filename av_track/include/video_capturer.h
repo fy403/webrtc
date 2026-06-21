@@ -7,6 +7,7 @@
 
 // Forward declarations
 class Encoder;
+class LatencyTracker;
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -83,6 +84,13 @@ private:
 
   bool init_fps_filter(int width, int height, int fps);
   void cleanup_fps_filter();
+
+  // 端到端延时跟踪器
+  std::unique_ptr<LatencyTracker> latency_tracker_;
+
+public:
+  // 获取延时跟踪器（供 webrtc_publisher 使用）
+  LatencyTracker* get_latency_tracker() { return latency_tracker_.get(); }
 
   // 互斥锁保护 reconfiguration 期间对 encoder 和 fps filter 的并发访问
   std::mutex encoder_mutex_;

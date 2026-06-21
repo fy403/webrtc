@@ -8,7 +8,14 @@ class WebRTCOptimizer {
         
         // 性能指标
         this.metrics = {
-            // 延迟指标
+            // 延时指标（后端流水线，由服务端通过 DataChannel 推送）
+            backendCapture: 0,
+            backendDecode: 0,
+            backendFilter: 0,
+            backendEncode: 0,
+            backendSend: 0,
+            backendTotal: 0,  // Capture → Send (服务端)
+            // 前端延时指标（从 WebRTC stats 获取）
             avgJitterBufferDelay: 0,
             avgJitterBufferTargetDelay: 0,
             avgJitterBufferMinimumDelay: 0,
@@ -16,6 +23,8 @@ class WebRTCOptimizer {
             avgTotalProcessingDelay: 0,
             videoBufferDelay: 0,
             totalPlaybackDelay: 0,
+            // 网络指标
+            rtt: 0,
             // 质量指标
             framesDropped: 0,
             framesPerSecond: 0,
@@ -29,6 +38,10 @@ class WebRTCOptimizer {
         
         // WebRTC 连接引用
         this.peerConnection = null;
+
+        // E2E 统计定时器
+        this._e2eInterval = null;
+        this._e2eDataChannelReady = false;
     }
 
     /**
@@ -329,6 +342,214 @@ class WebRTCOptimizer {
         }
 
         return { ...this.metrics };
+    }
+
+    // ========== 端到端延时统计增强 ==========
+
+    /**
+     * 设置 DataChannel 引用（用于回传前端指标到服务端）
+     */
+    setDataChannel(dc) {
+        this._dataChannel = dc;
+        this._e2eDataChannelReady = dc && dc.readyState === 'open';
+        
+        if (dc) {
+            dc.onopen = () => { this._e2eDataChannelReady = true; };
+            dc.onclose = () => { this._e2eDataChannelReady = false; };
+        }
+    }
+
+    /**
+     * 启动 E2E 延时统计报告（每10秒打印完整管线延时）
+     */
+    startE2EReporting() {
+        if (this._e2eInterval) return;
+
+        this._e2eInterval = setInterval(async () => {
+            try {
+                const m = await this.getMetrics(true);
+                
+                const report = {
+                    type: 'e2e_report',
+                    timestamp: Date.now(),
+                    jitterBuffer: Math.round(m.avgJitterBufferDelay * 10) / 10,
+                    decode: Math.round(m.avgDecodeTime * 10) / 10,
+                    videoBuffer: Math.round(m.videoBufferDelay * 10) / 10,
+                    totalPlayback: Math.round(m.totalPlaybackDelay * 10) / 10,
+                    rtt: Math.round(m.rtt * 10) / 10,
+                    packetLoss: Math.round(m.packetLossRate * 10000) / 10000,
+                    fps: Math.round(m.framesPerSecond * 10) / 10,
+                    framesDecoded: m.framesDecoded,
+                    framesDropped: m.framesDropped
+                };
+
+                if (this._dataChannel && this._e2eDataChannelReady && 
+                    this._dataChannel.readyState === 'open') {
+                    this._dataChannel.send(JSON.stringify(report));
+                }
+
+                // ---------- 提取数据 ----------
+                const CL = m.framesPerSecond > 0 ? 1000 / m.framesPerSecond : 33.3;  // 采集延时 = 帧间隔
+                const S = {
+                    cap: CL,
+                    dec: m.backendDecode || 0,
+                    flt: m.backendFilter || 0,
+                    enc: m.backendEncode || 0,
+                    snd: m.backendSend || 0,
+                    total: CL + (m.backendDecode||0) + (m.backendFilter||0) + (m.backendEncode||0) + (m.backendSend||0),
+                    tmax: CL + (m._beTotalMax||0)
+                };
+                const R = {
+                    jb: m.avgJitterBufferDelay || 0,
+                    dec: m.avgDecodeTime || 0,
+                    vb: m.videoBufferDelay || 0,
+                    total: (m.avgJitterBufferDelay || 0) + (m.avgDecodeTime || 0) + (m.videoBufferDelay || 0)
+                };
+                const N = m.rtt || 0;
+                const totalE2E = S.total + N + R.total;
+                const fps = m.framesPerSecond.toFixed(0);
+                const loss = (m.packetLossRate * 100).toFixed(1);
+
+                // ---------- 工具函数 ----------
+                const fmt = (v) => (v >= 0.05 ? v.toFixed(1) + 'ms' : '  --').padStart(6);
+                const color = (v) => v < 5 ? '#4caf50' : v < 15 ? '#ff9800' : '#f44336';
+                const emoji = (v) => v < 5 ? '✅' : v < 15 ? '⚡' : '🔴';
+                const bold = (s) => `font-weight:bold;${s}`;
+
+                // ---------- 打印主标题 ----------
+                console.groupCollapsed(
+                    `%c📊 E2E 延时报告 %c│ 总延时 ${fmt(totalE2E)} %c${emoji(totalE2E)}`,
+                    'font-weight:bold;color:#00bcd4;font-size:14px',
+                    'color:#888;font-size:12px',
+                    `color:${color(totalE2E)};font-weight:bold;font-size:16px`
+                );
+
+                // ---------- Sender ----------
+                console.log(
+                    `%c🖥️  Sender  %c│ Capture ${fmt(S.cap)}  Decode ${fmt(S.dec)}  Filter ${fmt(S.flt)}  Encode ${fmt(S.enc)}  Send ${fmt(S.snd)}`,
+                    'font-weight:bold;color:#2196f3',
+                    'color:#666'
+                );
+                console.log(
+                    `%c           │ 总耗时 ${fmt(S.total)}  %c${emoji(S.total)}  (峰值 ${fmt(S.tmax)})`,
+                    'color:#666',
+                    `color:${color(S.total)};font-weight:bold`
+                );
+
+                // ---------- 分隔线 ----------
+                console.log(`%c  ────────────────────────────────────────────────────────`, 'color:#9e9e9e');
+
+                // ---------- Network ----------
+                console.log(
+                    `%c🌐  Network %c│ RTT ${fmt(N)}  %c${emoji(N)}`,
+                    'font-weight:bold;color:#9c27b0',
+                    'color:#666',
+                    `color:${color(N)};font-weight:bold`
+                );
+
+                console.log(`%c  ────────────────────────────────────────────────────────`, 'color:#9e9e9e');
+
+                // ---------- Receiver ----------
+                console.log(
+                    `%c📺  Receiver%c│ JitterBuf ${fmt(R.jb)}  Decode ${fmt(R.dec)}  VideoBuf ${fmt(R.vb)}`,
+                    'font-weight:bold;color:#ff5722',
+                    'color:#666'
+                );
+                console.log(
+                    `%c           │ 总耗时 ${fmt(R.total)}  %c${emoji(R.total)}`,
+                    'color:#666',
+                    `color:${color(R.total)};font-weight:bold`
+                );
+
+                // ---------- 底部汇总 ----------
+                console.log(`%c  ════════════════════════════════════════════════════════`, 'color:#9e9e9e');
+                console.log(
+                    `%c🎯 端到端总延时 %c${fmt(totalE2E)}  %c${emoji(totalE2E)}  │  FPS: %c${fps}  %c丢包: ${loss}%%`,
+                    'font-weight:bold;font-size:13px;color:#333',
+                    `font-weight:bold;font-size:16px;color:${color(totalE2E)}`,
+                    `color:${color(totalE2E)};font-size:18px`,
+                    'font-weight:bold;color:#4caf50',
+                    'color:#ff9800'
+                );
+                console.log(
+                    `%c📈 帧统计  │ 已解码: ${m.framesDecoded}  │  丢弃: ${m.framesDropped}`,
+                    'color:#666;font-size:11px'
+                );
+
+                console.groupEnd();
+
+                this.updateE2EDisplay(m);
+
+            } catch (err) {
+                console.warn('⚠️ E2E report failed:', err);
+            }
+        }, 5000);
+
+        console.log('✅ [E2E] Latency reporting started (5s interval)');
+    }
+
+    /**
+     * 停止 E2E 报告
+     */
+    stopE2EReporting() {
+        if (this._e2eInterval) {
+            clearInterval(this._e2eInterval);
+            this._e2eInterval = null;
+            console.log('[E2E] Latency reporting stopped');
+        }
+    }
+
+    /**
+     * 处理从服务端收到的后端流水线延时数据
+     */
+    onBackendLatency(data) {
+        if (!data || typeof data !== 'object') return;
+
+        this.metrics.backendCapture = data.capture || 0;
+        this.metrics.backendDecode = data.decode || 0;
+        this.metrics.backendFilter = data.filter || 0;
+        this.metrics.backendEncode = data.encode || 0;
+        this.metrics.backendSend = data.send || 0;
+        this.metrics.backendTotal = data.e2e_total || 0;
+        // 各阶段 max
+        this.metrics._beCapMax = data.capture_max || 0;
+        this.metrics._beDecMax = data.decode_max || 0;
+        this.metrics._beFltMax = data.filter_max || 0;
+        this.metrics._beEncMax = data.encode_max || 0;
+        this.metrics._beSndMax = data.send_max || 0;
+        this.metrics._beTotalMax = data.total_max || 0;
+
+        this.updateE2EDisplay(this.metrics);
+    }
+
+    /**
+     * 更新页面上的 E2E pipeline 显示元素
+     */
+    updateE2EDisplay(m) {
+        const el = document.getElementById('e2ePipeline');
+        if (!el) return;
+
+        const parts = [];
+        let color = '#32CD32';  // 绿色默认
+
+        if (m.backendTotal > 0) {
+            parts.push(`Srv:${m.backendTotal.toFixed(0)}ms`);
+            if (m.backendTotal > 80) color = '#FFA500';
+            if (m.backendTotal > 150) color = '#FF4500';
+        }
+        if (m.rtt > 0) {
+            parts.push(`Net:${m.rtt.toFixed(0)}ms`);
+        }
+        if (m.jitterBuffer > 0) {
+            parts.push(`JB:${m.jitterBuffer.toFixed(0)}ms`);
+        }
+
+        if (parts.length > 0) {
+            el.textContent = parts.join(' | ');
+            el.style.color = color;
+        } else {
+            el.textContent = '--';
+        }
     }
 }
 

@@ -1,4 +1,5 @@
 #include "video_capturer.h"
+#include "latency_tracker.h"
 #include "debug_utils.h"
 #include "encoder.h"
 #include "h264_encoder.h"
@@ -36,8 +37,11 @@ VideoCapturer::VideoCapturer(const std::string &device, bool debug_enabled,
                              size_t send_queue_capacity)
     : Capture(debug_enabled, decode_queue_capacity, encode_queue_capacity, send_queue_capacity),
       device_(device), resolution_(resolution), framerate_(framerate),
-      video_format_(video_format), target_fps_(framerate) {
+      video_format_(video_format), target_fps_(framerate),
+      latency_tracker_(std::make_unique<LatencyTracker>(512)) {
   avdevice_register_all();
+
+  std::cout << "[Latency] Tracker initialized (ring=512)" << std::endl;
 
   // 检测是否为模拟摄像头模式（lavfi）
   is_fake_camera_ = (device_ == "fake" || device_.substr(0, 5) == "lavfi");
@@ -751,6 +755,13 @@ void VideoCapturer::capture_loop() {
       }
 
       if (packet->stream_index == video_stream_index_) {
+        // ====== 延时统计：采集打点 ======
+        static uint64_t capture_seq = 0;
+        uint64_t fid = ++capture_seq;
+        latency_tracker_->record_capture(fid);
+        // 将 frame_id 附加到 packet（通过 opaque 或 side_data 传递到后续阶段）
+        packet->opaque = reinterpret_cast<void*>(fid);
+
         // 实际采集 FPS 测量（优化：只在需要时才获取时间戳）
         total_captured_frames++;
         
@@ -780,7 +791,7 @@ void VideoCapturer::capture_loop() {
                       << ", Frame Drop Factor: " << frame_drop_factor
                       << ", Total Captured: " << total_captured_frames
                       << std::endl;
-            
+
             // 重置计数器
             fps_calc_start_time = now;
             total_captured_frames = 0;
@@ -864,6 +875,11 @@ void VideoCapturer::decode_loop() {
       AVFrame *ref_frame = av_frame_alloc();
       av_frame_ref(ref_frame, frame);
 
+      // ====== 延时统计：解码打点 ======
+      uint64_t fid = reinterpret_cast<uint64_t>(packet->opaque);
+      if (fid > 0) latency_tracker_->record_decode(fid);
+      ref_frame->opaque = reinterpret_cast<void*>(fid);  // 传递到下一阶段
+
       if (!filter_queue_.try_push(ref_frame)) {
         if (debug_enabled_) {
           std::cout << "Filter queue full, dropping decoded frame" << std::endl;
@@ -920,6 +936,9 @@ void VideoCapturer::filter_loop() {
       //  用真实时间戳(微秒)作为 PTS，配合 filter time_base=1/1000000
       frame->pts = av_gettime_relative();
 
+      // ⚠️ 必须在 av_frame_free 之前提取 opaque（避免 use-after-free）
+      uint64_t fid = reinterpret_cast<uint64_t>(frame->opaque);
+
       std::lock_guard<std::mutex> lock(filter_mutex_);
       int ret = av_buffersrc_add_frame_flags(fps_buffer_src_, frame,
                                              AV_BUFFERSRC_FLAG_KEEP_REF);
@@ -949,6 +968,10 @@ void VideoCapturer::filter_loop() {
         // 重置 PTS：FPS filter 输出微秒级 PTS，编码器 time_base 是帧为单位，
         // 让编码器自己的帧计数器来分配 PTS，避免 GOP 被破坏
         filtered_frame->pts = AV_NOPTS_VALUE;
+
+        // ====== 延时统计：滤镜打点 ======
+        if (fid > 0) latency_tracker_->record_filter(fid);
+        filtered_frame->opaque = reinterpret_cast<void*>(fid);  // 传递到编码阶段
 
         if (!encode_queue_.try_push(filtered_frame)) {
           if (debug_enabled_) {
@@ -1001,10 +1024,19 @@ void VideoCapturer::encode_loop() {
       std::lock_guard<std::mutex> lock(encoder_mutex_);
       encoded = encoder_->encode_frame(frame, packet);
     }
+    // ⚠️ 必须在 release_scaled_frame 之前提取 opaque（避免 use-after-free）
+    uint64_t fid = reinterpret_cast<uint64_t>(frame->opaque);
+    
     // 使用 frame pool 复用内存
     release_scaled_frame(frame);
 
     if (encoded) {
+      // ====== 延时统计：编码打点 ======
+      if (fid > 0) {
+        latency_tracker_->record_encode(fid);
+        packet->opaque = reinterpret_cast<void*>(fid);
+      }
+
       // Put packet in send queue（非阻塞推入，满则清空队列减少堆积延迟）
       AVPacket *clone_packet = av_packet_alloc();
       av_packet_ref(clone_packet, packet);
@@ -1078,6 +1110,10 @@ void VideoCapturer::send_loop() {
     }
 
     bytes_sent_in_window += packet->size;
+
+    // ====== 延时统计：WebRTC 发送打点 ======
+    uint64_t fid = reinterpret_cast<uint64_t>(packet->opaque);
+    if (fid > 0) latency_tracker_->record_send(fid);
 
     // Send data to all registered callbacks (multiple peer support)
     auto data = reinterpret_cast<const std::byte *>(packet->data);

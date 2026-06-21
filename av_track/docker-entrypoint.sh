@@ -24,6 +24,22 @@ get_config() {
     grep "^${key}=" "$CONFIG_FILE" 2>/dev/null | head -1 | cut -d'=' -f2- | sed 's/[[:space:]]*#.*//; s/^[[:space:]]*//; s/[[:space:]]*$//' | tr -d '"' | tr -d "'" | grep -v '^$' || echo "$default"
 }
 
+# Check binary exists
+check_binary() {
+    if [ ! -f ./build/webrtc_publisher ]; then
+        echo "ERROR: Binary not found at ./build/webrtc_publisher"
+        echo "Files in /app/av_track/build:"
+        ls -la ./build/ 2>/dev/null || echo "  (build directory empty or missing)"
+        exit 1
+    fi
+    if [ ! -x ./build/webrtc_publisher ]; then
+        echo "ERROR: Binary not executable: ./build/webrtc_publisher"
+        ls -la ./build/webrtc_publisher
+        exit 1
+    fi
+    echo "Binary found: $(ls -lh ./build/webrtc_publisher | awk '{print $5}')"
+}
+
 # Main entrypoint
 main() {
     echo "$(date): Starting av_track container..."
@@ -43,10 +59,13 @@ main() {
     if [[ "$VIDEO_DEVICE" == /dev/* ]]; then
         check_device "$VIDEO_DEVICE"
 
-        # Wait for device to be ready
-        echo "Waiting for device to be ready..."
-        sleep 1
+        # Wait for sensor to stabilize after ISP reconfiguration
+        echo "Waiting for sensor to stabilize..."
+        sleep 3
     fi
+
+    # Verify binary exists before entering loop
+    check_binary
 
     # Start RTC stream with config file
     while true; do
@@ -60,18 +79,19 @@ main() {
         # Read CHECK_INTERVAL from config
         CHECK_INTERVAL=$(get_config "CHECK_INTERVAL" "2")
 
-        # Wait before restart
+        # Wait before restart (首次失败多等一会让硬件稳定)
         if [ "$exit_code" -eq 0 ]; then
-            echo "$(date): Stream completed normally, waiting before restart..."
+            echo "$(date): Stream completed normally, waiting ${CHECK_INTERVAL}s before restart..."
         else
-            echo "$(date): Stream failed with code $exit_code, waiting before retry..."
+            echo "$(date): Stream failed with code $exit_code, waiting ${CHECK_INTERVAL}s before retry..."
         fi
         sleep "$CHECK_INTERVAL"
     done
 }
 
-# Handle shutdown signals
-trap 'echo "$(date): Shutdown signal received, exiting..."; exit 0' SIGTERM SIGINT
+# Handle shutdown signals (only after main() enters the streaming loop)
+trap 'echo "$(date): ⚠ Shutdown signal received, exiting..."; exit 0' SIGTERM SIGINT
 
+echo "$(date): Entrypoint starting..."
 # Run main function
 main

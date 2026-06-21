@@ -1,5 +1,7 @@
 #include "webrtc_publisher.h"
+#include "latency_tracker.h"
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <functional>
 #include <future>
@@ -294,7 +296,7 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
     }
   });
   // DataChannel 处理
-  pc->onDataChannel([id, this](std::shared_ptr<rtc::DataChannel> dc) {
+  pc->onDataChannel([id, wws, this](std::shared_ptr<rtc::DataChannel> dc) {
     std::cout << "DataChannel from " << id << " received with label \""
               << dc->label() << "\"" << std::endl;
 
@@ -307,7 +309,7 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
       dataChannelMap_.erase(id);
     });
 
-    dc->onMessage([id, this](auto data) {
+    dc->onMessage([id, dc, wws, this](auto data) {
       if (std::holds_alternative<std::string>(data)) {
         const std::string &str_data = std::get<std::string>(data);
         try {
@@ -334,6 +336,39 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
 
                 // 调用视频配置重置方法
                 video_capturer_->reconfigure(resolution, fps, bitrate, format);
+              }
+
+            // ====== E2E 延时：接收前端回传的网络/渲染延时 ======
+            } else if (type == "e2e_report") {
+              double jitter = msg.value("jitterBuffer", 0.0);
+              double decode = msg.value("decode", 0.0);
+              double buffer = msg.value("videoBuffer", 0.0);
+              double rtt = msg.value("rtt", 0.0);
+
+              if (video_capturer_) {
+                auto* tracker = video_capturer_->get_latency_tracker();
+                auto stats = tracker->get_stats();
+
+                json e2e_resp;
+                e2e_resp["type"] = "e2e_backend";
+                // 后端各阶段平均延时 (ms, 保留0.1ms精度)
+                e2e_resp["capture"] = round(stats.avg_stage_us[LatencyTracker::Stage::CAPTURE] / 100.0) / 10.0;
+                e2e_resp["decode"] = round(stats.avg_stage_us[LatencyTracker::Stage::DECODE] / 100.0) / 10.0;
+                e2e_resp["filter"] = round(stats.avg_stage_us[LatencyTracker::Stage::FILTER] / 100.0) / 10.0;
+                e2e_resp["encode"] = round(stats.avg_stage_us[LatencyTracker::Stage::ENCODE] / 100.0) / 10.0;
+                e2e_resp["send"] = round(stats.avg_stage_us[LatencyTracker::Stage::SEND] / 100.0) / 10.0;
+                e2e_resp["e2e_total"] = round(stats.total_avg_ms * 10.0) / 10.0;
+                // 后端各阶段最大延时 (ms, 保留0.1ms精度)
+                e2e_resp["capture_max"] = round(stats.max_stage_us[LatencyTracker::Stage::CAPTURE] / 100.0) / 10.0;
+                e2e_resp["decode_max"] = round(stats.max_stage_us[LatencyTracker::Stage::DECODE] / 100.0) / 10.0;
+                e2e_resp["filter_max"] = round(stats.max_stage_us[LatencyTracker::Stage::FILTER] / 100.0) / 10.0;
+                e2e_resp["encode_max"] = round(stats.max_stage_us[LatencyTracker::Stage::ENCODE] / 100.0) / 10.0;
+                e2e_resp["send_max"] = round(stats.max_stage_us[LatencyTracker::Stage::SEND] / 100.0) / 10.0;
+                e2e_resp["total_max"] = round(stats.total_max_ms * 10.0) / 10.0;
+                e2e_resp["frame_count"] = stats.frame_count;
+
+                // 通过 DataChannel 回传给前端（非信令 WebSocket）
+                dc->send(e2e_resp.dump());
               }
             }
           }

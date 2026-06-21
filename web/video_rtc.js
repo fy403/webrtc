@@ -73,6 +73,11 @@ window.addEventListener('load', () => {
                                 const rttText = report.currentRoundTripTime ? (report.currentRoundTripTime * 1000).toFixed(0) + 'ms' : '--';
                                 const rttMs = report.currentRoundTripTime ? report.currentRoundTripTime * 1000 : 0;
 
+                                // 同步到 E2E 优化器
+                                if (typeof PerformanceOptimizer !== 'undefined') {
+                                    PerformanceOptimizer.metrics.rtt = rttMs;
+                                }
+
                                 // 更新连接类型
                                 const connectionTypeEl = type === 'video' 
                                     ? document.getElementById('connectionType') 
@@ -846,11 +851,13 @@ window.addEventListener('load', () => {
     };
 
     // ========== 性能优化模块 ==========
-    // 使用独立的优化类
     const PerformanceOptimizer = new WebRTCOptimizer(remoteVideo);
 
     // 初始化性能优化器
     PerformanceOptimizer.init();
+
+    // 启动端到端延时统计报告（每2秒通过 DataChannel 推送前端指标到服务端）
+    PerformanceOptimizer.startE2EReporting();
 
     // Initialize with "No Signal" overlay visible
     toggleNoSignalOverlay(true);
@@ -1543,11 +1550,15 @@ window.addEventListener('load', () => {
             console.log(`DataChannel from ${id} open`);
             updateStatus(`Data channel open with ${id}`);
             stopAutoReconnect(); // 数据通道打开，停止自动重连
+
+            // 将 DataChannel 注册到 E2E 优化器（用于回传前端指标）
+            PerformanceOptimizer.setDataChannel(dc);
         };
         dc.onclose = () => {
             console.log(`DataChannel from ${id} closed`);
             updateStatus(`Data channel closed with ${id}`);
             // 数据通道关闭不立即重连，等待连接状态变化处理
+            PerformanceOptimizer._e2eDataChannelReady = false;
         };
         dc.onerror = (err) => {
             console.error(`DataChannel error with ${id}:`, err);
@@ -1564,15 +1575,20 @@ window.addEventListener('load', () => {
             }
         };
         dc.onmessage = (e) => {
-            if (typeof (e.data) != 'string')
-                return;
-            console.log(`Message from ${id} received: ${e.data}`);
-            // Create message element
-            const messageElement = document.createElement('div');
-            messageElement.textContent = `From ${id}: ${e.data}`;
-            messageElement.style.padding = '5px';
-            messageElement.style.borderBottom = '1px solid #eee';
-            document.body.appendChild(messageElement);
+            if (typeof (e.data) != 'string') return;
+            
+            try {
+                const msg = JSON.parse(e.data);
+
+                // 处理服务端推送的 E2E 延时数据
+                if (msg.type === 'e2e_backend' || msg.type === 'latency_report') {
+                    PerformanceOptimizer.onBackendLatency(msg);
+                } else {
+                    console.log(`Message from ${id}:`, msg.type || e.data.substring(0, 50));
+                }
+            } catch (err) {
+                console.log(`Message from ${id} received: ${e.data}`);
+            }
         };
 
         dataChannelMap[id] = dc;

@@ -68,8 +68,11 @@ CONFIG_ABS_PATH=$(realpath "$CONFIG_FILE")
 CONFIG_DIR=$(dirname "$CONFIG_ABS_PATH")
 CONFIG_FILENAME=$(basename "$CONFIG_ABS_PATH")
 
-# Stop existing container first (release /dev/video0 before reconfiguring ISP)
+# Stop & remove existing container first (release /dev/video0 before reconfiguring ISP)
+echo "Removing old container if exists: $CONTAINER_NAME"
+docker stop $CONTAINER_NAME >/dev/null 2>&1 || true
 docker rm -f $CONTAINER_NAME >/dev/null 2>&1 || true
+sleep 1
 
 # IMX419 sensor pipeline configuration (MUST run on host, after container stopped)
 VIDEO_TYPE=$(parse_config "videoType" "$CONFIG_FILE")

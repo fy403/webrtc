@@ -102,16 +102,30 @@ parse_resolution() {
 patch_iq_for_banding() {
     info "修复水平条纹: 限制模拟增益 ≤ 4x ..."
 
-    # Backup original IQ file if not already done
+    # Backup original IQ file only once (first run)
     if [ ! -f "$IQ_BAK" ]; then
         cp "$IQ_FILE" "$IQ_BAK"
         info "  原始 IQ 已备份: $IQ_BAK"
     fi
 
-    python3 << 'PYEOF'
-import json
+    # 先校验当前 JSON 是否合法，损坏则自动从备份恢复
+    if ! python3 -c "import json; json.load(open('$IQ_FILE'))" 2>/dev/null; then
+        warn "  IQ 文件已损坏，从备份恢复..."
+        if [ -f "$IQ_BAK" ]; then
+            cp "$IQ_BAK" "$IQ_FILE"
+            info "  ✓ 已从备份恢复"
+        else
+            warn "  ✗ 无可用备份，跳过修复"
+            return 1
+        fi
+    fi
 
-with open('/etc/iqfiles/imx219_RADXA-CAMERA-8M_default.json', 'r') as f:
+    python3 << 'PYEOF'
+import json, os
+
+IQ = '/etc/iqfiles/imx219_RADXA-CAMERA-8M_default.json'
+
+with open(IQ, 'r') as f:
     data = json.load(f)
 
 sc = data['sensor_calib']
@@ -144,9 +158,18 @@ mc['ae_calib']['CommCtrl']['AecSpeed']['DampOver'] = 0.7
 mc['ae_calib']['CommCtrl']['AecSpeed']['DampUnder'] = 0.3
 mc['ae_calib']['CommCtrl']['AecAntiFlicker']['enable'] = 0
 
-with open('/etc/iqfiles/imx219_RADXA-CAMERA-8M_default.json', 'w') as f:
+# 先写临时文件再原子替换，避免半写损坏
+tmp = IQ + '.tmp'
+with open(tmp, 'w') as f:
     json.dump(data, f, indent='\t')
+
+# 写入后验证
+with open(tmp, 'r') as f:
+    json.load(f)  # 解析失败会抛异常
+
+os.replace(tmp, IQ)  # 原子替换
 PYEOF
+    info "  ✓ IQ 已更新（临时文件+原子替换+校验）"
 }
 
 restore_iq_original() {
