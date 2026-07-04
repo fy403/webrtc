@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E2E Latency Test - AV Track</title>
+<link rel="stylesheet" href="latency_test.css">
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <h1>⏱ E2E Latency Test</h1>
+  <div class="status-row">
+    <span><span class="status-dot dot-gray" id="sigDot"></span>信令: <span id="sigStatus">--</span></span>
+    <span><span class="status-dot dot-gray" id="connDot"></span>连接: <span id="connStatus">--</span></span>
+    <span id="fpsDisplay" style="color:#58a6ff">0 fps</span>
+    <span id="resDisplay" style="color:#8b949e">--</span>
+  </div>
+</div>
+
+<!-- Input -->
+<div class="input-row">
+  <label>服务器:</label>
+  <input type="text" id="serverAddr" value="119.45.178.251:8000" placeholder="host:port">
+  <label>设备ID:</label>
+  <input type="text" id="remoteId" value="fake_test_latency" placeholder="设备 client_id">
+  <button id="connectBtn" onclick="connect()">连接</button>
+  <button id="disconnectBtn" onclick="disconnect()" disabled style="background:#da3633">断开</button>
+</div>
+
+  <!-- Main Area -->
+<div class="main">
+  <!-- Video -->
+  <div class="video-area" id="videoArea">
+    <video id="remoteVideo" autoplay playsinline muted></video>
+    <div class="no-signal-overlay" id="noSignal">等待视频流...</div>
+    <div class="video-stats-overlay" id="videoOverlayStats"></div>
+    <!-- 实时时钟 -->
+    <div style="position:absolute;top:8px;right:12px;display:flex;flex-direction:column;align-items:flex-end;gap:2px;z-index:10;pointer-events:none">
+      <div class="clock-overlay" id="liveClock" style="position:relative;top:auto;right:auto">--:--:--.---</div>
+
+    </div>
+    <!-- 快照对比按钮 -->
+    <button class="snapshot-btn" id="snapshotBtn" onclick="takeSnapshot()" style="display:none">📸 截取当前帧</button>
+    <div class="snapshot-result" id="snapshotResult"></div>
+  </div>
+
+  <!-- Latency Panel -->
+  <div class="panel" id="panel">
+    <!-- E2E Total -->
+    <div class="panel-section">
+      <div class="e2e-total">
+        <span class="label">端到端总延时</span>
+        <span><span class="value" id="e2eTotal" style="color:#3fb950">--</span><span class="unit">ms</span></span>
+      </div>
+      <div id="e2eBreakdown" style="text-align:center;padding-top:2px"></div>
+    </div>
+
+    <!-- Sender Pipeline -->
+    <div class="panel-section" id="senderSection">
+      <div class="section-title"><span class="icon">🖥️</span> 发送端流水线 (Sender)</div>
+      <div id="senderStages"></div>
+    </div>
+
+    <!-- Network -->
+    <div class="panel-section">
+      <div class="section-title"><span class="icon">🌐</span> 网络传输 (Network)</div>
+      <div class="rtt-row">
+        <span class="label">ICE RTT</span><span class="value" id="rttVal">--</span>
+      </div>
+      <div class="rtt-row">
+        <span class="label">DataChannel RTT</span><span class="value" id="dcRttVal">--</span>
+      </div>
+      <div class="rtt-row">
+        <span class="label">估计单向网络延时</span><span class="value" id="owdVal">--</span>
+      </div>
+    </div>
+
+    <!-- Receiver Pipeline -->
+    <div class="panel-section" id="receiverSection">
+      <div class="section-title"><span class="icon">📺</span> 接收端流水线 (Receiver)</div>
+      <div id="receiverStages"></div>
+    </div>
+
+    <!-- 物理下限 + 未统计延迟 -->
+    <div class="panel-section" id="unmeasuredSection">
+      <div class="section-title"><span class="icon">📐</span> 物理下限 (Camera Physics) <span style="font-size:9px;color:#3fb950;font-weight:400">— 1/fps 传感器曝光不可避免</span></div>
+      <div id="physicsFloor"></div>
+    </div>
+    <div class="panel-section" id="hiddenSection">
+      <div class="section-title"><span class="icon">🔍</span> 未统计延迟 (Previously Hidden) <span style="font-size:9px;color:#d29922;font-weight:400">— 之前存在但未计入E2E</span></div>
+      <div id="unmeasuredStages"></div>
+    </div>
+
+    <!-- Per-frame Detail (Backend Pipeline) -->
+    <div class="panel-section">
+      <div class="section-title"><span class="icon">📋</span> 最近帧后端流水线 (us)</div>
+      <div style="max-height:160px;overflow-y:auto">
+        <table class="per-frame-table" id="frameTable">
+          <thead>
+            <tr>
+              <th>帧ID</th><th>解码</th><th>滤镜</th><th>编码</th><th>发送</th><th>总耗时</th>
+            </tr>
+          </thead>
+          <tbody id="frameTableBody">
+            <tr><td colspan="6" style="color:#484f58">等待数据...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Per-frame Send→显示 延迟 (实测) -->
+    <div class="panel-section">
+      <div class="section-title"><span class="icon">📡</span> 每帧 Send→显示 延迟 (ms) <span style="font-size:9px;color:#58a6ff;font-weight:400">RVFC实测</span></div>
+      <div style="max-height:180px;overflow-y:auto">
+        <table class="per-frame-table" id="sendDisplayTable">
+          <thead>
+            <tr>
+              <th>#</th><th>Send→显示</th><th>Send→接收</th><th>接收→显示</th><th>趋势</th>
+            </tr>
+          </thead>
+          <tbody id="sendDisplayBody">
+            <tr><td colspan="5" style="color:#484f58">等待 RVFC 回调...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:4px;font-size:9px;color:#484f58;line-height:1.4">
+        利用后端 send 时间戳 + 时钟同步 + RVFC 实测<br>
+        Send→接收 = 网络传输 + JitterBuffer 缓冲<br>
+        接收→显示 = 解码 + 合成 + 渲染
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="log-area" id="logArea"></div>
+    <div class="input-row" style="border-top:1px solid #30363d;padding:6px 16px;gap:6px;flex-wrap:wrap">
+      <button id="saveLogBtn" onclick="saveLogToFile()" style="background:#1f6feb;padding:4px 10px;font-size:11px">💾 下载日志</button>
+      <button id="autoSaveBtn" onclick="toggleAutoSave()" style="background:#21262d;border:1px solid #30363d;padding:4px 10px;font-size:11px">⏺ 自动保存</button>
+      <span id="saveStatus" style="font-size:10px;color:#6e7681"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ========== DOM refs ==========
+const $ = id => document.getElementById(id);
+const remoteVideo = $('remoteVideo');
+const noSignal = $('noSignal');
+const videoOverlayStats = $('videoOverlayStats');
+const connectBtn = $('connectBtn');
+const disconnectBtn = $('disconnectBtn');
+
+// ========== State ==========
+let ws = null;
+let pc = null;
+let dc = null;
+let statsInterval = null;
+let e2eInterval = null;
+let connected = false;
+
+// Latency data stores
+let backendLatency = {};       // from e2e_backend
+let frameSendTimes = new Map(); // frame_id → send_clock_us (from C++ steady_clock)
+let lastDcSendTime = 0;        // client time when we sent e2e_report
+let dcRtt = 0;                 // DataChannel round-trip time (ms)
+let rttMs = 0;                 // ICE candidate-pair RTT (ms)
+let receiverMetrics = { jitterBuffer: 0, decode: 0, videoBuffer: 0, fps: 0, res: '--' };
+let perFrameRows = [];         // recent frames detail
+let clockOffset = 0;           // 服务器-客户端时间偏差 (ms)，用于同步时钟显示
+let clockSynced = false;       // 是否已同步时钟
+
+// ========== 未统计/隐藏延迟测量（仅统计显示，不影响实际画质）==========
+let renderMetrics = {
+  renderDelay: 0,        // 浏览器解码→合成→上屏（requestVideoFrameCallback 实测）
+  pacerDelay: 0,         // WebRTC Pacer发送平滑+RTP打包+SRTP加密 估算
+  protocolStack: 0       // 接收端 NIC中断→IP/UDP解包→SRTP解密→RTP重组 估算
+};
+let rvfcSupported = false;
+
+// ========== 每帧 Send→显示 延迟追踪 ==========
+// 利用 RVFC 每帧回调 + 后端 send 时间戳 + 时钟同步
+// sendToDisplay = 从后端 sendFrame 到浏览器上屏的总延迟
+// sendToReceive = 网络传输 + JitterBuffer
+// receiveToDisplay = 解码 + 渲染
+let perFrameSendDisplay = [];  // { displayNow, sendToDisplay, sendToReceive, receiveToDisplay }
+const MAX_SEND_DISPLAY_SAMPLES = 60;
+
+// ========== Random ID ==========
+function randomId(len) {
+  const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+  return Array.from({length: len}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
+// ========== Log 收集和保存 ==========
+let logEntries = [];     // 所有日志条目 { time, msg, type }
+let autoSaveTimer = null;
+let autoSaveEnabled = false;
+
+function log(msg, type) {
+  type = type || 'info';
+  const now = new Date();
+  const ts = now.toLocaleTimeString() + '.' + String(now.getMilliseconds()).padStart(3,'0');
+  const entry = { time: ts, msg: msg, type: type };
+  logEntries.push(entry);
+
+  const la = $('logArea');
+  const div = document.createElement('div');
+  div.textContent = ts + ' ' + msg;
+  if (type === 'error') div.style.color = '#f85149';
+  else if (type === 'warn') div.style.color = '#d29922';
+  else if (type === 'snapshot') div.style.color = '#58a6ff';
+  la.appendChild(div);
+  if (la.children.length > 50) la.removeChild(la.firstChild);
+  la.scrollTop = la.scrollHeight;
+  console.log('[LatencyTest]', msg);
+}
+function setStatus(el, text, dotClass) {
+  $(el).textContent = text;
+  const dot = $(el.replace('Status','Dot'));
+  if (dot) { dot.className = 'status-dot ' + (dotClass || 'dot-gray'); }
+}
+
+// ========== Connection ==========
+async function connect() {
+  const server = $('serverAddr').value.trim();
+  const remoteId = $('remoteId').value.trim();
+  if (!server || !remoteId) { log('请填写服务器地址和设备ID'); return; }
+
+  const localId = randomId(6);
+  const url = `ws://${server}/${localId}`;
+  log(`连接信令: ${url}`);
+
+  connectBtn.disabled = true;
+  setStatus('sigStatus', '连接中...', 'dot-yellow');
+
+  ws = new WebSocket(url);
+  ws.onopen = () => {
+    setStatus('sigStatus', '已连接', 'dot-green');
+    disconnectBtn.disabled = false;
+    log('信令已连接，发送 Offer');
+
+    // send offer
+    const offerId = remoteId;
+    createPeerConnection(offerId);
+    const dcChannel = pc.createDataChannel('latency');
+    setupDataChannel(dcChannel);
+
+    pc.createOffer({ offerToReceiveVideo: true })
+      .then(desc => pc.setLocalDescription(desc))
+      .then(() => {
+        ws.send(JSON.stringify({ id: offerId, type: pc.localDescription.type, description: pc.localDescription.sdp }));
+        log('Offer 已发送');
+      })
+      .catch(err => log('创建 Offer 失败: ' + err.message));
+  };
+
+  ws.onclose = () => {
+    setStatus('sigStatus', '断开', 'dot-red');
+    setStatus('connStatus', '断开', 'dot-red');
+    connected = false;
+    connectBtn.disabled = false;
+    disconnectBtn.disabled = true;
+    noSignal.style.display = 'flex';
+    cleanup();
+    log('信令断开');
+  };
+
+  ws.onerror = () => { setStatus('sigStatus', '错误', 'dot-red'); log('信令错误'); };
+
+  ws.onmessage = (e) => {
+    if (typeof e.data !== 'string') return;
+    const msg = JSON.parse(e.data);
+    const { id, type } = msg;
+
+    if (!pc || !pc.remoteDescription && type !== 'offer' && type !== 'answer') return;
+
+    if (type === 'answer') {
+      pc.setRemoteDescription(new RTCSessionDescription({ sdp: msg.description, type: 'answer' }))
+        .then(() => log('已设置 Remote Answer'))
+        .catch(err => log('设置 Remote Answer 失败: ' + err.message));
+    } else if (type === 'offer') {
+      // ====== 服务器发起的重新协商（libdatachannel 在 Answer 后会发 Re-offer）======
+      log('收到服务器 Re-offer，开始协商...');
+      pc.setRemoteDescription(new RTCSessionDescription({ sdp: msg.description, type: 'offer' }))
+        .then(() => {
+          log('已设置 Remote Offer，创建 Answer...');
+          return pc.createAnswer();
+        })
+        .then(answer => pc.setLocalDescription(answer))
+        .then(() => {
+          // 发送 answer 回服务器
+          ws.send(JSON.stringify({
+            id: id,
+            type: pc.localDescription.type,
+            description: pc.localDescription.sdp
+          }));
+          log('已发送 Answer 响应 Re-offer');
+        })
+        .catch(err => log('处理 Re-offer 失败: ' + err.message));
+    } else if (type === 'candidate') {
+      pc.addIceCandidate(new RTCIceCandidate({ candidate: msg.candidate, sdpMid: msg.mid }))
+        .catch(err => log('添加 ICE 候选失败: ' + err.message));
+    }
+  };
+}
+
+function disconnect() {
+  cleanup();
+  if (ws) { ws.close(); ws = null; }
+  connectBtn.disabled = false;
+  disconnectBtn.disabled = true;
+  setStatus('sigStatus', '断开', 'dot-gray');
+  setStatus('connStatus', '断开', 'dot-gray');
+  noSignal.style.display = 'flex';
+  log('已断开');
+
+  // 断开时自动保存日志到 localStorage
+  try {
+    localStorage.setItem('latency_log_disconnect', formatLogAsText());
+  } catch(e) {}
+}
+
+function cleanup() {
+  if (e2eInterval) { clearInterval(e2eInterval); e2eInterval = null; }
+  if (statsInterval) { clearInterval(statsInterval); statsInterval = null; }
+  if (dc) { try { dc.close(); } catch(e) {} dc = null; }
+  if (pc) { try { pc.close(); } catch(e) {} pc = null; }
+  frameSendTimes.clear();
+  perFrameRows = [];
+  perFrameSendDisplay = [];
+  // 重置时钟同步状态
+  clockOffset = 0;
+  clockSynced = false;
+  renderMetrics = { renderDelay: 0, pacerDelay: 0, protocolStack: 0 };
+}
+
+function createPeerConnection(id) {
+  pc = new RTCPeerConnection({
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' }
+      // TURN 暂时禁用：服务端 TURN 返回 403 导致 DTLS 握手超时
+      // { urls: 'turn:119.45.178.251:3478?transport=udp', username: 'fy403', credential: 'qwertyuiop' }
+    ]
+  });
+
+  pc.oniceconnectionstatechange = () => {
+    log('ICE: ' + pc.iceConnectionState);
+    if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+      setStatus('connStatus', '已连接', 'dot-green');
+      connected = true;
+      startStatsLoop();
+      startE2ELoop();
+    } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+      setStatus('connStatus', pc.iceConnectionState, 'dot-red');
+      connected = false;
+    }
+  };
+
+  pc.onconnectionstatechange = () => {
+    log('连接状态: ' + pc.connectionState);
+    if (pc.connectionState === 'connected') {
+      setStatus('connStatus', '已连接', 'dot-green');
+      connected = true;
+    }
+  };
+
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+      ws.send(JSON.stringify({
+        id: id,
+        type: 'candidate',
+        candidate: e.candidate.candidate,
+        mid: e.candidate.sdpMid
+      }));
+    }
+  };
+
+  pc.ontrack = (e) => {
+    log('收到远程轨道: ' + e.track.kind);
+    if (e.track.kind === 'video') {
+      if (remoteVideo.srcObject) {
+        remoteVideo.srcObject.addTrack(e.track);
+      } else {
+        remoteVideo.srcObject = new MediaStream([e.track]);
+      }
+      noSignal.style.display = 'none';
+      remoteVideo.play().catch(() => {});
+
+      // 配置低延迟 SDP
+      if (e.transceiver && e.transceiver.receiver) {
+        try {
+          const params = e.transceiver.receiver.getParameters();
+          log('视频编解码: ' + (params.codecs ? params.codecs.map(c=>c.mimeType).join(',') : 'unknown'));
+        } catch(ex) {}
+      }
+
+      // ====== requestVideoFrameCallback 测量渲染延迟 ======
+      if (typeof HTMLVideoElement.prototype.requestVideoFrameCallback === 'function') {
+        rvfcSupported = true;
+        log('requestVideoFrameCallback 已启用（渲染+发送延迟实测）', 'info');
+        let renderDelaySamples = [];
+
+        function onVideoFrame(now, metadata) {
+          try {
+            // ── 渲染延迟 ──
+            const presentationTime = metadata.presentationTime || 0;
+            if (presentationTime > 0) {
+              const frameDelay = now - presentationTime;
+              if (frameDelay > 0 && frameDelay < 500) {
+                renderDelaySamples.push(frameDelay);
+                if (renderDelaySamples.length > 30) renderDelaySamples.shift();
+                const sorted = [...renderDelaySamples].sort((a,b) => a-b);
+                renderMetrics.renderDelay = sorted[Math.floor(sorted.length / 2)];
+              }
+            }
+
+            // ── 每帧 Send→显示 延迟 ──
+            // 取最新的后端发送时间戳（表示最新一帧被 sendFrame 的时刻）
+            if (frameSendTimes.size > 0 && clockSynced) {
+              // 找到最近的 send 时间戳（按 frame_id 排序取最大）
+              const frameIds = [...frameSendTimes.keys()].sort((a,b) => a-b);
+              const latestFid = frameIds[frameIds.length - 1];
+              const latestSendSysClockUs = frameSendTimes.get(latestFid);
+
+              // 转换为客户端时间: system_clock_us / 1000 → ms, 减去时钟偏差
+              const latestSendClientMs = (latestSendSysClockUs / 1000.0) - clockOffset;
+
+              // send→显示 = 当前时间 - 发送时间
+              const sendToDisplay = now - latestSendClientMs;
+
+              // send→接收 = receiveTime - 发送时间（网络+JitterBuffer）
+              const receiveTime = metadata.receiveTime || 0;
+              let sendToReceive = 0;
+              if (receiveTime > 0) {
+                sendToReceive = receiveTime - latestSendClientMs;
+              }
+
+              // 接收→显示 = now - receiveTime（解码+渲染）
+              const receiveToDisplay = receiveTime > 0 ? (now - receiveTime) : 0;
+
+              // 存储（过滤异常值）
+              if (sendToDisplay > 0 && sendToDisplay < 2000) {
+                perFrameSendDisplay.push({
+                  displayNow: now,
+                  sendToDisplay: Math.round(sendToDisplay * 10) / 10,
+                  sendToReceive: Math.round(sendToReceive * 10) / 10,
+                  receiveToDisplay: Math.round(receiveToDisplay * 10) / 10
+                });
+                if (perFrameSendDisplay.length > MAX_SEND_DISPLAY_SAMPLES) {
+                  perFrameSendDisplay.shift();
+                }
+              }
+            }
+          } catch(e) {}
+          remoteVideo.requestVideoFrameCallback(onVideoFrame);
+        }
+        remoteVideo.requestVideoFrameCallback(onVideoFrame);
+      } else {
+        rvfcSupported = false;
+        log('requestVideoFrameCallback 不支持，使用屏幕刷新率估算', 'warn');
+        renderMetrics.renderDelay = 1000 / (screen.refreshRate || 60);
+      }
+    }
+  };
+
+  return pc;
+}
+
+function setupDataChannel(channel) {
+  dc = channel;
+  dc.onopen = () => {
+    log('DataChannel 已打开');
+    $('dcRttVal').textContent = '就绪';
+  };
+  dc.onclose = () => log('DataChannel 已关闭');
+  dc.onerror = () => log('DataChannel 错误');
+
+  dc.onmessage = (e) => {
+    if (typeof e.data !== 'string') return;
+    try {
+      const msg = JSON.parse(e.data);
+
+      if (msg.type === 'e2e_backend') {
+        // Calculate DataChannel RTT
+        if (lastDcSendTime > 0) {
+          dcRtt = Date.now() - lastDcSendTime;
+          $('dcRttVal').textContent = dcRtt.toFixed(0) + ' ms';
+          $('dcRttVal').style.color = dcRtt < 20 ? '#3fb950' : dcRtt < 50 ? '#d29922' : '#f85149';
+          // Estimate one-way delay: DC RTT / 2 (very rough estimate)
+          $('owdVal').textContent = (dcRtt / 2).toFixed(0) + ' ms';
+        }
+
+        // ====== 时间同步：计算服务器-客户端时间偏差 ======
+        if (msg.server_time_ms) {
+          const clientTimeMs = Date.now();
+          const serverTimeMs = msg.server_time_ms;
+          // 新的偏差 = 服务器时间 - 客户端时间（原始偏差，用于诊断）
+          const newOffset = serverTimeMs - clientTimeMs;
+
+
+
+          if (!clockSynced) {
+            clockOffset = newOffset;
+            clockSynced = true;
+            log(`时钟已同步: 偏差 ${clockOffset.toFixed(0)}ms (${clockOffset >= 0 ? 'C++快' : '浏览器快'})`, 'info');
+            log(`诊断: 如果 ΔT 为正且 >20ms，说明 C++ 时钟比浏览器快，画面时间会比 Web 晚`, 'warn');
+          } else {
+            // 使用指数平滑更新偏差，避免抖动
+            clockOffset = clockOffset * 0.8 + newOffset * 0.2;
+          }
+        }
+
+        // Store backend latency data
+        backendLatency = {
+          capture: msg.capture || 0,          // 始终为0（get_stats从DECODE开始算）
+          decode: msg.decode || 0,            // CAPTURE→DECODE 完整时间（含队列等待）
+          filter: msg.filter || 0,
+          encode: msg.encode || 0,
+          send: msg.send || 0,
+          total: msg.e2e_total || 0,
+          sensorPrecapture: msg.sensor_precapture_ms || 0,  // 摄像头传感器预采集延迟
+          capture_max: msg.capture_max || 0,
+          decode_max: msg.decode_max || 0,
+          filter_max: msg.filter_max || 0,
+          encode_max: msg.encode_max || 0,
+          send_max: msg.send_max || 0,
+          total_max: msg.total_max || 0,
+          frame_count: msg.frame_count || 0
+        };
+
+        // Store per-frame send times
+        if (msg.frame_send_times && Array.isArray(msg.frame_send_times)) {
+          for (const [fid, send_us] of msg.frame_send_times) {
+            frameSendTimes.set(fid, send_us);
+          }
+          // Limit map size
+          if (frameSendTimes.size > 500) {
+            const keys = [...frameSendTimes.keys()].sort((a,b) => a-b);
+            for (let i = 0; i < keys.length - 300; i++) frameSendTimes.delete(keys[i]);
+          }
+        }
+
+        // Store per-frame detail breakdown
+        if (msg.frame_detail_json) {
+          try {
+            perFrameRows = JSON.parse(msg.frame_detail_json);
+          } catch(e) { perFrameRows = []; }
+        }
+
+        updateDisplay();
+      }
+    } catch(err) { /* ignore parse errors */ }
+  };
+}
+
+// ========== Stats Loop (1s) ==========
+function startStatsLoop() {
+  if (statsInterval) return;
+  statsInterval = setInterval(async () => {
+    if (!pc || pc.connectionState !== 'connected') return;
+    try {
+      const stats = await pc.getStats();
+      let videoInbound = null;
+
+      for (const [id, report] of stats.entries()) {
+        // RTT from candidate-pair
+        if (report.type === 'candidate-pair' && (report.selected || report.state === 'succeeded')) {
+          rttMs = report.currentRoundTripTime ? report.currentRoundTripTime * 1000 : rttMs;
+          $('rttVal').textContent = rttMs > 0 ? rttMs.toFixed(1) + ' ms' : '--';
+          $('rttVal').style.color = rttMs < 10 ? '#3fb950' : rttMs < 30 ? '#d29922' : '#f85149';
+        }
+        // Video inbound
+        if (report.type === 'inbound-rtp' && report.kind === 'video') {
+          videoInbound = report;
+        }
+      }
+
+      if (videoInbound) {
+        const emitted = videoInbound.jitterBufferEmittedCount || 0;
+        const decoded = videoInbound.framesDecoded || 0;
+        const jbDelay = emitted > 0 ? ((videoInbound.jitterBufferDelay || 0) / emitted) * 1000 : 0;
+        const decTime = decoded > 0 ? ((videoInbound.totalDecodeTime || 0) / decoded) * 1000 : 0;
+        const fps = videoInbound.framesPerSecond || 0;
+        const w = videoInbound.frameWidth || 0;
+        const h = videoInbound.frameHeight || 0;
+
+        receiverMetrics = {
+          jitterBuffer: jbDelay,
+          decode: decTime,
+          videoBuffer: 0, // calculated from buffered
+          fps: fps,
+          res: (w && h) ? `${w}x${h}` : '--'
+        };
+
+        // Video buffer delay from <video> element
+        if (remoteVideo.buffered && remoteVideo.buffered.length > 0) {
+          const bufEnd = remoteVideo.buffered.end(remoteVideo.buffered.length - 1);
+          receiverMetrics.videoBuffer = (bufEnd - remoteVideo.currentTime) * 1000;
+        }
+
+        // Header stats
+        $('fpsDisplay').textContent = fps.toFixed(0) + ' fps';
+        $('resDisplay').textContent = receiverMetrics.res;
+
+        // Video overlay
+        $('videoOverlayStats').textContent =
+          `${receiverMetrics.res} | ${fps.toFixed(0)}fps | JB:${jbDelay.toFixed(0)}ms Dec:${decTime.toFixed(1)}ms Rnd:${renderMetrics.renderDelay.toFixed(1)}ms`;
+
+        // ====== Pacer + 协议栈延迟估算 ======
+        const bitrateBps = videoInbound.bitrate || (fps > 0 ? w * h * fps * 0.1 : 2000000);
+        const pacerWindowMs = Math.max(2, Math.min(10, 1500000 / Math.max(bitrateBps, 100000)));
+        renderMetrics.pacerDelay = pacerWindowMs + 1.5;  // +RTP打包+SRTP加密
+
+        const jitterLevel = videoInbound.jitter || 0;
+        renderMetrics.protocolStack = Math.max(1, Math.min(5, 2 + jitterLevel * 0.5));
+
+        if (!rvfcSupported && screen.refreshRate) {
+          renderMetrics.renderDelay = 1000 / screen.refreshRate;
+        } else if (!rvfcSupported) {
+          renderMetrics.renderDelay = 16.7;
+        }
+
+        updateDisplay();
+      }
+    } catch(err) { /* ignore */ }
+  }, 1000);
+}
+
+// ========== E2E Loop (5s) ==========
+function startE2ELoop() {
+  if (e2eInterval) return;
+  e2eInterval = setInterval(() => {
+    if (!dc || dc.readyState !== 'open') return;
+
+    const report = {
+      type: 'e2e_report',
+      timestamp: Date.now(),
+      jitterBuffer: Math.round(receiverMetrics.jitterBuffer * 10) / 10,
+      decode: Math.round(receiverMetrics.decode * 10) / 10,
+      videoBuffer: Math.round(receiverMetrics.videoBuffer * 10) / 10,
+      totalPlayback: Math.round(
+        (receiverMetrics.jitterBuffer + receiverMetrics.decode + receiverMetrics.videoBuffer) * 10
+      ) / 10,
+      rtt: Math.round(rttMs * 10) / 10,
+      fps: Math.round(receiverMetrics.fps * 10) / 10
+    };
+
+    lastDcSendTime = Date.now();
+    dc.send(JSON.stringify(report));
+
+    // ====== Console E2E 报告（含传感器+隐藏延迟） ======
+    const b = backendLatency;
+    const r = receiverMetrics;
+    const rm = renderMetrics;
+    const fmtUs = (v) => (v >= 0.05 ? v.toFixed(1) + 'ms' : '  --').padStart(7);
+    const C = (v) => v < 5 ? '🟢' : v < 15 ? '🟡' : '🔴';
+
+    const sensorMs = b.sensorPrecapture || (1000 / (r.fps || 30));
+    const senderTotal = (b.decode||0) + (b.filter||0) + (b.encode||0) + (b.send||0);
+    const recvTotal = r.jitterBuffer + r.decode + r.videoBuffer;
+    const netOwd = rttMs / 2;
+    const hiddenTotal = rm.pacerDelay + rm.protocolStack + rm.renderDelay;
+    const optimizable = senderTotal + netOwd + recvTotal + hiddenTotal;  // 可优化部分
+    const e2eOld = b.e2e_total || 0;
+    const e2e = sensorMs + optimizable;
+
+    console.groupCollapsed(
+      `%c📊 E2E 延时报告 %c│ %cE2E ${e2e.toFixed(0)}ms %c${C(e2e)} %c│ ${r.fps.toFixed(0)}fps`,
+      'font-weight:bold;color:#58a6ff;font-size:13px',
+      'color:#8b949e;font-size:11px',
+      `font-weight:bold;font-size:15px;color:${e2e<80?'#3fb950':e2e<150?'#d29922':'#f85149'}`,
+      `font-size:16px`,
+      'color:#484f58;font-size:11px'
+    );
+    console.log(
+      `%c⚛  Physics %c│ 传感器曝光 1/fps ≈ ${fmtUs(sensorMs)} %c(物理下限，不可避免)`,
+      'font-weight:bold;color:#58a6ff', 'color:#8b949e', 'color:#484f58'
+    );
+    console.log(
+      `%c🖥️  Sender  %c│ Capt→Dec ${fmtUs(b.decode||0)} Flt ${fmtUs(b.filter||0)} Enc ${fmtUs(b.encode||0)} Snd ${fmtUs(b.send||0)} %c│ ${fmtUs(senderTotal)} ${C(senderTotal)}`,
+      'font-weight:bold;color:#1f6feb', 'color:#6e7681', `color:#c9d1d9;font-weight:bold`
+    );
+    console.log(
+      `%c⚙️  Pacer   %c│ 发送平滑+RTP+SRTP ≈ ${fmtUs(rm.pacerDelay)}`,
+      'font-weight:bold;color:#d29922', 'color:#6e7681'
+    );
+    console.log(
+      `%c🌐  Network %c│ RTT ${fmtUs(rttMs)} DC-RTT ${fmtUs(dcRtt)} OWD ${fmtUs(netOwd)}`,
+      'font-weight:bold;color:#9c27b0', 'color:#6e7681'
+    );
+    console.log(
+      `%c📡  ProtoStk%c│ NIC→解包→SRTP→重组 ≈ ${fmtUs(rm.protocolStack)}`,
+      'font-weight:bold;color:#d29922', 'color:#6e7681'
+    );
+    console.log(
+      `%c📺  Receiver%c│ JBuf ${fmtUs(r.jitterBuffer)} Dec ${fmtUs(r.decode)} VBuf ${fmtUs(r.videoBuffer)} %c│ ${fmtUs(recvTotal)} ${C(recvTotal)}`,
+      'font-weight:bold;color:#f85149', 'color:#6e7681', `color:#c9d1d9;font-weight:bold`
+    );
+    console.log(
+      `%c🖼️  Render  %c│ Compositor+GPU+VSync ≈ ${fmtUs(rm.renderDelay)} ${rvfcSupported ? '(RVFC)' : '(估)'}`,
+      'font-weight:bold;color:#d29922', 'color:#6e7681'
+    );
+    console.log(`%c  ════════════════════════════════════════════ %c物理: ${sensorMs.toFixed(1)}ms + 可优化: ${optimizable.toFixed(1)}ms │ 旧E2E=${e2eOld.toFixed(0)}ms → 完整=${e2e.toFixed(0)}ms`, 'color:#30363d', 'color:#d29922');
+    console.log(`%c  ════════════════════════════════════════════ %cFrames: ${b.frame_count||0}`, 'color:#30363d', 'color:#484f58');
+    console.groupEnd();
+
+    log(`E2E: 物理${sensorMs.toFixed(1)}+可优化${optimizable.toFixed(1)}=${e2e.toFixed(1)}ms (发送${senderTotal.toFixed(1)} 网${netOwd.toFixed(1)} 接收${recvTotal.toFixed(1)} 隐藏${hiddenTotal.toFixed(1)}) FPS=${r.fps.toFixed(0)}`, 'info');
+  }, 5000);
+}
+
+// ========== Display Update ==========
+function updateDisplay() {
+  // Sender stages（注意：capture始终为0，decode已包含capture→decode完整时间）
+  const senderStages = [
+    { key: 'decode', label: '采集→解码', color: 'blue' },
+    { key: 'filter', label: '滤镜', color: 'blue' },
+    { key: 'encode', label: '编码', color: 'blue' },
+    { key: 'send', label: '发送', color: 'blue' }
+  ];
+
+  let maxSenderMs = 20;
+  for (const s of senderStages) {
+    const v = (backendLatency[s.key] || 0);
+    if (v > maxSenderMs) maxSenderMs = v;
+    const vmax = backendLatency[s.key + '_max'] || 0;
+    if (vmax > maxSenderMs) maxSenderMs = vmax;
+  }
+
+  let senderHtml = '';
+  for (const s of senderStages) {
+    const avg = (backendLatency[s.key] || 0);
+    const mx = backendLatency[s.key + '_max'] || 0;
+    const pct = maxSenderMs > 0 ? Math.min(100, (avg / maxSenderMs) * 100) : 0;
+    const color = avg < 5 ? 'green' : avg < 15 ? 'orange' : 'red';
+    senderHtml += `<div class="stage-row">
+      <span class="stage-label">${s.label}</span>
+      <div class="stage-bar-wrap"><div class="stage-bar ${color}" style="width:${pct}%"></div></div>
+      <span class="stage-val">${avg.toFixed(1)}ms</span>
+      <span class="stage-max">max:${mx.toFixed(1)}ms</span>
+    </div>`;
+  }
+  $('senderStages').innerHTML = senderHtml;
+
+  // Receiver stages
+  const recvStages = [
+    { key: 'jitterBuffer', label: '去抖动缓冲', val: receiverMetrics.jitterBuffer },
+    { key: 'decode', label: '解码', val: receiverMetrics.decode },
+    { key: 'videoBuffer', label: '视频缓冲', val: receiverMetrics.videoBuffer }
+  ];
+  const maxRecvMs = Math.max(20, receiverMetrics.jitterBuffer, receiverMetrics.decode, receiverMetrics.videoBuffer);
+
+  let recvHtml = '';
+  for (const s of recvStages) {
+    const v = s.val || 0;
+    const pct = maxRecvMs > 0 ? Math.min(100, (v / maxRecvMs) * 100) : 0;
+    const color = v < 5 ? 'green' : v < 15 ? 'orange' : 'red';
+    recvHtml += `<div class="stage-row">
+      <span class="stage-label">${s.label}</span>
+      <div class="stage-bar-wrap"><div class="stage-bar ${color}" style="width:${pct}%"></div></div>
+      <span class="stage-val">${v.toFixed(1)}ms</span>
+    </div>`;
+  }
+  $('receiverStages').innerHTML = recvHtml;
+
+  // ====== 物理下限：传感器曝光 1/fps（不可避免） ======
+  const sensorMs = backendLatency.sensorPrecapture || (1000 / (receiverMetrics.fps || 30));
+  const physicsBarWidth = 100; // 物理下限用满宽度显示
+  $('physicsFloor').innerHTML = `<div class="stage-row">
+      <span class="stage-label" style="width:90px">⚛ 传感器曝光</span>
+      <div class="stage-bar-wrap"><div class="stage-bar blue" style="width:100%"></div></div>
+      <span class="stage-val">${sensorMs.toFixed(1)}ms</span>
+      <span style="width:80px;font-size:9px;color:#58a6ff;text-align:right">1/fps 物理下限</span>
+    </div>`;
+
+  // ====== 未统计延迟（可优化的隐藏延迟） ======
+  const unmeasuredStages = [
+    { key: 'pacerDelay', label: 'Pacer调度', val: renderMetrics.pacerDelay, desc: '发送平滑+RTP+SRTP' },
+    { key: 'protocolStack', label: '协议栈处理', val: renderMetrics.protocolStack, desc: 'NIC→解包→解密→重组' },
+    { key: 'renderDelay', label: '渲染管线', val: renderMetrics.renderDelay, desc: rvfcSupported ? 'RVFC实测' : '刷新率估算' }
+  ];
+  const maxUnmeasMs = Math.max(20, renderMetrics.pacerDelay, renderMetrics.protocolStack, renderMetrics.renderDelay);
+
+  let unmeasHtml = '';
+  for (const s of unmeasuredStages) {
+    const v = s.val || 0;
+    const pct = maxUnmeasMs > 0 ? Math.min(100, (v / maxUnmeasMs) * 100) : 0;
+    const color = v < 5 ? 'green' : v < 12 ? 'orange' : 'red';
+    unmeasHtml += `<div class="stage-row">
+      <span class="stage-label" style="width:90px">${s.label}</span>
+      <div class="stage-bar-wrap"><div class="stage-bar ${color}" style="width:${pct}%"></div></div>
+      <span class="stage-val">${v.toFixed(1)}ms</span>
+      <span style="width:80px;font-size:9px;color:#484f58;text-align:right">${s.desc}</span>
+    </div>`;
+  }
+  $('unmeasuredStages').innerHTML = unmeasHtml;
+
+  // E2E Total
+  const senderTotal = (backendLatency.decode||0) + (backendLatency.filter||0) + (backendLatency.encode||0) + (backendLatency.send||0);
+  const recvTotal = receiverMetrics.jitterBuffer + receiverMetrics.decode + receiverMetrics.videoBuffer;
+  const netDelay = (dcRtt > 0 ? dcRtt : rttMs) / 2;
+  const hiddenTotal = renderMetrics.pacerDelay + renderMetrics.protocolStack + renderMetrics.renderDelay;
+  // 可优化延迟 = 流水线 + 网络 + 接收 + 未统计
+  const optimizableTotal = senderTotal + netDelay + recvTotal + hiddenTotal;
+  // 完整 E2E = 物理下限 + 可优化
+  const totalE2E = sensorMs + optimizableTotal;
+
+  const e2eEl = $('e2eTotal');
+  e2eEl.textContent = totalE2E > 0 ? totalE2E.toFixed(0) : '--';
+  e2eEl.style.color = totalE2E < 100 ? '#3fb950' : totalE2E < 200 ? '#d29922' : '#f85149';
+  // 下方显示：物理下限 + 可优化
+  $('e2eBreakdown').innerHTML = sensorMs > 0 ?
+    `<span style="font-size:11px;color:#58a6ff">${sensorMs.toFixed(0)}ms 物理下限</span>
+     <span style="font-size:11px;color:#8b949e"> + </span>
+     <span style="font-size:11px;color:#d29922">${optimizableTotal.toFixed(0)}ms 可优化</span>` : '';
+
+  // Per-frame table
+  updateFrameTable();
+  updateSendDisplayTable();
+}
+
+// ========== Per-Frame Table ==========
+function updateFrameTable() {
+  if (perFrameRows.length === 0) {
+    $('frameTableBody').innerHTML = '<tr><td colspan="6" style="color:#484f58">等待数据...</td></tr>';
+    return;
+  }
+
+  const colorForUs = (us) => us < 5000 ? 'val-ok' : us < 15000 ? 'val-warn' : 'val-bad';
+  const usToMs = (us) => {
+    if (us < 1000) return (us).toFixed(0) + 'us';
+    return (us / 1000).toFixed(1) + 'ms';
+  };
+
+  let html = '';
+  // Show last 15 frames (newest last)
+  const rows = perFrameRows.slice(-15);
+  for (const f of rows) {
+    html += `<tr>
+      <td class="fid">#${f.fid}</td>
+      <td class="${colorForUs(f.d||0)}">${usToMs(f.d||0)}</td>
+      <td class="${colorForUs(f.f||0)}">${usToMs(f.f||0)}</td>
+      <td class="${colorForUs(f.e||0)}">${usToMs(f.e||0)}</td>
+      <td class="${colorForUs(f.s||0)}">${usToMs(f.s||0)}</td>
+      <td class="${colorForUs(f.t||0)}">${usToMs(f.t||0)}</td>
+    </tr>`;
+  }
+  $('frameTableBody').innerHTML = html;
+}
+
+// ========== Send→显示 每帧延迟 表格 ==========
+function updateSendDisplayTable() {
+  const samples = perFrameSendDisplay;
+  if (samples.length === 0) {
+    $('sendDisplayBody').innerHTML = '<tr><td colspan="5" style="color:#484f58">等待 RVFC 回调...</td></tr>';
+    return;
+  }
+
+  const colorForMs = (ms) => ms < 50 ? 'val-ok' : ms < 100 ? 'val-warn' : 'val-bad';
+  // 显示最近 15 帧
+  const rows = samples.slice(-15);
+  
+  // 计算平均用于趋势
+  const avgTotal = rows.reduce((s,r) => s + r.sendToDisplay, 0) / rows.length;
+  const trend = (v) => v < avgTotal - 3 ? '↓' : v > avgTotal + 3 ? '↑' : '→';
+
+  let html = '';
+  for (const r of rows) {
+    html += `<tr>
+      <td class="fid">#${samples.indexOf(r)+1}</td>
+      <td class="${colorForMs(r.sendToDisplay)}">${r.sendToDisplay.toFixed(1)}ms</td>
+      <td class="${r.sendToReceive > 0 ? colorForMs(r.sendToReceive) : 'val-warn'}">${r.sendToReceive > 0 ? r.sendToReceive.toFixed(1)+'ms' : '--'}</td>
+      <td class="${r.receiveToDisplay > 0 ? colorForMs(r.receiveToDisplay) : 'val-warn'}">${r.receiveToDisplay > 0 ? r.receiveToDisplay.toFixed(1)+'ms' : '--'}</td>
+      <td style="color:${trend(r.sendToDisplay)==='↑'?'#f85149':trend(r.sendToDisplay)==='↓'?'#3fb950':'#8b949e'}">${trend(r.sendToDisplay)}</td>
+    </tr>`;
+  }
+  $('sendDisplayBody').innerHTML = html;
+}
+
+// ========== 日志保存 ==========
+function formatLogAsText() {
+  let lines = [];
+  lines.push('========================================');
+  lines.push(' E2E Latency Test - 接收端日志');
+  lines.push(' 日期: ' + new Date().toISOString());
+  lines.push(' 服务器: ' + $('serverAddr').value);
+  lines.push(' 设备ID: ' + $('remoteId').value);
+  lines.push('========================================');
+  lines.push('');
+
+  for (const e of logEntries) {
+    lines.push('[' + e.time + '] ' + e.msg);
+  }
+
+  // 追加最后的状态快照
+  lines.push('');
+  lines.push('--- 状态快照 ---');
+  const b = backendLatency;
+  const r = receiverMetrics;
+  lines.push('Physics(物理下限): SensorExposure=' + (b.sensorPrecapture||0).toFixed(1) + 'ms (1/fps 不可避免)');
+  lines.push('Sender: ' +
+    'Capt→Dec=' + (b.decode||0).toFixed(1) + 'ms ' +
+    'Filter=' + (b.filter||0).toFixed(1) + 'ms ' +
+    'Encode=' + (b.encode||0).toFixed(1) + 'ms ' +
+    'Send=' + (b.send||0).toFixed(1) + 'ms ' +
+    'BackendE2E=' + (b.total||0).toFixed(1) + 'ms'
+  );
+  lines.push('Network: RTT=' + rttMs.toFixed(1) + 'ms DC-RTT=' + dcRtt.toFixed(1) + 'ms');
+  const rm = renderMetrics;
+  lines.push('Hidden(之前未统计): Pacer=' + (rm.pacerDelay||0).toFixed(1) + 'ms ProtoStk=' + (rm.protocolStack||0).toFixed(1) + 'ms Render=' + (rm.renderDelay||0).toFixed(1) + 'ms');
+  lines.push('Receiver: ' +
+    'JBuf=' + (r.jitterBuffer||0).toFixed(1) + 'ms ' +
+    'Decode=' + (r.decode||0).toFixed(1) + 'ms ' +
+    'VBuf=' + (r.videoBuffer||0).toFixed(1) + 'ms ' +
+    'FPS=' + (r.fps||0).toFixed(1)
+  );
+
+  // 最近逐帧明细
+  lines.push('');
+  lines.push('--- 最近帧延时明细 ---');
+  lines.push('帧ID\t解码\t滤镜\t编码\t发送\t总耗时');
+  for (const f of perFrameRows.slice(-15)) {
+    lines.push('#' + f.fid + '\t' +
+      (f.d||0) + 'us\t' + (f.f||0) + 'us\t' +
+      (f.e||0) + 'us\t' + (f.s||0) + 'us\t' +
+      (f.t||0) + 'us'
+    );
+  }
+
+  return lines.join('\n');
+}
+
+function saveLogToFile() {
+  const text = formatLogAsText();
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const now = new Date();
+  const fn = 'latency_log_' +
+    now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') +
+    '_' + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0') +
+    '.txt';
+  a.href = url;
+  a.download = fn;
+  a.click();
+  URL.revokeObjectURL(url);
+  log('日志已保存: ' + fn, 'snapshot');
+}
+
+function toggleAutoSave() {
+  autoSaveEnabled = !autoSaveEnabled;
+  const btn = $('autoSaveBtn');
+  const status = $('saveStatus');
+  if (autoSaveEnabled) {
+    btn.style.background = '#238636';
+    btn.textContent = '⏸ 停止保存';
+    status.textContent = '自动保存中...';
+    autoSaveTimer = setInterval(() => {
+      // 保存日志到 localStorage 作为备份
+      try {
+        const text = formatLogAsText();
+        localStorage.setItem('latency_log_backup', text);
+        localStorage.setItem('latency_log_time', new Date().toISOString());
+        status.textContent = '已保存 ' + new Date().toLocaleTimeString();
+      } catch(e) {
+        status.textContent = '保存失败';
+      }
+    }, 10000); // 每 10 秒保存一次
+  } else {
+    btn.style.background = '#21262d';
+    btn.textContent = '⏺ 自动保存';
+    status.textContent = '已停止';
+    if (autoSaveTimer) { clearInterval(autoSaveTimer); autoSaveTimer = null; }
+  }
+}
+
+// 页面卸载前保存日志到 localStorage
+window.addEventListener('beforeunload', () => {
+  try {
+    const text = formatLogAsText();
+    localStorage.setItem('latency_log_final', text);
+    localStorage.setItem('latency_log_final_time', new Date().toISOString());
+  } catch(e) {}
+});
+
+// ========== Init ==========
+// 检查是否有上次的日志
+const lastLog = localStorage.getItem('latency_log_backup');
+if (lastLog) {
+  log('发现上一次的日志备份 (' + localStorage.getItem('latency_log_time') + ')，断开后点击💾下载', 'warn');
+}
+log('E2E Latency Test 页面就绪');
+log('提示: 连接后点击 💾下载 可保存完整日志文件');
+
+// ========== 实时时钟（60fps 更新）==========
+// 使用与后端同样的原理：直接读取系统本地时间
+// 后端: %{localtime} → C localtime() → 系统墙钟时间
+// 前端: new Date() → JS Date → 系统墙钟时间（不做任何运算/同步）
+const liveClock = $('liveClock');
+setInterval(() => {
+  const now = new Date();  // 直接读取系统本地时间（与 %{localtime} 同理）
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  const ms = String(now.getMilliseconds()).padStart(3,'0');
+  liveClock.textContent = `${h}:${m}:${s}.${ms}`;
+}, 16);
+
+// ========== 截帧对比 ==========
+function takeSnapshot() {
+  const canvas = document.createElement('canvas');
+  canvas.width = remoteVideo.videoWidth;
+  canvas.height = remoteVideo.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(remoteVideo, 0, 0);
+
+  // 显示快照
+  const result = $('snapshotResult');
+
+  // 客户端本地时间
+  const clientNow = new Date();
+  const clientTime = `${String(clientNow.getHours()).padStart(2,'0')}:${String(clientNow.getMinutes()).padStart(2,'0')}:${String(clientNow.getSeconds()).padStart(2,'0')}.${String(clientNow.getMilliseconds()).padStart(3,'0')}`;
+
+  // 同步后的服务器时间（用于与画面时间戳对比）
+  const syncedNow = new Date(Date.now() + (clockSynced ? clockOffset : 0));
+  const syncedTime = `${String(syncedNow.getHours()).padStart(2,'0')}:${String(syncedNow.getMinutes()).padStart(2,'0')}:${String(syncedNow.getSeconds()).padStart(2,'0')}.${String(syncedNow.getMilliseconds()).padStart(3,'0')}`;
+
+  // 时间偏差信息
+  const offsetInfo = clockSynced
+    ? `<span style="color:#58a6ff">时钟偏差: ${clockOffset.toFixed(0)}ms</span>`
+    : '<span style="color:#d29922">等待时钟同步...</span>';
+
+  result.style.display = 'block';
+  result.innerHTML = `📸 截帧时间<br>
+    <table style="font-size:12px;font-family:monospace;margin-top:6px">
+      <tr><td style="color:#8b949e">客户端:</td><td>${clientTime}</td></tr>
+      <tr><td style="color:#0f0">服务器:</td><td>${syncedTime}</td></tr>
+      <tr><td colspan="2">${offsetInfo}</td></tr>
+    </table>
+    <br><span style="color:#8b949e;font-size:11px">用「服务器」时间与画面中时间戳对比，差值即为端到端延迟</span>
+    <br><button onclick="this.parentElement.style.display='none'" style="
+      background:#21262d;border:1px solid #30363d;color:#c9d1d9;
+      padding:2px 10px;border-radius:4px;cursor:pointer;margin-top:4px;font-size:11px">关闭</button>`;
+  result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // 记录到日志
+  log(`📸 快照: 客户端=${clientTime} 服务器=${syncedTime}${clockSynced ? ` 偏差=${clockOffset.toFixed(0)}ms` : ''}`, 'snapshot');
+}
+
+// 连接后显示截帧按钮
+remoteVideo.addEventListener('playing', () => {
+  $('snapshotBtn').style.display = 'block';
+});
+</script>
+</body>
+</html>

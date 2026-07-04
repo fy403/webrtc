@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <utility>
 #include <iostream>
 
 /**
@@ -44,7 +45,7 @@ public:
     // 单帧的时间戳记录
     struct FrameTimestamps {
         uint64_t frame_id;
-        std::chrono::steady_clock::time_point times[STAGE_COUNT];
+        std::chrono::system_clock::time_point times[STAGE_COUNT];
         bool has_stage[STAGE_COUNT];
 
         FrameTimestamps() : frame_id(0) {
@@ -116,6 +117,14 @@ public:
 
     // 获取最新帧 ID
     uint64_t get_last_frame_id() const { return last_frame_id_.load(); }
+
+    // 导出最近 N 帧的逐帧阶段延时数据（供 DataChannel 发送到前端）
+    // 返回 JSON 字符串
+    std::string dump_recent_frames_json(size_t max_count = 30) const;
+
+    // 获取 send 时间戳映射（frame_id → send_time_us）
+    // 用于前端计算每帧网络延时
+    std::vector<std::pair<uint64_t, uint64_t>> get_recent_send_times(size_t max_count = 60) const;
 
 private:
     // 环形缓冲区索引

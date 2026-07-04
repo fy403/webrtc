@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdio>
 #include <inttypes.h>
+#include <sstream>
 
 LatencyTracker::LatencyTracker(size_t ring_size) 
     : ring_size_(ring_size > 0 ? ring_size : 256),
@@ -216,7 +217,7 @@ void LatencyTracker::print_frame(uint64_t frame_id) const {
     }
 
     std::cout << "[Latency] Frame " << frame_id << " timeline:" << std::endl;
-    auto prev_time = std::chrono::steady_clock::time_point{};
+    auto prev_time = std::chrono::system_clock::time_point{};
     bool has_prev = false;
 
     for (int s = 0; s <= Stage::SEND; ++s) {
@@ -234,4 +235,93 @@ void LatencyTracker::print_frame(uint64_t frame_id) const {
         prev_time = now;
         has_prev = true;
     }
+}
+
+std::string LatencyTracker::dump_recent_frames_json(size_t max_count) const {
+    std::lock_guard<std::mutex> lock(stats_mutex_);
+
+    uint64_t last_id = last_frame_id_.load();
+    if (last_id == 0) return "[]";
+
+    size_t count = std::min(max_count, std::min(ring_size_, static_cast<size_t>(last_id + 1)));
+    uint64_t start_id = (last_id >= count) ? (last_id - count + 1) : 0;
+
+    std::ostringstream oss;
+    oss << "[";
+    bool first = true;
+
+    for (size_t i = 0; i < count; ++i) {
+        uint64_t fid = start_id + i;
+        const auto& frame = frames_[index_of(fid)];
+        if (frame.frame_id != fid) continue;
+        if (!frame.has_stage[Stage::CAPTURE] || !frame.has_stage[Stage::SEND]) continue;
+
+        auto capture_us = std::chrono::duration_cast<std::chrono::microseconds>(
+            frame.times[Stage::CAPTURE].time_since_epoch()).count();
+        auto send_us = std::chrono::duration_cast<std::chrono::microseconds>(
+            frame.times[Stage::SEND].time_since_epoch()).count();
+
+        // 各阶段间延时（微秒）
+        int64_t decode_lat = 0, filter_lat = 0, encode_lat = 0, send_lat = 0;
+        auto prev = capture_us;
+
+        if (frame.has_stage[Stage::DECODE]) {
+            auto t = std::chrono::duration_cast<std::chrono::microseconds>(
+                frame.times[Stage::DECODE].time_since_epoch()).count();
+            decode_lat = t - prev;
+            prev = t;
+        }
+        if (frame.has_stage[Stage::FILTER]) {
+            auto t = std::chrono::duration_cast<std::chrono::microseconds>(
+                frame.times[Stage::FILTER].time_since_epoch()).count();
+            filter_lat = t - prev;
+            prev = t;
+        }
+        if (frame.has_stage[Stage::ENCODE]) {
+            auto t = std::chrono::duration_cast<std::chrono::microseconds>(
+                frame.times[Stage::ENCODE].time_since_epoch()).count();
+            encode_lat = t - prev;
+            prev = t;
+        }
+        send_lat = send_us - prev;
+        int64_t total_lat = send_us - capture_us;
+
+        if (!first) oss << ",";
+        first = false;
+        oss << "{"
+            << "\"fid\":" << fid
+            << ",\"d\":" << decode_lat
+            << ",\"f\":" << filter_lat
+            << ",\"e\":" << encode_lat
+            << ",\"s\":" << send_lat
+            << ",\"t\":" << total_lat
+            << ",\"send_us\":" << send_us
+            << "}";
+    }
+    oss << "]";
+    return oss.str();
+}
+
+std::vector<std::pair<uint64_t, uint64_t>> LatencyTracker::get_recent_send_times(size_t max_count) const {
+    std::lock_guard<std::mutex> lock(stats_mutex_);
+
+    std::vector<std::pair<uint64_t, uint64_t>> result;
+    uint64_t last_id = last_frame_id_.load();
+    if (last_id == 0) return result;
+
+    size_t count = std::min(max_count, std::min(ring_size_, static_cast<size_t>(last_id + 1)));
+    uint64_t start_id = (last_id >= count) ? (last_id - count + 1) : 0;
+    result.reserve(count);
+
+    for (size_t i = 0; i < count; ++i) {
+        uint64_t fid = start_id + i;
+        const auto& frame = frames_[index_of(fid)];
+        if (frame.frame_id != fid) continue;
+        if (!frame.has_stage[Stage::SEND]) continue;
+
+        auto send_us = std::chrono::duration_cast<std::chrono::microseconds>(
+            frame.times[Stage::SEND].time_since_epoch()).count();
+        result.emplace_back(fid, static_cast<uint64_t>(send_us));
+    }
+    return result;
 }

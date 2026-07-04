@@ -40,6 +40,7 @@ public:
   void set_profile(const std::string &profile);   // 设置编码场景 (lowlatency / hd)
   std::string get_video_codec() const { return video_codec_; } // 获取当前视频编码器类型
   std::string get_profile() const { return profile_; }          // 获取当前编码场景
+  int get_framerate() const { return framerate_; }             // 获取帧率
 
 private:
   void capture_loop() override;

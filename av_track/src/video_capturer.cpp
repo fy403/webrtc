@@ -38,10 +38,12 @@ VideoCapturer::VideoCapturer(const std::string &device, bool debug_enabled,
     : Capture(debug_enabled, decode_queue_capacity, encode_queue_capacity, send_queue_capacity),
       device_(device), resolution_(resolution), framerate_(framerate),
       video_format_(video_format), target_fps_(framerate),
-      latency_tracker_(std::make_unique<LatencyTracker>(512)) {
+      latency_tracker_(debug_enabled ? std::make_unique<LatencyTracker>(128) : nullptr) {
   avdevice_register_all();
 
-  std::cout << "[Latency] Tracker initialized (ring=512)" << std::endl;
+  if (latency_tracker_) {
+    std::cout << "[Latency] Tracker initialized (ring=512)" << std::endl;
+  }
 
   // 检测是否为模拟摄像头模式（lavfi）
   is_fake_camera_ = (device_ == "fake" || device_.substr(0, 5) == "lavfi");
@@ -368,6 +370,13 @@ bool VideoCapturer::start() {
 }
 
 void VideoCapturer::stop() {
+  // ====== 打印最终延时报告 ======
+  if (latency_tracker_) {
+    std::cout << "\n[Latency] === Final E2E Latency Report ===" << std::endl;
+    latency_tracker_->print_stats();
+    std::cout << "[Latency] === End of Report ===" << std::endl;
+  }
+
   Capture::stop();
 
   if (sws_context_) {
@@ -756,11 +765,13 @@ void VideoCapturer::capture_loop() {
 
       if (packet->stream_index == video_stream_index_) {
         // ====== 延时统计：采集打点 ======
-        static uint64_t capture_seq = 0;
-        uint64_t fid = ++capture_seq;
-        latency_tracker_->record_capture(fid);
-        // 将 frame_id 附加到 packet（通过 opaque 或 side_data 传递到后续阶段）
-        packet->opaque = reinterpret_cast<void*>(fid);
+        if (latency_tracker_) {
+          static uint64_t capture_seq = 0;
+          uint64_t fid = ++capture_seq;
+          latency_tracker_->record_capture(fid);
+          // 将 frame_id 附加到 packet（通过 opaque 传递到后续阶段）
+          packet->opaque = reinterpret_cast<void*>(fid);
+        }
 
         // 实际采集 FPS 测量（优化：只在需要时才获取时间戳）
         total_captured_frames++;
@@ -876,9 +887,11 @@ void VideoCapturer::decode_loop() {
       av_frame_ref(ref_frame, frame);
 
       // ====== 延时统计：解码打点 ======
-      uint64_t fid = reinterpret_cast<uint64_t>(packet->opaque);
-      if (fid > 0) latency_tracker_->record_decode(fid);
-      ref_frame->opaque = reinterpret_cast<void*>(fid);  // 传递到下一阶段
+      if (latency_tracker_) {
+        uint64_t fid = reinterpret_cast<uint64_t>(packet->opaque);
+        if (fid > 0) latency_tracker_->record_decode(fid);
+        ref_frame->opaque = reinterpret_cast<void*>(fid);  // 传递到下一阶段
+      }
 
       if (!filter_queue_.try_push(ref_frame)) {
         if (debug_enabled_) {
@@ -970,8 +983,10 @@ void VideoCapturer::filter_loop() {
         filtered_frame->pts = AV_NOPTS_VALUE;
 
         // ====== 延时统计：滤镜打点 ======
-        if (fid > 0) latency_tracker_->record_filter(fid);
-        filtered_frame->opaque = reinterpret_cast<void*>(fid);  // 传递到编码阶段
+        if (latency_tracker_) {
+          if (fid > 0) latency_tracker_->record_filter(fid);
+          filtered_frame->opaque = reinterpret_cast<void*>(fid);  // 传递到编码阶段
+        }
 
         if (!encode_queue_.try_push(filtered_frame)) {
           if (debug_enabled_) {
@@ -1032,7 +1047,7 @@ void VideoCapturer::encode_loop() {
 
     if (encoded) {
       // ====== 延时统计：编码打点 ======
-      if (fid > 0) {
+      if (latency_tracker_ && fid > 0) {
         latency_tracker_->record_encode(fid);
         packet->opaque = reinterpret_cast<void*>(fid);
       }
@@ -1111,9 +1126,16 @@ void VideoCapturer::send_loop() {
 
     bytes_sent_in_window += packet->size;
 
-    // ====== 延时统计：WebRTC 发送打点 ======
-    uint64_t fid = reinterpret_cast<uint64_t>(packet->opaque);
-    if (fid > 0) latency_tracker_->record_send(fid);
+    // ====== 延时统计：WebRTC 发送打点 + 周期性报告 ======
+    if (latency_tracker_) {
+      uint64_t fid = reinterpret_cast<uint64_t>(packet->opaque);
+      if (fid > 0) latency_tracker_->record_send(fid);
+
+      static uint64_t report_counter = 0;
+      if (++report_counter % 300 == 0) {
+        latency_tracker_->print_stats();
+      }
+    }
 
     // Send data to all registered callbacks (multiple peer support)
     auto data = reinterpret_cast<const std::byte *>(packet->data);

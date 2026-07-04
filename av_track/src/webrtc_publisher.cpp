@@ -347,10 +347,14 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
 
               if (video_capturer_) {
                 auto* tracker = video_capturer_->get_latency_tracker();
+                if (!tracker) return;
                 auto stats = tracker->get_stats();
 
                 json e2e_resp;
                 e2e_resp["type"] = "e2e_backend";
+                // 服务器当前时间戳 (毫秒，用于客户端时间同步)
+                e2e_resp["server_time_ms"] = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count();
                 // 后端各阶段平均延时 (ms, 保留0.1ms精度)
                 e2e_resp["capture"] = round(stats.avg_stage_us[LatencyTracker::Stage::CAPTURE] / 100.0) / 10.0;
                 e2e_resp["decode"] = round(stats.avg_stage_us[LatencyTracker::Stage::DECODE] / 100.0) / 10.0;
@@ -358,6 +362,8 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
                 e2e_resp["encode"] = round(stats.avg_stage_us[LatencyTracker::Stage::ENCODE] / 100.0) / 10.0;
                 e2e_resp["send"] = round(stats.avg_stage_us[LatencyTracker::Stage::SEND] / 100.0) / 10.0;
                 e2e_resp["e2e_total"] = round(stats.total_avg_ms * 10.0) / 10.0;
+                // 摄像头传感器预采集延迟估算
+                e2e_resp["sensor_precapture_ms"] = round(10000.0 / video_capturer_->get_framerate()) / 10.0;
                 // 后端各阶段最大延时 (ms, 保留0.1ms精度)
                 e2e_resp["capture_max"] = round(stats.max_stage_us[LatencyTracker::Stage::CAPTURE] / 100.0) / 10.0;
                 e2e_resp["decode_max"] = round(stats.max_stage_us[LatencyTracker::Stage::DECODE] / 100.0) / 10.0;
@@ -366,6 +372,18 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
                 e2e_resp["send_max"] = round(stats.max_stage_us[LatencyTracker::Stage::SEND] / 100.0) / 10.0;
                 e2e_resp["total_max"] = round(stats.total_max_ms * 10.0) / 10.0;
                 e2e_resp["frame_count"] = stats.frame_count;
+
+                // 逐帧 send 时间戳 (用于前端计算每帧网络/接收延时)
+                auto send_times = tracker->get_recent_send_times(60);
+                json st_arr = json::array();
+                for (auto& [fid, send_us] : send_times) {
+                  st_arr.push_back({fid, send_us});
+                }
+                e2e_resp["frame_send_times"] = st_arr;
+
+                // 逐帧各阶段延时明细 (JSON 数组)
+                std::string frames_json = tracker->dump_recent_frames_json(30);
+                e2e_resp["frame_detail_json"] = frames_json;
 
                 // 通过 DataChannel 回传给前端（非信令 WebSocket）
                 dc->send(e2e_resp.dump());
