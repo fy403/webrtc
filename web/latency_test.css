@@ -44,6 +44,12 @@ body {
   height: 100%;
   object-fit: contain;
   background: #000;
+  /* ====== 优化: 禁用视频平滑缩放 (减少渲染延迟) ====== */
+  image-rendering: auto;
+  /* 对于 Chromium 内核 */
+  image-rendering: -webkit-optimize-contrast;
+  /* 对于 Firefox */
+  image-rendering: optimizeSpeed;
 }
 
 /* ====== Live Clock Overlay ====== */

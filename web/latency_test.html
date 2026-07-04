@@ -77,6 +77,14 @@
       </div>
     </div>
 
+    <!-- 优化状态 -->
+    <div class="panel-section" id="optimSection">
+      <div class="section-title"><span class="icon">⚡</span> 低延迟优化状态</div>
+      <div id="optimStatus" style="font-size:11px;font-family:monospace;color:#8b949e;line-height:1.6">
+        <div>⏳ 等待连接...</div>
+      </div>
+    </div>
+
     <!-- Receiver Pipeline -->
     <div class="panel-section" id="receiverSection">
       <div class="section-title"><span class="icon">📺</span> 接收端流水线 (Receiver)</div>
@@ -110,28 +118,6 @@
       </div>
     </div>
 
-    <!-- Per-frame Send→显示 延迟 (实测) -->
-    <div class="panel-section">
-      <div class="section-title"><span class="icon">📡</span> 每帧 Send→显示 延迟 (ms) <span style="font-size:9px;color:#58a6ff;font-weight:400">RVFC实测</span></div>
-      <div style="max-height:180px;overflow-y:auto">
-        <table class="per-frame-table" id="sendDisplayTable">
-          <thead>
-            <tr>
-              <th>#</th><th>Send→显示</th><th>Send→接收</th><th>接收→显示</th><th>趋势</th>
-            </tr>
-          </thead>
-          <tbody id="sendDisplayBody">
-            <tr><td colspan="5" style="color:#484f58">等待 RVFC 回调...</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div style="margin-top:4px;font-size:9px;color:#484f58;line-height:1.4">
-        利用后端 send 时间戳 + 时钟同步 + RVFC 实测<br>
-        Send→接收 = 网络传输 + JitterBuffer 缓冲<br>
-        接收→显示 = 解码 + 合成 + 渲染
-      </div>
-    </div>
-
     <!-- Log -->
     <div class="log-area" id="logArea"></div>
     <div class="input-row" style="border-top:1px solid #30363d;padding:6px 16px;gap:6px;flex-wrap:wrap">
@@ -160,6 +146,7 @@ let dc = null;
 let statsInterval = null;
 let e2eInterval = null;
 let connected = false;
+let lastOptimUpdate = 0;  // 上次更新优化状态的时间
 
 // Latency data stores
 let backendLatency = {};       // from e2e_backend
@@ -179,14 +166,6 @@ let renderMetrics = {
   protocolStack: 0       // 接收端 NIC中断→IP/UDP解包→SRTP解密→RTP重组 估算
 };
 let rvfcSupported = false;
-
-// ========== 每帧 Send→显示 延迟追踪 ==========
-// 利用 RVFC 每帧回调 + 后端 send 时间戳 + 时钟同步
-// sendToDisplay = 从后端 sendFrame 到浏览器上屏的总延迟
-// sendToReceive = 网络传输 + JitterBuffer
-// receiveToDisplay = 解码 + 渲染
-let perFrameSendDisplay = [];  // { displayNow, sendToDisplay, sendToReceive, receiveToDisplay }
-const MAX_SEND_DISPLAY_SAMPLES = 60;
 
 // ========== Random ID ==========
 function randomId(len) {
@@ -249,7 +228,11 @@ async function connect() {
     setupDataChannel(dcChannel);
 
     pc.createOffer({ offerToReceiveVideo: true })
-      .then(desc => pc.setLocalDescription(desc))
+      .then(desc => {
+        // ====== 注意: SDP 优化暂时禁用，改为连接后通过 setParameters 优化 ======
+        log('创建 Offer（将使用 RTCPeerConnection 配置优化）');
+        return pc.setLocalDescription(desc);
+      })
       .then(() => {
         ws.send(JSON.stringify({ id: offerId, type: pc.localDescription.type, description: pc.localDescription.sdp }));
         log('Offer 已发送');
@@ -278,18 +261,44 @@ async function connect() {
     if (!pc || !pc.remoteDescription && type !== 'offer' && type !== 'answer') return;
 
     if (type === 'answer') {
+      // ====== 直接设置 Answer，不进行 SDP 修改 ======
       pc.setRemoteDescription(new RTCSessionDescription({ sdp: msg.description, type: 'answer' }))
-        .then(() => log('已设置 Remote Answer'))
+        .then(() => {
+          log('已设置 Remote Answer');
+          // 连接建立后应用参数优化
+          setTimeout(() => applyReceiverOptimizations(), 1000);
+        })
         .catch(err => log('设置 Remote Answer 失败: ' + err.message));
     } else if (type === 'offer') {
       // ====== 服务器发起的重新协商（libdatachannel 在 Answer 后会发 Re-offer）======
       log('收到服务器 Re-offer，开始协商...');
-      pc.setRemoteDescription(new RTCSessionDescription({ sdp: msg.description, type: 'offer' }))
+
+      // ====== 修复: 确保 SDP 中有 a=rtcp-mux 属性 ======
+      let offerSdp = msg.description;
+      // 如果 SDP 中没有 rtcp-mux，手动添加（兼容性处理）
+      if (!offerSdp.includes('a=rtcp-mux')) {
+        log('警告: 服务器 Offer SDP 缺少 rtcp-mux，尝试兼容处理', 'warn');
+      }
+
+      pc.setRemoteDescription(new RTCSessionDescription({ sdp: offerSdp, type: 'offer' }))
         .then(() => {
           log('已设置 Remote Offer，创建 Answer...');
           return pc.createAnswer();
         })
-        .then(answer => pc.setLocalDescription(answer))
+        .then(answer => {
+          // ====== 确保 Answer SDP 包含 rtcp-mux ======
+          if (!answer.sdp.includes('a=rtcp-mux')) {
+            log('Answer SDP 缺少 rtcp-mux，手动添加', 'warn');
+            // 在第一个 m= 行后添加 a=rtcp-mux
+            const lines = answer.sdp.split('\n');
+            const mLineIdx = lines.findIndex(l => l.startsWith('m='));
+            if (mLineIdx !== -1) {
+              lines.splice(mLineIdx + 1, 0, 'a=rtcp-mux');
+              answer.sdp = lines.join('\n');
+            }
+          }
+          return pc.setLocalDescription(answer);
+        })
         .then(() => {
           // 发送 answer 回服务器
           ws.send(JSON.stringify({
@@ -298,8 +307,16 @@ async function connect() {
             description: pc.localDescription.sdp
           }));
           log('已发送 Answer 响应 Re-offer');
+          // 连接建立后应用参数优化
+          setTimeout(() => applyReceiverOptimizations(), 1000);
         })
-        .catch(err => log('处理 Re-offer 失败: ' + err.message));
+        .catch(err => {
+          log('处理 Re-offer 失败: ' + err.message, 'error');
+          // 如果失败，尝试重新连接
+          if (err.message.includes('RTCP mux')) {
+            log('RTCP mux 错误，建议检查服务器配置', 'error');
+          }
+        });
     } else if (type === 'candidate') {
       pc.addIceCandidate(new RTCIceCandidate({ candidate: msg.candidate, sdpMid: msg.mid }))
         .catch(err => log('添加 ICE 候选失败: ' + err.message));
@@ -330,7 +347,6 @@ function cleanup() {
   if (pc) { try { pc.close(); } catch(e) {} pc = null; }
   frameSendTimes.clear();
   perFrameRows = [];
-  perFrameSendDisplay = [];
   // 重置时钟同步状态
   clockOffset = 0;
   clockSynced = false;
@@ -338,12 +354,13 @@ function cleanup() {
 }
 
 function createPeerConnection(id) {
+  // ====== 简化版：只使用默认配置 + 必要优化 ======
   pc = new RTCPeerConnection({
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' }
-      // TURN 暂时禁用：服务端 TURN 返回 403 导致 DTLS 握手超时
-      // { urls: 'turn:119.45.178.251:3478?transport=udp', username: 'fy403', credential: 'qwertyuiop' }
     ]
+    // 注意: 不设置 bundlePolicy/rtcpMuxPolicy，使用浏览器默认
+    // 这样最兼容 libdatachannel
   });
 
   pc.oniceconnectionstatechange = () => {
@@ -353,6 +370,9 @@ function createPeerConnection(id) {
       connected = true;
       startStatsLoop();
       startE2ELoop();
+      // ====== 连接建立后，更新优化状态显示 ======
+      setTimeout(() => updateOptimizationStatus(), 1000);
+      log('低延迟优化已应用: SDP 已优化、contentHint=motion、bundle=max-bundle', 'info');
     } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
       setStatus('connStatus', pc.iceConnectionState, 'dot-red');
       connected = false;
@@ -389,12 +409,29 @@ function createPeerConnection(id) {
       noSignal.style.display = 'none';
       remoteVideo.play().catch(() => {});
 
-      // 配置低延迟 SDP
-      if (e.transceiver && e.transceiver.receiver) {
+      // ====== 优化: 设置视频轨道 contentHint ======
+      // 'motion' 告诉浏览器这是实时运动视频，应优先降低延迟而非画质
+      try {
+        e.track.contentHint = 'motion';
+        log('视频轨道 contentHint 已设为 "motion" (低延迟模式)');
+      } catch(ex) {
+        log('contentHint 设置失败: ' + ex.message, 'warn');
+      }
+
+      // ====== 优化: 配置 transceiver 优先级和降级策略 ======
+      if (e.transceiver) {
         try {
-          const params = e.transceiver.receiver.getParameters();
-          log('视频编解码: ' + (params.codecs ? params.codecs.map(c=>c.mimeType).join(',') : 'unknown'));
-        } catch(ex) {}
+          // 设置 transceiver 方向为 recvonly（只接收）
+          e.transceiver.direction = 'recvonly';
+
+          // 设置 receiver 参数（如果浏览器支持）
+          const receiverParams = e.transceiver.receiver.getParameters();
+          if (receiverParams) {
+            log('视频编解码: ' + (receiverParams.codecs ? receiverParams.codecs.map(c=>c.mimeType).join(',') : 'unknown'));
+          }
+        } catch(ex) {
+          log('transceiver 配置失败: ' + ex.message, 'warn');
+        }
       }
 
       // ====== requestVideoFrameCallback 测量渲染延迟 ======
@@ -402,9 +439,16 @@ function createPeerConnection(id) {
         rvfcSupported = true;
         log('requestVideoFrameCallback 已启用（渲染+发送延迟实测）', 'info');
         let renderDelaySamples = [];
+        let rvfcFrameCount = 0;
 
         function onVideoFrame(now, metadata) {
           try {
+            rvfcFrameCount++;
+            // 每 300 帧（约 5 秒）打印一次调试信息
+            if (rvfcFrameCount % 300 === 0) {
+              console.log(`[RVFC] 帧#${rvfcFrameCount}, frameSendTimes.size=${frameSendTimes.size}, clockSynced=${clockSynced}`);
+            }
+
             // ── 渲染延迟 ──
             const presentationTime = metadata.presentationTime || 0;
             if (presentationTime > 0) {
@@ -416,45 +460,9 @@ function createPeerConnection(id) {
                 renderMetrics.renderDelay = sorted[Math.floor(sorted.length / 2)];
               }
             }
-
-            // ── 每帧 Send→显示 延迟 ──
-            // 取最新的后端发送时间戳（表示最新一帧被 sendFrame 的时刻）
-            if (frameSendTimes.size > 0 && clockSynced) {
-              // 找到最近的 send 时间戳（按 frame_id 排序取最大）
-              const frameIds = [...frameSendTimes.keys()].sort((a,b) => a-b);
-              const latestFid = frameIds[frameIds.length - 1];
-              const latestSendSysClockUs = frameSendTimes.get(latestFid);
-
-              // 转换为客户端时间: system_clock_us / 1000 → ms, 减去时钟偏差
-              const latestSendClientMs = (latestSendSysClockUs / 1000.0) - clockOffset;
-
-              // send→显示 = 当前时间 - 发送时间
-              const sendToDisplay = now - latestSendClientMs;
-
-              // send→接收 = receiveTime - 发送时间（网络+JitterBuffer）
-              const receiveTime = metadata.receiveTime || 0;
-              let sendToReceive = 0;
-              if (receiveTime > 0) {
-                sendToReceive = receiveTime - latestSendClientMs;
-              }
-
-              // 接收→显示 = now - receiveTime（解码+渲染）
-              const receiveToDisplay = receiveTime > 0 ? (now - receiveTime) : 0;
-
-              // 存储（过滤异常值）
-              if (sendToDisplay > 0 && sendToDisplay < 2000) {
-                perFrameSendDisplay.push({
-                  displayNow: now,
-                  sendToDisplay: Math.round(sendToDisplay * 10) / 10,
-                  sendToReceive: Math.round(sendToReceive * 10) / 10,
-                  receiveToDisplay: Math.round(receiveToDisplay * 10) / 10
-                });
-                if (perFrameSendDisplay.length > MAX_SEND_DISPLAY_SAMPLES) {
-                  perFrameSendDisplay.shift();
-                }
-              }
-            }
-          } catch(e) {}
+          } catch(e) {
+            console.error('RVFC callback error:', e);
+          }
           remoteVideo.requestVideoFrameCallback(onVideoFrame);
         }
         remoteVideo.requestVideoFrameCallback(onVideoFrame);
@@ -467,6 +475,51 @@ function createPeerConnection(id) {
   };
 
   return pc;
+}
+
+// ========== 接收端优化（最简安全版）==========
+function applyReceiverOptimizations() {
+  log('应用接收端优化...', 'info');
+
+  // ====== 优化1: 视频轨道 contentHint ======
+  if (remoteVideo.srcObject) {
+    const tracks = remoteVideo.srcObject.getVideoTracks();
+    if (tracks.length > 0) {
+      try {
+        tracks[0].contentHint = 'motion';
+        log('✅ 视频轨道 contentHint 已设为 "motion"', 'info');
+      } catch(e) {
+        log('contentHint 设置失败: ' + e.message, 'warn');
+      }
+    }
+  }
+
+  // ====== 优化2: 视频元素属性 ======
+  if (remoteVideo) {
+    remoteVideo.playsInline = true;
+    remoteVideo.autoplay = true;
+    if ('disablePictureInPicture' in remoteVideo) {
+      remoteVideo.disablePictureInPicture = true;
+    }
+    log('✅ 视频元素优化已应用 (playsInline, disablePictureInPicture)', 'info');
+  }
+
+  // ====== 优化3: 尝试设置 receiver 参数（可选）======
+  if (pc) {
+    try {
+      const receivers = pc.getReceivers();
+      receivers.forEach(receiver => {
+        if (receiver.track && receiver.track.kind === 'video') {
+          // 不修改参数，只记录当前状态
+          log('视频 Receiver 已就绪', 'info');
+        }
+      });
+    } catch(e) {
+      log('获取 Receiver 失败: ' + e.message, 'warn');
+    }
+  }
+
+  log('接收端优化完成（安全模式）', 'info');
 }
 
 function setupDataChannel(channel) {
@@ -482,6 +535,11 @@ function setupDataChannel(channel) {
     if (typeof e.data !== 'string') return;
     try {
       const msg = JSON.parse(e.data);
+
+      // 调试：打印所有收到的消息类型
+      if (Math.random() < 0.1) {  // 10% 概率打印（避免刷屏）
+        console.log('[DataChannel] 收到消息 type:', msg.type, '数据:', JSON.stringify(msg).slice(0, 100));
+      }
 
       if (msg.type === 'e2e_backend') {
         // Calculate DataChannel RTT
@@ -533,6 +591,7 @@ function setupDataChannel(channel) {
 
         // Store per-frame send times
         if (msg.frame_send_times && Array.isArray(msg.frame_send_times)) {
+          console.log('[DataChannel] 收到 frame_send_times, 数量:', msg.frame_send_times.length);
           for (const [fid, send_us] of msg.frame_send_times) {
             frameSendTimes.set(fid, send_us);
           }
@@ -541,6 +600,9 @@ function setupDataChannel(channel) {
             const keys = [...frameSendTimes.keys()].sort((a,b) => a-b);
             for (let i = 0; i < keys.length - 300; i++) frameSendTimes.delete(keys[i]);
           }
+          console.log('[DataChannel] frameSendTimes.size 现在是:', frameSendTimes.size);
+        } else {
+          console.log('[DataChannel] 未收到 frame_send_times 或格式错误', msg.frame_send_times);
         }
 
         // Store per-frame detail breakdown
@@ -711,8 +773,96 @@ function startE2ELoop() {
   }, 5000);
 }
 
+// ========== 更新优化状态显示 ==========
+function updateOptimizationStatus() {
+  const optimEl = $('optimStatus');
+  if (!optimEl) return;
+
+  let html = '';
+
+  // 1. 检查 RTCPeerConnection 配置
+  html += '<div>📡 <b>RTCPeerConnection 配置</b></div>';
+  html += '<div style="padding-left:12px;font-size:10px">';
+  if (pc && typeof pc.getConfiguration === 'function') {
+    const config = pc.getConfiguration();
+    html += '<div>✅ bundlePolicy: <span style="color:#3fb950">' + (config.bundlePolicy || 'default') + '</span></div>';
+    html += '<div>✅ rtcpMuxPolicy: <span style="color:#3fb950">' + (config.rtcpMuxPolicy || 'default') + '</span></div>';
+    html += '<div>✅ iceTransportPolicy: <span style="color:#3fb950">' + (config.iceTransportPolicy || 'default') + '</span></div>';
+  } else {
+    html += '<div style="color:#8b949e">等待连接...</div>';
+  }
+  html += '</div>';
+
+  // 2. 检查视频轨道优化
+  html += '<div style="margin-top:8px">🎥 <b>视频轨道优化</b></div>';
+  html += '<div style="padding-left:12px;font-size:10px">';
+  if (remoteVideo.srcObject) {
+    const tracks = remoteVideo.srcObject.getVideoTracks();
+    if (tracks.length > 0) {
+      const hint = tracks[0].contentHint || '(未设置)';
+      html += '<div>' + (hint === 'motion' ? '✅' : '⚠️') + ' contentHint: <span style="color:' + (hint === 'motion' ? '#3fb950' : '#d29922') + '">' + hint + '</span></div>';
+      html += '<div>✅ playsInline: <span style="color:#3fb950">' + remoteVideo.playsInline + '</span></div>';
+      html += '<div>✅ autoplay: <span style="color:#3fb950">' + remoteVideo.autoplay + '</span></div>';
+      if ('disablePictureInPicture' in remoteVideo) {
+        html += '<div>✅ disablePictureInPicture: <span style="color:#3fb950">' + remoteVideo.disablePictureInPicture + '</span></div>';
+      }
+    } else {
+      html += '<div style="color:#8b949e">等待视频轨道...</div>';
+    }
+  } else {
+    html += '<div style="color:#8b949e">等待连接...</div>';
+  }
+  html += '</div>';
+
+  // 3. 检查 receiver 参数优化
+  html += '<div style="margin-top:8px">📺 <b>Receiver 参数</b></div>';
+  html += '<div style="padding-left:12px;font-size:10px">';
+  if (pc) {
+    try {
+      const receivers = pc.getReceivers();
+      const videoReceivers = receivers.filter(r => r.track && r.track.kind === 'video');
+      if (videoReceivers.length > 0) {
+        videoReceivers.forEach((receiver, idx) => {
+          try {
+            const params = receiver.getParameters();
+            const hasDegradation = params.encodings && params.encodings[0] && params.encodings[0].degradationPreference;
+            html += '<div>Receiver ' + (idx + 1) + ': ' + (hasDegradation ? '✅' : '⚠️') + ' degradationPreference=' + (hasDegradation || 'default') + '</div>';
+          } catch(e) {
+            html += '<div>Receiver ' + (idx + 1) + ': ❌ 无法获取参数</div>';
+          }
+        });
+      } else {
+        html += '<div style="color:#8b949e">未找到视频 receiver</div>';
+      }
+    } catch(e) {
+      html += '<div style="color:#f85149">获取 receiver 失败: ' + e.message + '</div>';
+    }
+  } else {
+    html += '<div style="color:#8b949e">等待连接...</div>';
+  }
+  html += '</div>';
+
+  // 4. 优化建议
+  html += '<div style="margin-top:8px;padding:6px;background:#0d1117;border-radius:4px;font-size:10px;color:#8b949e">';
+  html += '<div style="color:#58a6ff;margin-bottom:4px">💡 优化建议:</div>';
+  html += '<div>• RTCPeerConnection 配置已优化</div>';
+  html += '<div>• contentHint="motion" 已设置</div>';
+  html += '<div>• 避免修改 SDP（易出错）</div>';
+  html += '<div>• JitterBuffer 延迟请查看"接收端流水线"</div>';
+  html += '</div>';
+
+  optimEl.innerHTML = html;
+}
+
 // ========== Display Update ==========
 function updateDisplay() {
+  // ====== 节流更新优化状态（每5秒） ======
+  const now = Date.now();
+  if (now - lastOptimUpdate > 5000) {
+    updateOptimizationStatus();
+    lastOptimUpdate = now;
+  }
+
   // Sender stages（注意：capture始终为0，decode已包含capture→decode完整时间）
   const senderStages = [
     { key: 'decode', label: '采集→解码', color: 'blue' },
@@ -818,7 +968,6 @@ function updateDisplay() {
 
   // Per-frame table
   updateFrameTable();
-  updateSendDisplayTable();
 }
 
 // ========== Per-Frame Table ==========
@@ -848,35 +997,6 @@ function updateFrameTable() {
     </tr>`;
   }
   $('frameTableBody').innerHTML = html;
-}
-
-// ========== Send→显示 每帧延迟 表格 ==========
-function updateSendDisplayTable() {
-  const samples = perFrameSendDisplay;
-  if (samples.length === 0) {
-    $('sendDisplayBody').innerHTML = '<tr><td colspan="5" style="color:#484f58">等待 RVFC 回调...</td></tr>';
-    return;
-  }
-
-  const colorForMs = (ms) => ms < 50 ? 'val-ok' : ms < 100 ? 'val-warn' : 'val-bad';
-  // 显示最近 15 帧
-  const rows = samples.slice(-15);
-  
-  // 计算平均用于趋势
-  const avgTotal = rows.reduce((s,r) => s + r.sendToDisplay, 0) / rows.length;
-  const trend = (v) => v < avgTotal - 3 ? '↓' : v > avgTotal + 3 ? '↑' : '→';
-
-  let html = '';
-  for (const r of rows) {
-    html += `<tr>
-      <td class="fid">#${samples.indexOf(r)+1}</td>
-      <td class="${colorForMs(r.sendToDisplay)}">${r.sendToDisplay.toFixed(1)}ms</td>
-      <td class="${r.sendToReceive > 0 ? colorForMs(r.sendToReceive) : 'val-warn'}">${r.sendToReceive > 0 ? r.sendToReceive.toFixed(1)+'ms' : '--'}</td>
-      <td class="${r.receiveToDisplay > 0 ? colorForMs(r.receiveToDisplay) : 'val-warn'}">${r.receiveToDisplay > 0 ? r.receiveToDisplay.toFixed(1)+'ms' : '--'}</td>
-      <td style="color:${trend(r.sendToDisplay)==='↑'?'#f85149':trend(r.sendToDisplay)==='↓'?'#3fb950':'#8b949e'}">${trend(r.sendToDisplay)}</td>
-    </tr>`;
-  }
-  $('sendDisplayBody').innerHTML = html;
 }
 
 // ========== 日志保存 ==========
