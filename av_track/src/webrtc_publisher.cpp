@@ -48,6 +48,14 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
 
   pc->onLocalDescription([wws, id](rtc::Description description) {
     std::cout << "send answer, type: " << description.typeString() << std::endl;
+    // Debug: 打印 SDP 中 video/audio media 行
+    std::string sdp = std::string(description);
+    size_t pos = 0;
+    while ((pos = sdp.find("m=", pos)) != std::string::npos) {
+      size_t end = sdp.find('\n', pos);
+      std::cout << "  SDP media: " << sdp.substr(pos, end - pos) << std::endl;
+      pos = end + 1;
+    }
     json message = {{"id", id},
                     {"type", description.typeString()},
                     {"description", std::string(description)}};
@@ -347,7 +355,6 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
 
               if (video_capturer_) {
                 auto* tracker = video_capturer_->get_latency_tracker();
-                if (!tracker) return;
                 auto stats = tracker->get_stats();
 
                 json e2e_resp;
@@ -356,13 +363,16 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
                 e2e_resp["server_time_ms"] = std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::system_clock::now().time_since_epoch()).count();
                 // 后端各阶段平均延时 (ms, 保留0.1ms精度)
+                // 注意: avg_stage_us[CAPTURE] 始终为0（get_stats 从 DECODE 开始计算），
+                // decode 字段已经包含 capture→decode 的完整时间
                 e2e_resp["capture"] = round(stats.avg_stage_us[LatencyTracker::Stage::CAPTURE] / 100.0) / 10.0;
                 e2e_resp["decode"] = round(stats.avg_stage_us[LatencyTracker::Stage::DECODE] / 100.0) / 10.0;
                 e2e_resp["filter"] = round(stats.avg_stage_us[LatencyTracker::Stage::FILTER] / 100.0) / 10.0;
                 e2e_resp["encode"] = round(stats.avg_stage_us[LatencyTracker::Stage::ENCODE] / 100.0) / 10.0;
                 e2e_resp["send"] = round(stats.avg_stage_us[LatencyTracker::Stage::SEND] / 100.0) / 10.0;
                 e2e_resp["e2e_total"] = round(stats.total_avg_ms * 10.0) / 10.0;
-                // 摄像头传感器预采集延迟估算
+                // 摄像头传感器预采集延迟估算: 从传感器开始曝光到 av_read_frame() 返回
+                // 约为 1 帧间隔 (曝光+传感器读出+ISP+驱动缓冲)
                 e2e_resp["sensor_precapture_ms"] = round(10000.0 / video_capturer_->get_framerate()) / 10.0;
                 // 后端各阶段最大延时 (ms, 保留0.1ms精度)
                 e2e_resp["capture_max"] = round(stats.max_stage_us[LatencyTracker::Stage::CAPTURE] / 100.0) / 10.0;
@@ -620,19 +630,14 @@ rtc::Configuration WebRTCPublisher::createIceConfig() {
               << std::endl;
   }
 
-  // 添加 TURN 服务器配置支持
+  // 添加 TURN 服务器配置支持（暂时禁用：TURN 403 导致 DTLS 握手超时）
   if (!turnServer.empty()) {
     std::cout << "TURN server is " << turnServer << ":" << turnPort
-              << std::endl;
-
-    // TURN 服务器 - 使用带参数的构造函数
-    config.iceServers.push_back(
-        rtc::IceServer(turnServer,                        // hostname
-                       turnPort,                          // port
-                       turnUser,                          // username
-                       turnPass,                          // password
-                       rtc::IceServer::RelayType::TurnUdp // relay type
-                       ));
+              << " (DISABLED - causing DTLS handshake failure)" << std::endl;
+    // TODO: 排查 TURN 凭证/权限后再启用
+    // config.iceServers.push_back(
+    //     rtc::IceServer(turnServer, turnPort, turnUser, turnPass,
+    //                    rtc::IceServer::RelayType::TurnUdp));
   }
 
   if (udpMux) {

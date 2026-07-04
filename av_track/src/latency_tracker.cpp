@@ -16,7 +16,7 @@ void LatencyTracker::record_capture(uint64_t frame_id) {
     // 重置该槽位（新帧开始，清除旧数据）
     frame = FrameTimestamps{};
     frame.frame_id = frame_id;
-    frame.times[Stage::CAPTURE] = std::chrono::steady_clock::now();
+    frame.times[Stage::CAPTURE] = std::chrono::system_clock::now();
     frame.has_stage[Stage::CAPTURE] = true;
     last_frame_id_.store(frame_id);
 }
@@ -26,7 +26,7 @@ void LatencyTracker::record_decode(uint64_t frame_id) {
     std::lock_guard<std::mutex> lock(stats_mutex_);
     auto& frame = frames_[idx];
     if (frame.frame_id == frame_id || !frame.has_stage[Stage::DECODE]) {
-        frame.times[Stage::DECODE] = std::chrono::steady_clock::now();
+        frame.times[Stage::DECODE] = std::chrono::system_clock::now();
         frame.has_stage[Stage::DECODE] = true;
     }
 }
@@ -36,7 +36,7 @@ void LatencyTracker::record_filter(uint64_t frame_id) {
     std::lock_guard<std::mutex> lock(stats_mutex_);
     auto& frame = frames_[idx];
     if (frame.frame_id == frame_id || !frame.has_stage[Stage::FILTER]) {
-        frame.times[Stage::FILTER] = std::chrono::steady_clock::now();
+        frame.times[Stage::FILTER] = std::chrono::system_clock::now();
         frame.has_stage[Stage::FILTER] = true;
     }
 }
@@ -46,7 +46,7 @@ void LatencyTracker::record_encode(uint64_t frame_id) {
     std::lock_guard<std::mutex> lock(stats_mutex_);
     auto& frame = frames_[idx];
     if (frame.frame_id == frame_id || !frame.has_stage[Stage::ENCODE]) {
-        frame.times[Stage::ENCODE] = std::chrono::steady_clock::now();
+        frame.times[Stage::ENCODE] = std::chrono::system_clock::now();
         frame.has_stage[Stage::ENCODE] = true;
     }
 }
@@ -56,7 +56,7 @@ void LatencyTracker::record_send(uint64_t frame_id) {
     std::lock_guard<std::mutex> lock(stats_mutex_);
     auto& frame = frames_[idx];
     if (frame.frame_id == frame_id || !frame.has_stage[Stage::SEND]) {
-        frame.times[Stage::SEND] = std::chrono::steady_clock::now();
+        frame.times[Stage::SEND] = std::chrono::system_clock::now();
         frame.has_stage[Stage::SEND] = true;
     }
 }
@@ -217,7 +217,7 @@ void LatencyTracker::print_frame(uint64_t frame_id) const {
     }
 
     std::cout << "[Latency] Frame " << frame_id << " timeline:" << std::endl;
-    auto prev_time = std::chrono::system_clock::time_point{};
+        auto prev_time = std::chrono::system_clock::time_point{};
     bool has_prev = false;
 
     for (int s = 0; s <= Stage::SEND; ++s) {

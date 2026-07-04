@@ -164,7 +164,19 @@ bool H264Encoder::open_encoder(int width, int height, int fps, int64_t bit_rate,
               << "ms buffering)" 
               << (is_hw_encoder ? " [HW]" : " [SW]") << std::endl;
 
-    encoder_context_->level = 31;
+    // 根据分辨率和帧率自动选择 H.264 level
+    // Level 3.1 = 31 (1280x720@30), Level 4.0 = 40 (1920x1080@30),
+    // Level 4.1 = 41 (1920x1080@60), Level 4.2 = 42 (2048x1080)
+    // 使用 auto 让 libx264 自动计算，或按宏块数推算
+    int64_t mb_per_frame = ((width + 15) / 16) * ((height + 15) / 16);
+    if (mb_per_frame <= 3600)       // Level 3.1 上限
+      encoder_context_->level = 31;
+    else if (mb_per_frame <= 8192)  // Level 4.0 上限
+      encoder_context_->level = 40;
+    else if (mb_per_frame <= 16384) // Level 4.1 上限
+      encoder_context_->level = 41;
+    else
+      encoder_context_->level = 42; // Level 4.2
   }
 
   std::cout << "Profile: " << profile

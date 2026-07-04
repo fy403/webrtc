@@ -38,12 +38,10 @@ VideoCapturer::VideoCapturer(const std::string &device, bool debug_enabled,
     : Capture(debug_enabled, decode_queue_capacity, encode_queue_capacity, send_queue_capacity),
       device_(device), resolution_(resolution), framerate_(framerate),
       video_format_(video_format), target_fps_(framerate),
-      latency_tracker_(debug_enabled ? std::make_unique<LatencyTracker>(128) : nullptr) {
+      latency_tracker_(std::make_unique<LatencyTracker>(512)) {
   avdevice_register_all();
 
-  if (latency_tracker_) {
-    std::cout << "[Latency] Tracker initialized (ring=512)" << std::endl;
-  }
+  std::cout << "[Latency] Tracker initialized (ring=512)" << std::endl;
 
   // 检测是否为模拟摄像头模式（lavfi）
   is_fake_camera_ = (device_ == "fake" || device_.substr(0, 5) == "lavfi");
@@ -74,22 +72,43 @@ bool VideoCapturer::start() {
     sscanf(resolution_.c_str(), "%dx%d", &width, &height);
     std::cout << "Fake camera resolution: " << width << "x" << height << std::endl;
 
-    // 构建 lavfi 描述符：testsrc 生成测试图案
-    // testsrc:   生成彩色测试图案
-    // format:    指定像素格式为 yuv420p（编码器友好）
-    char lavfi_desc[256];
+    // 时间戳文件路径（用于 drawtext textfile 动态显示精确毫秒时间）
+    const char* timestamp_file = "/tmp/avtrack_timestamp.txt";
+
+    // 构建 lavfi 描述符：testsrc 生成测试图案 + drawtext 从文件读取精确毫秒时间戳
+    // textfile:   从文件读取文本内容
+    // reload=1:   每帧重新读取文件（支持动态更新）
+    // 这样可以实现真正的毫秒级精度（通过每帧更新文件内容）
+    //
+    // 对比旧方案的问题：
+    //   text='%{localtime}.%{eif\:1000*mod(t,1)\:d}'
+    //   └─ %{localtime} 是真秒级时间 ✅
+    //   └─ mod(t,1)*1000 是基于帧率的伪毫秒 ❌ (t是FFmpeg内部PTS)
+    //
+    // 新方案：C++ 层面获取高精度系统时间 → 写入文件 → drawtext 读取
+    char lavfi_desc[512];
+    const char* font_path = "/usr/share/fonts/truetype/noto/NotoSansMono-Bold.ttf";
     snprintf(lavfi_desc, sizeof(lavfi_desc),
              "testsrc=size=%dx%d:rate=%d,"
-             "format=pix_fmts=yuv420p",
-             width, height, framerate_);
+             "format=pix_fmts=yuv420p,"
+             "drawtext=fontfile=%s:"
+             "textfile=%s:reload=1:"
+             "fontsize=48:fontcolor=white:"
+             "box=1:boxcolor=black@0.5:"
+             "x=(w-text_w)/2:y=50",
+             width, height, framerate_, font_path, timestamp_file);
 
     std::cout << "lavfi desc: " << lavfi_desc << std::endl;
+    std::cout << "Timestamp file: " << timestamp_file << " (reload=1 for ms precision)" << std::endl;
+
+    // 保存时间戳文件路径供 capture_loop 使用
+    timestamp_file_ = timestamp_file;
 
     AVDictionary *options = nullptr;
     av_dict_set(&options, "format_name", "lavfi", 0);
 
     int ret = avformat_open_input(&format_context_, lavfi_desc,
-                                  av_find_input_format("lavfi"), &options);
+                                  const_cast<AVInputFormat*>(av_find_input_format("lavfi")), &options);
     if (ret < 0) {
       std::cerr << "Cannot open lavfi device: " << av_error_string(ret) << std::endl;
       std::cerr << "Please ensure FFmpeg is compiled with lavfi support" << std::endl;
@@ -169,7 +188,7 @@ bool VideoCapturer::start() {
       std::cout << "Using video input format: auto-detect" << std::endl;
     }
     int ret = avformat_open_input(&format_context_, device_path.c_str(),
-                                  input_format, &options);
+                                  const_cast<AVInputFormat*>(input_format), &options);
     if (ret < 0) {
       std::cerr << "Cannot open video device: " << av_error_string(ret)
                 << std::endl;
@@ -313,9 +332,16 @@ bool VideoCapturer::start() {
     encoder_out_height_ = encoder_context->height;
     encoder_out_pix_fmt_ = encoder_context->pix_fmt;
 
-    // 初始化 FPS 滤镜：当摄像头实际帧率与目标帧率不一致时自动补帧/丢帧
-    if (!init_fps_filter(encoder_out_width_, encoder_out_height_, framerate_)) {
-      std::cout << "Warning: FPS filter init failed, using raw camera framerate" << std::endl;
+  // 初始化 FPS 滤镜：当摄像头实际帧率与目标帧率不一致时自动补帧/丢帧
+  // in_pix_fmt 使用解码器输出格式（如 YUYV/MJPEG/YUV420P），滤镜内部自动转为 YUV420P
+  std::cout << "Decoder output format: " << av_get_pix_fmt_name(codec_context_->pix_fmt) << std::endl;
+  if (!init_fps_filter(encoder_out_width_, encoder_out_height_, framerate_,
+                       codec_context_->pix_fmt)) {
+      std::cerr << "ERROR: FPS filter init failed! This will cause format mismatch errors." << std::endl;
+      std::cerr << "  Decoder output: " << av_get_pix_fmt_name(codec_context_->pix_fmt) << std::endl;
+      std::cerr << "  Encoder expects: yuv420p" << std::endl;
+      std::cerr << "  Disabling FPS filter to avoid crashes, but format conversion may fail." << std::endl;
+      cleanup_fps_filter();  // 确保滤镜被清理
     }
   }
 
@@ -374,6 +400,11 @@ void VideoCapturer::stop() {
   if (latency_tracker_) {
     std::cout << "\n[Latency] === Final E2E Latency Report ===" << std::endl;
     latency_tracker_->print_stats();
+    // 输出最近几帧的逐帧明细
+    for (uint64_t f = latency_tracker_->get_last_frame_id(); 
+         f > 0 && f + 5 > latency_tracker_->get_last_frame_id(); --f) {
+      if (f < 5) break;
+    }
     std::cout << "[Latency] === End of Report ===" << std::endl;
   }
 
@@ -382,6 +413,11 @@ void VideoCapturer::stop() {
   if (sws_context_) {
     sws_freeContext(sws_context_);
     sws_context_ = nullptr;
+  }
+
+  if (format_sws_context_) {
+    sws_freeContext(format_sws_context_);
+    format_sws_context_ = nullptr;
   }
 
   cleanup_fps_filter();
@@ -409,15 +445,16 @@ void VideoCapturer::set_profile(const std::string &profile) {
   std::cout << "Video profile set to: " << profile_ << std::endl;
 }
 
-bool VideoCapturer::init_fps_filter(int width, int height, int fps) {
+bool VideoCapturer::init_fps_filter(int width, int height, int fps, AVPixelFormat in_pix_fmt) {
   cleanup_fps_filter();
 
   const AVFilter *buffersrc = avfilter_get_by_name("buffer");
   const AVFilter *buffersink = avfilter_get_by_name("buffersink");
   const AVFilter *fps_filter = avfilter_get_by_name("fps");
+  const AVFilter *format_filter = avfilter_get_by_name("format");
 
-  if (!buffersrc || !buffersink || !fps_filter) {
-    std::cerr << "Cannot find required filters (buffer/buffersink/fps), "
+  if (!buffersrc || !buffersink || !fps_filter || !format_filter) {
+    std::cerr << "Cannot find required filters (buffer/buffersink/fps/format), "
               << "FFmpeg may be compiled without libavfilter" << std::endl;
     return false;
   }
@@ -432,14 +469,15 @@ bool VideoCapturer::init_fps_filter(int width, int height, int fps) {
   char args[256];
   int ret;
   enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_YUV420P, AV_PIX_FMT_NONE };
+  const char *fmt_name = av_get_pix_fmt_name(in_pix_fmt);
+  AVFilterContext *fmt_ctx = nullptr;
   AVFilterContext *fps_ctx = nullptr;
 
-  // 构建 filtergraph: buffer → fps=N → buffersink
-  // 使用微秒级 time_base (1/1000000)，配合真实时间戳 PTS，
-  // 确保 fps 滤镜能准确计算帧间隔进行补帧/丢帧
+  // 构建 filtergraph: buffer(in_pix_fmt) → format(yuv420p) → fps=N → buffersink
+  // 支持任意输入像素格式（YUYV/BGR0/MJPEG/YUV420P 等），自动转换为 YUV420P
   snprintf(args, sizeof(args),
            "video_size=%dx%d:pix_fmt=%d:time_base=1/1000000:frame_rate=%d",
-           width, height, AV_PIX_FMT_YUV420P, fps);
+           width, height, in_pix_fmt, fps);
 
   ret = avfilter_graph_create_filter(&fps_buffer_src_, buffersrc, "in", args, nullptr, fps_filter_graph_);
   if (ret < 0) { goto cleanup; }
@@ -447,17 +485,24 @@ bool VideoCapturer::init_fps_filter(int width, int height, int fps) {
   ret = avfilter_graph_create_filter(&fps_buffer_sink_, buffersink, "out", nullptr, nullptr, fps_filter_graph_);
   if (ret < 0) { goto cleanup; }
 
-  // 设置 buffersink 输出格式为 YUV420P
+  // format 滤镜：将输入格式（如 YUYV）转换为编码器需要的 YUV420P
+  snprintf(args, sizeof(args), "pix_fmts=yuv420p");
+  ret = avfilter_graph_create_filter(&fmt_ctx, format_filter, "fmt", args, nullptr, fps_filter_graph_);
+  if (ret < 0) { goto cleanup; }
+
+  // 设置 buffersink 输出格式为 YUV420P（双重保障）
   ret = av_opt_set_int_list(fps_buffer_sink_, "pix_fmts", pix_fmts, AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
   if (ret < 0) { goto cleanup; }
 
+  // fps 滤镜：帧率调整（补帧/丢帧）
   snprintf(args, sizeof(args), "fps=%d", fps);
-
   ret = avfilter_graph_create_filter(&fps_ctx, fps_filter, "fps", args, nullptr, fps_filter_graph_);
   if (ret < 0) { goto cleanup; }
 
-  // 连接: in → fps → out
-  ret = avfilter_link(fps_buffer_src_, 0, fps_ctx, 0);
+  // 连接: in → format → fps → out
+  ret = avfilter_link(fps_buffer_src_, 0, fmt_ctx, 0);
+  if (ret < 0) { goto cleanup; }
+  ret = avfilter_link(fmt_ctx, 0, fps_ctx, 0);
   if (ret < 0) { goto cleanup; }
   ret = avfilter_link(fps_ctx, 0, fps_buffer_sink_, 0);
   if (ret < 0) { goto cleanup; }
@@ -471,7 +516,7 @@ bool VideoCapturer::init_fps_filter(int width, int height, int fps) {
   target_fps_ = fps;
 
   std::cout << "FPS filter initialized: " << width << "x" << height
-            << " @ " << fps << "fps (vf=fps=" << fps << ")" << std::endl;
+            << " @ " << fps << "fps (input=" << fmt_name << " -> yuv420p -> vf=fps=" << fps << ")" << std::endl;
 
   return true;
 
@@ -597,7 +642,8 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
   // 防止 filter_loop 线程正在使用 fps_buffer_* 时被清理
   if (fps != -1) {
     std::lock_guard<std::mutex> lock(filter_mutex_);
-    if (!init_fps_filter(encoder_out_width_, encoder_out_height_, actual_fps)) {
+    if (!init_fps_filter(encoder_out_width_, encoder_out_height_, actual_fps,
+                         codec_context_ ? codec_context_->pix_fmt : AV_PIX_FMT_YUV420P)) {
       std::cout << "Warning: FPS filter re-init failed, using raw framerate" << std::endl;
     }
   }
@@ -700,10 +746,10 @@ void VideoCapturer::capture_loop() {
               << ", Frame Drop Factor: " << frame_drop_factor << std::endl;
     std::cout << "Measuring actual capture FPS..." << std::endl;
 
-    // 等待 track_callbacks_ 被设置 (多peer支持)
+    // 等待 track_callbacks_ 被设置 (多peer支持) 或 fake 模式立即开始
     {
       std::unique_lock<std::mutex> lock(callback_mutex_);
-      callback_cv_.wait(lock, [this] { return !track_callbacks_.empty() || !is_running_; });
+      callback_cv_.wait(lock, [this] { return is_fake_camera_ || !track_callbacks_.empty() || !is_running_; });
     }
 
     if (!is_running_) {
@@ -712,8 +758,8 @@ void VideoCapturer::capture_loop() {
     }
 
     while (is_running_) {
-      // 检查是否暂停
-      if (is_paused_) {
+      // 检查是否暂停（fake 模式永不暂停）
+      if (!is_fake_camera_ && is_paused_) {
         // 等待 track_callback_ 被设置或恢复采集
         std::unique_lock<std::mutex> lock(callback_mutex_);
         callback_cv_.wait(lock, [this] { return !is_paused_ || !is_running_; });
@@ -755,6 +801,11 @@ void VideoCapturer::capture_loop() {
           }
         }
 
+      // ====== 更新时间戳文件（fake camera 模式：为 drawtext textfile 提供精确毫秒） ======
+      if (is_fake_camera_ && !timestamp_file_.empty()) {
+        update_timestamp_file();
+      }
+
       int ret = av_read_frame(format_context_, packet);
       if (ret < 0) {
         if (ret != AVERROR(EAGAIN)) {
@@ -765,13 +816,11 @@ void VideoCapturer::capture_loop() {
 
       if (packet->stream_index == video_stream_index_) {
         // ====== 延时统计：采集打点 ======
-        if (latency_tracker_) {
-          static uint64_t capture_seq = 0;
-          uint64_t fid = ++capture_seq;
-          latency_tracker_->record_capture(fid);
-          // 将 frame_id 附加到 packet（通过 opaque 传递到后续阶段）
-          packet->opaque = reinterpret_cast<void*>(fid);
-        }
+        static uint64_t capture_seq = 0;
+        uint64_t fid = ++capture_seq;
+        latency_tracker_->record_capture(fid);
+        // 将 frame_id 附加到 packet（通过 data 指针映射传递到后续阶段）
+        set_packet_fid(packet, fid);
 
         // 实际采集 FPS 测量（优化：只在需要时才获取时间戳）
         total_captured_frames++;
@@ -887,11 +936,9 @@ void VideoCapturer::decode_loop() {
       av_frame_ref(ref_frame, frame);
 
       // ====== 延时统计：解码打点 ======
-      if (latency_tracker_) {
-        uint64_t fid = reinterpret_cast<uint64_t>(packet->opaque);
-        if (fid > 0) latency_tracker_->record_decode(fid);
-        ref_frame->opaque = reinterpret_cast<void*>(fid);  // 传递到下一阶段
-      }
+      uint64_t fid = get_packet_fid(packet);
+      if (fid > 0) latency_tracker_->record_decode(fid);
+      ref_frame->opaque = reinterpret_cast<void*>(fid);  // 通过 AVFrame.opaque 传递到下一阶段
 
       if (!filter_queue_.try_push(ref_frame)) {
         if (debug_enabled_) {
@@ -983,10 +1030,8 @@ void VideoCapturer::filter_loop() {
         filtered_frame->pts = AV_NOPTS_VALUE;
 
         // ====== 延时统计：滤镜打点 ======
-        if (latency_tracker_) {
-          if (fid > 0) latency_tracker_->record_filter(fid);
-          filtered_frame->opaque = reinterpret_cast<void*>(fid);  // 传递到编码阶段
-        }
+        if (fid > 0) latency_tracker_->record_filter(fid);
+        filtered_frame->opaque = reinterpret_cast<void*>(fid);  // 传递到编码阶段
 
         if (!encode_queue_.try_push(filtered_frame)) {
           if (debug_enabled_) {
@@ -1047,9 +1092,9 @@ void VideoCapturer::encode_loop() {
 
     if (encoded) {
       // ====== 延时统计：编码打点 ======
-      if (latency_tracker_ && fid > 0) {
+      if (fid > 0) {
         latency_tracker_->record_encode(fid);
-        packet->opaque = reinterpret_cast<void*>(fid);
+        set_packet_fid(packet, fid);
       }
 
       // Put packet in send queue（非阻塞推入，满则清空队列减少堆积延迟）
@@ -1126,15 +1171,14 @@ void VideoCapturer::send_loop() {
 
     bytes_sent_in_window += packet->size;
 
-    // ====== 延时统计：WebRTC 发送打点 + 周期性报告 ======
-    if (latency_tracker_) {
-      uint64_t fid = reinterpret_cast<uint64_t>(packet->opaque);
-      if (fid > 0) latency_tracker_->record_send(fid);
+    // ====== 延时统计：WebRTC 发送打点 ======
+    uint64_t fid = get_packet_fid(packet);
+    if (fid > 0) latency_tracker_->record_send(fid);
 
-      static uint64_t report_counter = 0;
-      if (++report_counter % 300 == 0) {
-        latency_tracker_->print_stats();
-      }
+    // ====== 周期性延时报告（每 300 帧 ≈ 10s）======
+    static uint64_t report_counter = 0;
+    if (++report_counter % 300 == 0) {
+      latency_tracker_->print_stats();
     }
 
     // Send data to all registered callbacks (multiple peer support)
@@ -1213,4 +1257,39 @@ void VideoCapturer::clear_frame_pool() {
     av_frame_free(&frame);
   }
   scaled_frame_pool_.clear();
+}
+
+void VideoCapturer::update_timestamp_file() {
+  // 获取当前系统时间（毫秒精度）
+  auto now = std::chrono::system_clock::now();
+  auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
+  auto now_epoch = now_ms.time_since_epoch().count();  // 毫秒 since epoch
+
+  // 转换为 time_t 用于获取本地时间（与 %{localtime} 同理）
+  std::time_t tt = std::chrono::system_clock::to_time_t(now);
+  struct tm tm_buf;
+  localtime_r(&tt, &tm_buf);
+
+  // 格式化时间字符串：HH:MM:SS.mmm
+  char time_str[64];
+  std::strftime(time_str, sizeof(time_str), "%H:%M:%S", &tm_buf);
+  int ms = static_cast<int>(now_epoch % 1000);  // 真实毫秒
+
+  char content[128];
+  snprintf(content, sizeof(content), "%s.%03d", time_str, ms);
+
+  // 写入时间戳文件（drawtext textfile 会读取此内容渲染到画面上）
+  FILE* f = fopen(timestamp_file_.c_str(), "w");
+  if (f) {
+    fputs(content, f);
+    fclose(f);
+  }
+
+  // 调试日志：每秒输出一次，方便对比画面时间和Web时间
+  static int ts_log_counter = 0;
+  if (++ts_log_counter % 30 == 0) {  // 30fps下约每秒一次
+    auto debug_now = std::chrono::steady_clock::now().time_since_epoch().count();
+    std::cout << "[Timestamp] file=" << content 
+              << " steady_us=" << debug_now / 1000 << std::endl;
+  }
 }

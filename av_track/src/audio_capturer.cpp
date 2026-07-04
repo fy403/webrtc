@@ -67,7 +67,7 @@ bool AudioCapturer::start() {
   av_dict_set(&options, "buffer_time", "500000", 0); // 500ms缓冲区
 
   int ret = avformat_open_input(&format_context_, device_path.c_str(),
-                                input_format, &options);
+                                const_cast<AVInputFormat*>(input_format), &options);
   if (ret < 0) {
     std::cerr << "Cannot open audio device: " << av_error_string(ret)
               << std::endl;

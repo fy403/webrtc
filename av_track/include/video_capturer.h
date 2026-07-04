@@ -40,7 +40,6 @@ public:
   void set_profile(const std::string &profile);   // 设置编码场景 (lowlatency / hd)
   std::string get_video_codec() const { return video_codec_; } // 获取当前视频编码器类型
   std::string get_profile() const { return profile_; }          // 获取当前编码场景
-  int get_framerate() const { return framerate_; }             // 获取帧率
 
 private:
   void capture_loop() override;
@@ -65,6 +64,7 @@ private:
   AVFormatContext *format_context_ = nullptr;
   AVCodecContext *codec_context_ = nullptr;
   SwsContext *sws_context_ = nullptr;
+  SwsContext *format_sws_context_ = nullptr;  // 格式转换（非YUV420P → YUV420P）
   int video_stream_index_ = -1;
 
   // Cached encoder output parameters for sws_context_ and frame pool
@@ -83,7 +83,7 @@ private:
   AVFilterContext *fps_buffer_sink_ = nullptr;
   int target_fps_;  // 目标输出帧率
 
-  bool init_fps_filter(int width, int height, int fps);
+  bool init_fps_filter(int width, int height, int fps, AVPixelFormat in_pix_fmt = AV_PIX_FMT_YUV420P);
   void cleanup_fps_filter();
 
   // 端到端延时跟踪器
@@ -92,12 +92,38 @@ private:
 public:
   // 获取延时跟踪器（供 webrtc_publisher 使用）
   LatencyTracker* get_latency_tracker() { return latency_tracker_.get(); }
+  int get_framerate() const { return framerate_; }
 
   // 互斥锁保护 reconfiguration 期间对 encoder 和 fps filter 的并发访问
   std::mutex encoder_mutex_;
   std::mutex filter_mutex_;
 
   std::shared_ptr<rtc::Track> track_;
+
+  // ── 帧 ID 传递（FFmpeg 4.4 AVPacket 无 opaque 字段）──
+  // 使用 data 指针映射帧 ID，绕过多线程流水线的传递限制
+  std::unordered_map<const uint8_t*, uint64_t> packet_fid_map_;
+  std::mutex packet_fid_mutex_;
+
+  inline void set_packet_fid(const AVPacket* pkt, uint64_t fid) {
+    std::lock_guard<std::mutex> lk(packet_fid_mutex_);
+    packet_fid_map_[pkt->data] = fid;
+  }
+  inline uint64_t get_packet_fid(const AVPacket* pkt) {
+    std::lock_guard<std::mutex> lk(packet_fid_mutex_);
+    auto it = packet_fid_map_.find(pkt->data);
+    return it != packet_fid_map_.end() ? it->second : 0;
+  }
+  inline void erase_packet_fid(const AVPacket* pkt) {
+    std::lock_guard<std::mutex> lk(packet_fid_mutex_);
+    packet_fid_map_.erase(pkt->data);
+  }
+
+  // 时间戳文件路径（用于 drawtext textfile 动态显示精确毫秒时间）
+  std::string timestamp_file_;
+
+  // 更新时间戳文件内容（每帧调用，写入当前系统时间的 HH:MM:SS.mmm 格式）
+  void update_timestamp_file();
 };
 
 #endif // VIDEO_CAPTURER_H

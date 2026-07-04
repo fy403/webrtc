@@ -70,9 +70,15 @@ CONFIG_FILENAME=$(basename "$CONFIG_ABS_PATH")
 
 # Stop & remove existing container first (release /dev/video0 before reconfiguring ISP)
 echo "Removing old container if exists: $CONTAINER_NAME"
-docker stop $CONTAINER_NAME >/dev/null 2>&1 || true
-docker rm -f $CONTAINER_NAME >/dev/null 2>&1 || true
+docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
+docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 sleep 1
+# 确认旧容器已删除，防止 name conflict
+if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER_NAME}$"; then
+    echo "WARNING: Old container still exists, retrying remove..."
+    docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+    sleep 1
+fi
 
 # IMX419 sensor pipeline configuration (MUST run on host, after container stopped)
 VIDEO_TYPE=$(parse_config "videoType" "$CONFIG_FILE")
