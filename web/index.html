@@ -744,6 +744,8 @@
                     <span class="terminal-status-text" id="shellTerminalStatus">DISCONNECTED</span>
                 </div>
                 <div class="terminal-header-right">
+                    <button class="terminal-restart-btn" id="restartAvBtn" title="重启音视频容器 (webrtc_av_track)">AV</button>
+                    <button class="terminal-restart-btn" id="restartDataBtn" title="重启控制信号容器 (webrtc_data_track)">DT</button>
                     <button class="terminal-kill-btn" id="shellKillBtn" title="Ctrl+C (SIGINT)">C</button>
                     <button class="terminal-toggle-btn" id="shellTerminalToggleBtn" title="折叠终端">_</button>
                 </div>
@@ -867,11 +869,6 @@
 
             // 监听 localStorage 变化
             window.addEventListener('storage', handleConfigUpdate);
-
-            // 如果当前不是mobile.html页面且检测到是移动设备，则跳转到mobile.html
-            if (!window.location.pathname.includes('mobile.html') && isMobileDevice()) {
-                window.location.href = 'mobile.html';
-            }
 
             // 初始化配置按钮
             const configBtn = document.getElementById('configBtn');

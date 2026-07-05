@@ -3125,6 +3125,38 @@ body.mobile-layout {
     background: rgba(50, 205, 50, 0.1);
 }
 
+.terminal-restart-btn {
+    background: transparent;
+    border: 1px solid #FF8C00;
+    color: #FF8C00;
+    font-size: 11px;
+    font-weight: bold;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: 'Courier New', monospace;
+    line-height: 1;
+    padding: 0;
+}
+
+.terminal-restart-btn:hover {
+    border-color: #FFA500;
+    box-shadow: 0 0 8px rgba(255, 165, 0, 0.4);
+    background: rgba(255, 165, 0, 0.1);
+    color: #FFD700;
+}
+
+.terminal-restart-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    border-color: var(--titan-border);
+    color: var(--titan-text-muted);
+}
+
 /* xterm.js container */
 .terminal-xterm-container {
     height: 400px;

@@ -7,6 +7,8 @@ window.addEventListener('load', () => {
     const terminalStatus = document.getElementById('shellTerminalStatus');
     const shellStatusDot = document.getElementById('shellStatusDot');
     const shellKillBtn = document.getElementById('shellKillBtn');
+    const restartAvBtn = document.getElementById('restartAvBtn');
+    const restartDataBtn = document.getElementById('restartDataBtn');
 
     if (!terminalPanel || !xtermContainer) return;
 
@@ -310,6 +312,41 @@ window.addEventListener('load', () => {
         });
     }
 
+    // Send command via DataChannel
+    function cmdSendCommand(command) {
+        if (!cmdCurrentDataChannel || cmdCurrentDataChannel.readyState !== 'open') {
+            term.writeln('\x1b[31m[ERROR] Not connected\x1b[0m');
+            return;
+        }
+        // Display command in terminal
+        term.writeln('\x1b[33m$ ' + command + '\x1b[0m');
+        // Send command via DataChannel (as if typed)
+        const encoder = new TextEncoder();
+        try {
+            cmdCurrentDataChannel.send(encoder.encode(command + '\n'));
+        } catch (e) {
+            console.error('[CMD] send command failed:', e);
+        }
+    }
+
+    // Restart AV container button
+    if (restartAvBtn) {
+        restartAvBtn.addEventListener('click', () => {
+            cmdSendCommand('docker restart webrtc_av_track');
+        });
+    }
+
+    // Restart Data container button
+    if (restartDataBtn) {
+        restartDataBtn.addEventListener('click', () => {
+            cmdSendCommand('docker restart webrtc_data_track');
+        });
+    }
+
+    // Disable restart buttons initially
+    if (restartAvBtn) restartAvBtn.disabled = true;
+    if (restartDataBtn) restartDataBtn.disabled = true;
+
     // Click anywhere on terminal container → focus terminal
     if (xtermContainer) {
         xtermContainer.addEventListener('click', () => {
@@ -334,6 +371,10 @@ window.addEventListener('load', () => {
                 cmdUpdateConnectionInfo(cmdCurrentPeerConnection);
             }
 
+            // Enable restart buttons
+            if (restartAvBtn) restartAvBtn.disabled = false;
+            if (restartDataBtn) restartDataBtn.disabled = false;
+
             // Fit terminal after connection
             if (fitAddon) {
                 setTimeout(() => { try { fitAddon.fit(); } catch (e) {} }, 300);
@@ -357,6 +398,10 @@ window.addEventListener('load', () => {
                     cmdStartAutoReconnect(cmdSignalingWs, id);
                 }
             }
+
+            // Disable restart buttons
+            if (restartAvBtn) restartAvBtn.disabled = true;
+            if (restartDataBtn) restartDataBtn.disabled = true;
         };
 
         dc.onerror = () => {

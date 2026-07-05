@@ -1033,7 +1033,7 @@ window.addEventListener('load', () => {
                 dataUpdateConnStatus('disconnected', 'DISCONNECTED');
                 dataToggleNoSignalOverlay(true);
                 // 启动自动重连
-                // dataStartAutoReconnect(ws, id);
+                dataStartAutoReconnect(ws, id);
             }
         };
         pc.onconnectionstatechange = () => {
