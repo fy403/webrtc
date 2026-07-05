@@ -2,7 +2,7 @@
 
 ![License](https://img.shields.io/badge/license-MIT-yellow) ![Language](https://img.shields.io/badge/language-C++-blue) ![Language](https://img.shields.io/badge/language-HTML-blue)
 
-![WebRTC](https://img.shields.io/badge/WebRTC-4682B4)![P2P](https://img.shields.io/badge/P2P-FF6347)![Linux](https://img.shields.io/badge/Linux-5F9EA0)![C++](https://img.shields.io/badge/C++-6495ED)![HTML](https://img.shields.io/badge/HTML-6495ED)![FFmpeg](https://img.shields.io/badge/FFmpeg-8A2BE2)![H264](https://img.shields.io/badge/H264-8A2BE2)![Opus](https://img.shields.io/badge/Opus-8A2BE2)![多线程](https://img.shields.io/badge/多线程-8A2BE2)![RNDIS](https://img.shields.io/badge/RNDIS-8A2BE2)![USB摄像头](https://img.shields.io/badge/USB摄像头-6A5ACD)![USB麦克风](https://img.shields.io/badge/USB麦克风-7B68EE)![4G网络](https://img.shields.io/badge/4G网络-9370DB)![WIFI](https://img.shields.io/badge/WIFI-9932CC)![开发板](https://img.shields.io/badge/开发板-8B008B)![电机驱动器](https://img.shields.io/badge/电机驱动器-BA55D3)![RC遥控车](https://img.shields.io/badge/RC遥控车-FF6347)
+![WebRTC](https://img.shields.io/badge/WebRTC-4682B4)![P2P](https://img.shields.io/badge/P2P-FF6347)![Linux](https://img.shields.io/badge/Linux-5F9EA0)![C++](https://img.shields.io/badge/C++-6495ED)![HTML](https://img.shields.io/badge/HTML-6495ED)![FFmpeg](https://img.shields.io/badge/FFmpeg-8A2BE2)![H264](https://img.shields.io/badge/H264-8A2BE2)![H265](https://img.shields.io/badge/H265-9370DB)![Opus](https://img.shields.io/badge/Opus-8A2BE2)![RKMPP](https://img.shields.io/badge/RKMPP-FF4500)![多线程](https://img.shields.io/badge/多线程-8A2BE2)![RNDIS](https://img.shields.io/badge/RNDIS-8A2BE2)![MIPI](https://img.shields.io/badge/MIPI_CSI-6A5ACD)![xterm.js](https://img.shields.io/badge/xterm.js-7B68EE)![4G网络](https://img.shields.io/badge/4G网络-9370DB)![开发板](https://img.shields.io/badge/开发板-8B008B)![电机驱动器](https://img.shields.io/badge/电机驱动器-BA55D3)![RC遥控车](https://img.shields.io/badge/RC遥控车-FF6347)
 
 ### ⌛欢迎star✨任何问题发issue👨‍🏫欢迎一起贡献代码🎊[源码地址](https://github.com/fy403/webrtc)
 
@@ -12,82 +12,42 @@
 
 ## 项目介绍
 
-项目主要面向RC遥控车改造，希望在遥控车基础上开发低延时、点对点、可远程控制、可捕获画面和声音的遥控车。采用的技术方案是通过RTP将采集的音视频或者是监控数据传输到控制端；将控制信号也通过RTP传输到被控遥控车，遥控车通过解析协议，转换为命令控制遥控车。技术方案尽可能减少服务器的参与，流量直接点对点传输。
+项目主要面向RC遥控车改造，希望在遥控车基础上开发低延时、点对点、可远程控制、可捕获画面和声音的遥控车。采用的技术方案是通过RTP将采集的音视频或监控数据传输到控制端；控制信号也通过RTP传输到被控端，被控端解析协议转换为命令控制遥控车。技术方案尽可能减少服务器的参与，流量直接点对点传输。
 
-## 数据流动示意
+**V2 版本重大升级：**
+- 🆕 **16通道 RC 协议** — 全新 RC Protocol V2，支持16路独立通道，raw PWM 1000~2000μs，71字节固定帧
+- 🆕 **多控制器融合** — 支持键盘、Xbox手柄、虚拟摇杆、手机陀螺仪四种操控方式
+- 🆕 **远程 Shell 终端** — 新增 `cmd_track` 模块，通过 WebRTC DataChannel 实现远端开发板命令执行
+- 🆕 **速度响应曲线** — 可视化曲线编辑器，为每个通道自定义非线性控制手感
+- 🆕 **硬件编码加速** — 支持 Rockchip MPP 硬编码（`h264_rkmpp` / `hevc_rkmpp`），显著降低CPU占用
+- 🆕 **MIPI CSI 摄像头** — 新增摄像头配置工具，支持 OV5647 / IMX219 等 CSI 摄像头的分辨率/帧率配置
+- 🆕 **实时性能监控** — 前端 OSD 显示 FPS、码率、延时、Jitter、Codec、分辨率，CPU/内存仪表盘
 
-> 下图展示了从"你按下键盘"到"小车动起来"、从"摄像头拍到画面"到"浏览器显示"的完整数据流动过程。
-> 服务器只在**建立连接时**短暂参与，连接建立后画面和控制信号均**直接点对点传输**，服务器不再转发任何流媒体数据。
+## 系统架构
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant 浏览器 as 🖥️ 浏览器<br/>（你的电脑）
-    participant Signaling as ☁️ 信令服务器<br/>（牵线搭桥）
-    participant STUN_TURN as ☁️ STUN / TURN<br/>（地址探测 / 中继备用）
-    participant 控制板 as 🤖 控制板<br/>（小车上的大脑）
-    participant 摄像头 as 📷 摄像头
-    participant 麦克风 as 🎙️ 麦克风
-    participant 扬声器 as 🔊 扬声器
-    participant 电调 as ⚙️ 电调 / 电机
+整套系统由四个核心部分组成：
 
-    rect rgb(230, 245, 255)
-        Note over 浏览器,控制板: ① 握手阶段：互相告知"我在哪、我能说什么语言"（仅在连接建立时发生，之后服务器退场）
-        浏览器->>Signaling: 我想连接小车，这是我的网络地址和能力（SDP + ICE）
-        Signaling->>控制板: 转交给你，浏览器想跟你说话
-        控制板->>STUN_TURN: 我的公网地址是多少？
-        STUN_TURN-->>控制板: 你的公网地址是 x.x.x.x
-        控制板->>Signaling: 好的，这是我的网络地址和能力（SDP + ICE）
-        Signaling->>浏览器: 转交给你，小车回应了
-        浏览器->>STUN_TURN: 我的公网地址是多少？
-        STUN_TURN-->>浏览器: 你的公网地址是 y.y.y.y
-        Note over 浏览器,控制板: 双方尝试直连 → 若防火墙阻断则通过 TURN 中继
-        浏览器-->>控制板: ✅ P2P 通道建立成功（或经 TURN 中继）
-    end
+**1. 信令服务器（Signaling Server）** — 负责 WebRTC 握手阶段 SDP/ICE 交换，使用 WebSocket 通信。
 
-    rect rgb(255, 248, 220)
-        Note over 摄像头,浏览器: ② 画面传输：摄像头拍到的画面 → 实时出现在你的浏览器
-        摄像头->>控制板: 原始画面（YUV / MJPEG）
-        控制板->>控制板: FFmpeg 压缩编码（H.264）
-        控制板-->>浏览器: 📡 压缩后的视频流（RTP，走 P2P 通道）
-        浏览器->>浏览器: 解码 → 显示画面
-    end
+**2. 音视频采集端（`av_track`）** — 运行在开发板上，通过 FFmpeg 采集摄像头（USB / MIPI CSI）与麦克风数据，编码为 H.264/H.265 + Opus，经 WebRTC RTP 推送至浏览器。
 
-    rect rgb(240, 255, 240)
-        Note over 麦克风,浏览器: ③ 声音传输：小车周围的声音 → 实时出现在你的耳机
-        麦克风->>控制板: 原始音频（PCM）
-        控制板->>控制板: 编码压缩（Opus）
-        控制板-->>浏览器: 📡 压缩后的音频流（RTP，走 P2P 通道）
-        浏览器->>浏览器: 解码 → 播放声音
-    end
+**3. 数据控制端（`data_track`）** — 接收浏览器控制帧（RC Protocol V2，16通道），解析后通过串口驱动电机控制板（支持 CRSF-PWM / 原生 GPIO PWM）。同时采集 GPS、速度、电量、系统状态等遥测数据回传。
 
-    rect rgb(255, 240, 240)
-        Note over 浏览器,电调: ④ 控制传输：你按下键盘 → 小车动起来（延时 ≤110ms）
-        浏览器->>浏览器: 检测到按键（W/A/S/D/空格）
-        浏览器-->>控制板: 📡 控制指令（DataChannel，走 P2P 通道）
-        控制板->>控制板: 解析指令 → 转换为 PWM 信号
-        控制板->>电调: 串口发送 PWM 指令
-        电调->>电调: 驱动电机转动 🚗
-    end
+**4. 命令终端（`cmd_track`）** — 通过独立 WebRTC DataChannel 隧道传输 Shell 命令，浏览器端使用 xterm.js 渲染远程终端，支持 `Ctrl+C` 信号、容器重启等操作。
 
-    rect rgb(245, 235, 255)
-        Note over 浏览器,控制板: ⑤ 遥测回传：小车状态数据 → 实时显示在仪表盘
-        控制板->>控制板: 采集 GPS / 速度 / 电量 / 加速度
-        控制板-->>浏览器: 📡 遥测数据（DataChannel，走 P2P 通道）
-        浏览器->>浏览器: 渲染仪表盘（速度、GPS、加速度曲线）
-    end
-
-    rect rgb(230, 255, 248)
-        Note over 浏览器,扬声器: ⑥ 语音下发：你说的话 → 从小车扬声器播出
-        浏览器->>浏览器: 采集麦克风 → 编码（Opus）
-        浏览器-->>控制板: 📡 音频流（RTP，走 P2P 通道）
-        控制板->>扬声器: 解码 → 播放
-    end
+```
+浏览器                      信令服务器                    开发板
+  │                            │                          │
+  │── WebSocket ──────────────►│◄── WebSocket ────────────│
+  │                            │                          │
+  │◄══════ P2P RTP (VIDEO LINK, av_track) ═══════════════►│
+  │◄══════ P2P DataChannel (DATA LINK, data_track) ═══════►│
+  │◄══════ P2P DataChannel (CMD LINK, cmd_track) ═════════►│
 ```
 
 ## 演示效果
 
-屏幕OSD信息；数据通道实时数据变化；连接状态情况；实时视频参数调整；加速度曲线；GPS定位；速度仪表盘；共享连接数。
+O.S.D. 实时视频参数（FPS/码率/延时/Jitter/Decode/Codec/分辨率）；速度仪表盘；油门比例盘；CPU/内存指示器；16通道柱状图；GPS雷达定位；连接状态面板（Video/Data/CMD三路独立）；速度曲线编辑器；Shell远程终端。
 
 [在线体验地址](http://car.fy403.cn/)
 [B站视频](https://www.bilibili.com/video/BV1VA1kBnEAx?share_source=copy_web)
@@ -106,8 +66,7 @@ sequenceDiagram
 git clone https://github.com/fy403/webrtc
 ```
 
-方法1：nodejs
-
+**方式一：Node.js**
 ```shell
 cd webrtc/signaling_server/nodejs
 sudo apt install nodejs npm
@@ -115,8 +74,7 @@ npm install
 chmod +x ./install && ./install
 ```
 
-方法2：python3
-
+**方式二：Python3**
 ```shell
 cd webrtc/signaling_server/python3
 sudo apt install python3 python3-pip
@@ -124,61 +82,96 @@ pip3 install -r requirements.txt
 chmod +x ./install && ./install
 ```
 
-> 默认端口是8000，记得在服务器防火墙放行 TCP:8000。
-> 如果 `fy403.cn:8000` 还能用，可直接使用，但必须配置唯一的 `CLIENT_ID="cam_id_YvgpEqD4"`，避免冲突。
+> 默认端口 **8000**，记得在服务器防火墙放行 `TCP:8000`。
 
-#### 1.2 STUN/TURN 服务器（调试时可用作者搭建的，默认已包含在配置中）
+#### 1.2 STUN/TURN 服务器
 
-STUN/TURN 服务器用于获取 WebRTC 双方的网络地址信息。公开 STUN 服务器直接使用即可，如 `stun.l.google.com:19302`。
-
-TURN 服务器可自建（参考 [搭建私有TURN服务器](turn_server/README.md)），也可使用 Cloudflare 免费提供的节点（延迟稍高）。
-
-#### 1.3 控制板部分（Docker 一键安装）
-
-> 详细细节请查看 [Detail](README-Detail.md)
+公共 STUN 直接用 `stun.l.google.com:19302`。TURN 可自建（参考 [搭建私有TURN服务器](turn_server/README.md)）或使用 [Cloudflare TURN](https://pidan.dev/20250722/webrtc-livekit-deploy-config-turn-server/)（免费，延迟略高）。
 
 ### 2. 安装启动
 
-```shell
-# 配置开机启动 Docker
-sudo systemctl enable docker
-# 从dockerhub拉取镜像
-docker pull alifys/ubuntu:arm64
-```
+#### 2.1.1 方式一：手动全量编译
 
 ```shell
-# 1. 使用根目录构建
+cd webrtc
+./build-all.sh
+```
+
+#### 2.1.2分模块编译
+
+```shell
+cd av_track   && chmod +x build.sh install.sh && ./build.sh
+cd data_track && chmod +x build.sh install.sh && ./build.sh
+cd cmd_track  && chmod +x build.sh install.sh && ./build.sh
+```
+
+#### 2.1.2启动服务
+
+```shell
+# 音视频采集端
+cd av_track/build
+./webrtc_publisher ../config.txt
+
+# 数据控制端
+cd data_track/build
+./webrtc_publisher ../config.txt
+
+# 命令终端（可选）
+cd cmd_track/build
+./cmd_shell ../config.txt
+```
+
+#### 2.2.1 方式二：Docker 一键运行（推荐）
+
+```shell
+# 拉取 ARM64 镜像
+docker pull alifys/ubuntu:arm64
+
+# 根目录构建
 ./build-all.sh
 
-# 2. 运行 av_track
-pushd av_track
-./run-docker.sh
-# 或使用自定义参数
-./run-docker.sh  config.txt
-
-# 3. 运行 data_track
-popd
-pushd data_track
-./run-docker.sh
-# 或使用自定义串口
-./run-docker.sh config.txt
-popd
+# 运行各模块（必须指定配置文件）
+cd av_track   && ./run-docker.sh config.txt
+cd data_track && ./run-docker.sh config.txt
+cd cmd_track  && ./run-docker.sh config.txt
 ```
+
+### 3. 打开控制端网页
+
+浏览器打开 [`web/index.html`](web/index.html)，或访问[在线体验](http://car.fy403.cn/)。
+
+点击右上角 ⚙️ 齿轮图标可修改信令服务器地址和 STUN/TURN 配置。
+
+**操控方式：**
+
+| 控制器 | 说明 |
+|--------|------|
+| ⌨️ 键盘 | W/S 前进/后退，A/D 左转/右转，空格急停（支持按键自定义绑定） |
+| 🎮 Xbox 手柄 | 即插即用，摇杆控制，支持 RT 扳机 |
+| 📱 虚拟摇杆 | 触摸屏友好，移动端自动切换 |
+| 🔄 陀螺仪 | 手机倾斜控制（移动端专属） |
+| 📈 速度曲线 | 自定义非线性响应曲线，每个通道独立配置 |
+| 🖥️ Shell 终端 | 远程命令执行，Ctrl+C 中断，容器重启 |
 
 ## 后续计划
 
 - [x] 控制端语音推送
 - [x] 被控端扬声器播放
-- [x] X265编码
-- [x] 多控制端并行
+- [x] H.265 编码支持
+- [x] 多控制端并行接入
 - [x] 配置信息持久化
 - [x] 多通道绑定
-- [x] GNSS定位+带惯导
-- [ ] 电子陀螺仪
-- [ ] 无线充电
-- [ ] 视频编码芯片支持
-- [ ] 编码器电机支持
-- [ ] AI模型接入
+- [x] GNSS 定位 + 惯性导航（IMU）
+- [x] 16通道 RC Protocol V2
+- [x] 远程 Shell 终端（cmd_track）
+- [x] 速度响应曲线编辑器
+- [x] 多控制器融合（键盘/Xbox/虚拟摇杆/陀螺仪）
+- [x] Rockchip MPP 硬件编码加速
+- [x] MIPI CSI 摄像头配置工具
+- [ ] 电子陀螺仪稳像
+- [ ] 无线充电支持
+- [ ] 编码器电机闭环控制
+- [ ] AI 模型接入（目标识别 / 自主避障）
 
 ## QQ群交流
 
