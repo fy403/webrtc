@@ -1007,7 +1007,11 @@ window.addEventListener('load', () => {
             return;
         }
         const pc = dataCreatePeerConnection(ws, id);
-        const dc = pc.createDataChannel('control');
+        // 显式配置为可靠 + 有序（确保SCTP层自动重排）
+        const dc = pc.createDataChannel('control', {
+            ordered: true,  // 保证按序交付
+            maxRetransmits: 10  // 最大重传次数（可靠传输）
+        });
         dataSetupDataChannel(dc, id);
         dataUpdateConnStatus('connecting', `CONNECTING TO ${id}`);
         dataSendLocalDescription(ws, id, pc, 'offer');

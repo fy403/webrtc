@@ -67,23 +67,15 @@ private:
     std::string last_control_peer_id_;
     mutable std::mutex last_control_peer_id_mutex_;
 
-    // 跟踪控制帧序列号
-    std::atomic<uint32_t> last_control_sequence_;
-
     // Data channels for WebRTC communication（支持多端连接）
     std::unordered_map<std::string, std::shared_ptr<rtc::DataChannel> > data_channels_;
     mutable std::mutex data_channels_mutex_;
 
     // DataChannel健康检查
     struct DataChannelHealth {
-        std::chrono::steady_clock::time_point last_heartbeat;
-        bool is_alive;
-        std::atomic<int> missed_heartbeat_count;
-
-        // 每个DC独立的watchdog参数
-        int heartbeat_count;
-        int64_t total_heartbeat_interval_ms;
-        std::chrono::steady_clock::time_point last_heartbeat_time;
+        // 控制帧超时检测
+        std::chrono::steady_clock::time_point last_control_frame;
+        bool control_timeout_detected;
     };
 
     std::unordered_map<std::string, DataChannelHealth> channel_health_;
@@ -93,8 +85,9 @@ private:
     std::thread health_check_thread_;
     std::atomic<bool> health_check_running_;
     const int HEALTH_CHECK_INTERVAL_MS = 500;
-    const int MAX_MISSED_HEARTBEATS = 3;
-    int default_watchdog_timeout_ms_;
+    
+    // 控制帧超时检测
+    const int CONTROL_FRAME_TIMEOUT_MS = 500;  // 控制帧超时时间：500ms
 
     // System monitor
     SystemMonitor system_monitor_;

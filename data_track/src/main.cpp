@@ -25,6 +25,28 @@ using std::weak_ptr;
 // 全局原子标志位，用于信号处理
 std::atomic<bool> g_shutdown_requested{false};
 
+// SCTP 配置：优化实时性（低延迟优先）
+void configureSctp() {
+    rtc::SctpSettings settings;
+    
+    // 接收缓冲区：KB（实时控制不需要大缓冲，优先低延迟）
+    // 控制帧很小（~50字节），KB 
+    settings.recvBufferSize = 1 * 1024;
+    
+    // 发送缓冲区：KB
+    settings.sendBufferSize = 1 * 1024;
+    
+    // 初始拥塞窗口：2个 MTU（加快初始传输）
+    settings.initialCongestionWindow = 2;
+    
+    // 心跳间隔：秒（快速检测连接断开）
+    settings.heartbeatInterval = 5s;
+    
+    rtc::SetSctpSettings(settings);
+    std::cout << "SCTP 配置已设置 (实时模式): recvBuffer=" << *settings.recvBufferSize 
+              << " bytes, sendBuffer=" << *settings.sendBufferSize << " bytes" << std::endl;
+}
+
 // WebSocket 重连相关
 std::shared_ptr<std::thread> g_ws_reconnect_thread;
 std::atomic<bool> g_ws_reconnect_running{false};
@@ -93,6 +115,9 @@ void stopWsHeartbeat();
 
 int main(int argc, char **argv) {
     try {
+        // 配置 SCTP（必须在 rtc::InitLogger 之前调用）
+        configureSctp();
+        
         setup_signal_handlers(); // 设置信号处理器
 
         // Check for configuration file argument

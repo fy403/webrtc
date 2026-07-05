@@ -20,9 +20,7 @@ RCClient::RCClient(const RCClientConfig &config)
       motor_controller_(new MotorController(config.motor_controller_config)),
       // SystemMonitor 不需要在构造函数中初始化4G模块
       system_monitor_(),
-      health_check_running_(true),
-      default_watchdog_timeout_ms_(config.watchdog_timeout_ms),
-      last_control_sequence_(0) {
+      health_check_running_(true) {
     last_status_time_ = std::chrono::steady_clock::now();
 
     // 启动系统资源监控线程
@@ -74,13 +72,8 @@ void RCClient::addDataChannel(const std::string &peer_id, std::shared_ptr<rtc::D
     // 初始化健康检查状态
     {
         std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
-        DataChannelHealth health;
-        health.last_heartbeat = std::chrono::steady_clock::now();
-        health.is_alive = true;
-        health.missed_heartbeat_count.store(0);
-        channel_health_[peer_id].last_heartbeat = health.last_heartbeat;
-        channel_health_[peer_id].is_alive = health.is_alive;
-        channel_health_[peer_id].missed_heartbeat_count.store(health.missed_heartbeat_count.load());
+        channel_health_[peer_id].last_control_frame = std::chrono::steady_clock::now();
+        channel_health_[peer_id].control_timeout_detected = false;
     }
 
     std::cout << "DataChannel added for peer: " << peer_id
@@ -266,42 +259,27 @@ void RCClient::parseFrame(const std::string &peer_id, const uint8_t *frame, size
         return;
     }
 
-    // 只对控制包调用电机控制
+    // 控制包：调用电机控制（SCTP ordered 模式已保证有序可靠传输）
     if (msg_type == RCProtocolV2::CONTROL_MSG) {
-        uint32_t current_seq = control_frame.sequence;
-        uint32_t last_seq = last_control_sequence_.load();
-        // 序列号检查：
-        if (last_seq != 0 && current_seq != last_seq + 1) {
-            // 检测到乱序
-            std::cout << "检测到序列号乱序: 当前=" << current_seq << ", 上次=" << last_seq
-                    << ", 停止所有电机并接受新序列号" << std::endl;
-            motor_controller_->stopAll();
-            last_control_sequence_.store(current_seq);
-        } else {
-            // 序列号正常，更新并应用控制
-            last_control_sequence_.store(current_seq);
-
-            // 更新最后发送控制命令的peer_id
-            {
-                std::lock_guard<std::mutex> peer_id_lock(last_control_peer_id_mutex_);
-                last_control_peer_id_ = peer_id;
-            }
-            {
-                // 多端场景下：使用互斥锁保护parseFrame，防止并发调用导致电机控制冲突
-                std::lock_guard<std::mutex> lock(parse_frame_mutex_);
-                // 直接传递控制帧给电机控制器
-                motor_controller_->applyControl(control_frame);
-            }
+        // 更新最后发送控制命令的peer_id并应用控制
+        {
+            std::lock_guard<std::mutex> peer_id_lock(last_control_peer_id_mutex_);
+            last_control_peer_id_ = peer_id;
+        }
+        {
+            // 多端场景下：使用互斥锁保护parseFrame，防止并发调用导致电机控制冲突
+            std::lock_guard<std::mutex> lock(parse_frame_mutex_);
+            // 直接传递控制帧给电机控制器
+            motor_controller_->applyControl(control_frame);
         }
     }
-
-    // 控制包和心跳包都更新健康状态（统一放在外面）
+    
+    // 控制包和心跳包都更新 last_control_frame（用于超时检测）
     {
         std::lock_guard<std::mutex> health_lock(channel_health_mutex_);
         DataChannelHealth &health = channel_health_[peer_id];
-        health.last_heartbeat = std::chrono::steady_clock::now();
-        health.missed_heartbeat_count = 0;
-        health.is_alive = true;
+        health.last_control_frame = std::chrono::steady_clock::now();
+        health.control_timeout_detected = false;
     }
 }
 
@@ -322,29 +300,29 @@ void RCClient::healthCheckLoop() {
             last_control_peer_to_check = last_control_peer_id_;
         }
 
-        // 检查所有DataChannel的健康状态
+        // 检查所有DataChannel的控制帧超时
         {
             std::lock_guard<std::mutex> lock(channel_health_mutex_);
             for (auto &peer_health: channel_health_) {
                 const std::string &peer_id = peer_health.first;
                 DataChannelHealth &health = peer_health.second;
 
-                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    now - health.last_heartbeat).count();
-
-                // 检查是否超时
-                if (health.is_alive && elapsed > default_watchdog_timeout_ms_) {
-                    health.missed_heartbeat_count++;
-
-                    if (health.missed_heartbeat_count >= MAX_MISSED_HEARTBEATS) {
-                        health.is_alive = false;
-                        std::cout << "Peer " << peer_id << " marked as unhealthy ("
-                                << elapsed << "ms elapsed)" << std::endl;
-
-                        // 如果断开的是最后控制的peer，立即停止电机
+                // 控制帧超时检测（每个用户独立检测）
+                if (!health.control_timeout_detected) {
+                    auto control_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        now - health.last_control_frame).count();
+                    
+                    if (control_elapsed > CONTROL_FRAME_TIMEOUT_MS) {
+                        health.control_timeout_detected = true;
+                        std::cout << "控制帧超时: peer=" << peer_id 
+                                << ", 距离最后数据包: " << control_elapsed << "ms" << std::endl;
+                        
+                        // 只有当超时的用户是最后控制者时，才停止电机
                         if (peer_id == last_control_peer_to_check) {
-                            std::cout << "最后控制的peer " << peer_id << " 断开，自动停止电机" << std::endl;
+                            std::cout << "超时用户是最后控制者，自动停止电机（控制帧超时保护）" << std::endl;
                             motor_controller_->stopAll();
+                        } else {
+                            std::cout << "超时用户不是最后控制者，不停止电机" << std::endl;
                         }
                     }
                 }
