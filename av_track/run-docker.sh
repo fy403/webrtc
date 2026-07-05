@@ -80,17 +80,6 @@ if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER_NAME}$
     sleep 1
 fi
 
-# IMX419 sensor pipeline configuration (MUST run on host, after container stopped)
-VIDEO_TYPE=$(parse_config "videoType" "$CONFIG_FILE")
-if [ "$VIDEO_TYPE" = "imx419" ]; then
-    echo "=============================================="
-    echo " IMX419 sensor detected, configuring ISP pipeline (host-side)..."
-    echo "=============================================="
-    SCRIPT_DIR=$(dirname "$(realpath "$0")")
-    "$SCRIPT_DIR/imx219-config-tool.sh" set 1080p || echo "[WARNING] IMX419 pipeline config had issues (non-fatal)"
-    echo ""
-fi
-
 # Run container
 docker run -d \
   --name $CONTAINER_NAME \
