@@ -13,3 +13,7 @@ cmake*/
 data_track/.history
 av_track/.history
 .c*
+
+recv/mcp/node_modules/
+recv/mcp/dist/
+recv/*.py

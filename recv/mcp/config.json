@@ -1,0 +1,15 @@
+{
+  "signalingUrl": "119.45.178.251",
+  "signalingPort": 8000,
+  "stunServer": "stun.l.google.com",
+  "stunPort": 19302,
+  "turnServer": "119.45.178.251",
+  "turnPort": 3478,
+  "turnUser": "fy403",
+  "turnPass": "qwertyuiop",
+  "remoteId": "data_Dd8fgkoKo90",
+  "autoReconnect": true,
+  "reconnectIntervalMs": 3000,
+  "controlTimeoutMs": 500,
+  "heartbeatIntervalMs": 300
+}

@@ -23,7 +23,7 @@ turnPass=qwertyuiop               # TURN服务器密码
 #   - 模拟摄像头: 设置为 "fake" 启用 lavfi 虚拟设备（无摄像头时用于测试）
 #       模拟画面会显示彩色测试图案 + 毫秒时间戳
 videoDevice=/dev/video0           # 摄像头设备
-videoType=imx419
+videoType=imx219
 videoFormat=          # 视频输入格式（留空则自动检测）⚠️ 使用 fake 模拟摄像头时，此参数无效，留空即可
 videoCodec=h264_rkmpp              # 视频编码格式：h264, h265, h264_rkmpp, hevc_rkmpp
 resolution=1920x1080              # 视频分辨率（fake 模式也支持，如 1280x720）

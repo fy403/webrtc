@@ -1,0 +1,49 @@
+# WebRTC Virtual Camera Receiver Configuration
+# ===========================================
+
+[signaling]
+# Signaling server URL (WebSocket)
+url = ws://119.45.178.251:8000
+
+[ice]
+# STUN server
+stun_server = stun.l.google.com:19302
+
+# TURN server (optional, required for NAT traversal)
+turn_server = turn:119.45.178.251:3478?transport=udp
+turn_username = fy403
+turn_password = qwertyuiop
+
+[connection]
+# Remote peer ID (device to connect to)
+remote_id = cam_dYFh3H3kf
+
+# Auto-reconnect on disconnect (true/false)
+auto_reconnect = true
+
+# Reconnect interval in milliseconds (min/max)
+reconnect_interval_min = 500
+reconnect_interval_max = 3000
+max_reconnect_attempts = 120
+
+[video]
+# V4L2 loopback device node (e.g., /dev/video10)
+# Leave empty for auto-detection
+video_device = /dev/video10
+
+# Video output format (RGB24 or YUYV)
+video_format = RGB24
+
+[audio]
+# PulseAudio virtual sink name
+sink_name = webrtc_receiver_sink
+
+# Audio format
+sample_rate = 48000
+channels = 2
+
+[latency]
+# Enable latency tracking and statistics
+enable_latency_tracking = true
+# Print stats interval in seconds
+stats_interval = 1.0
