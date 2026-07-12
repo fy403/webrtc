@@ -11,5 +11,8 @@
   "autoReconnect": true,
   "reconnectIntervalMs": 3000,
   "controlTimeoutMs": 500,
-  "heartbeatIntervalMs": 300
+  "heartbeatIntervalMs": 300,
+  "transportMode": "sse",
+  "ssePort": 3000,
+  "sseHost": "0.0.0.0"
 }

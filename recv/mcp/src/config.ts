@@ -19,6 +19,12 @@ export interface ServerConfig {
   reconnectIntervalMs: number;
   controlTimeoutMs: number;
   heartbeatIntervalMs: number;
+  /** MCP transport mode: 'stdio' (default) or 'sse' */
+  transportMode: 'stdio' | 'sse';
+  /** SSE server port (used when transportMode='sse') */
+  ssePort: number;
+  /** SSE server host (used when transportMode='sse') */
+  sseHost: string;
 }
 
 const DEFAULT_CONFIG: ServerConfig = {
@@ -35,6 +41,9 @@ const DEFAULT_CONFIG: ServerConfig = {
   reconnectIntervalMs: 3000,
   controlTimeoutMs: 500,
   heartbeatIntervalMs: 300,
+  transportMode: 'sse',
+  ssePort: 3000,
+  sseHost: '0.0.0.0',
 };
 
 let _config: ServerConfig = { ...DEFAULT_CONFIG };
@@ -76,6 +85,14 @@ export function loadConfig(configPath?: string): ServerConfig {
   if (process.env.TURN_SERVER) envOverrides.turnServer = process.env.TURN_SERVER;
   if (process.env.TURN_USER) envOverrides.turnUser = process.env.TURN_USER;
   if (process.env.TURN_PASS) envOverrides.turnPass = process.env.TURN_PASS;
+  if (process.env.MCP_TRANSPORT) {
+    const mode = process.env.MCP_TRANSPORT.toLowerCase();
+    if (mode === 'stdio' || mode === 'sse') {
+      envOverrides.transportMode = mode;
+    }
+  }
+  if (process.env.MCP_SSE_PORT) envOverrides.ssePort = parseInt(process.env.MCP_SSE_PORT, 10);
+  if (process.env.MCP_SSE_HOST) envOverrides.sseHost = process.env.MCP_SSE_HOST;
 
   _config = { ..._config, ...envOverrides };
   return _config;
