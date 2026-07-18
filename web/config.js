@@ -5,7 +5,7 @@ const ConfigManager = {
         // 视频连接配置
         video: {
             signalingUrl: 'ws://fy403.cn:8000',
-            remoteId: 'cam_dYFh3H3kf',
+            remoteId: 'cam_dfsdf8324n ',
             iceServers: [
                 {
                     urls: ['stun:stun.l.google.com:19302']
@@ -28,7 +28,7 @@ const ConfigManager = {
         // 数据连接配置
         data: {
             signalingUrl: 'ws://fy403.cn:8000',
-            remoteId: 'data_Dd8fgkoKo90',
+            remoteId: 'data_dfj329jfd ',
             iceServers: [
                 {
                     urls: ['stun:stun.l.google.com:19302']

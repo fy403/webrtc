@@ -50,10 +50,10 @@ chmod +x install.sh run.sh
 ./install.sh
 
 # 2. Edit config (set your remote device ID)
-# Edit config.json and set "remoteId": "data_Dd8fgkoKo90"
+# Edit config.json and set "remoteId": "data_dfj329jfd "
 
 # 3. Run directly for testing
-REMOTE_ID=data_Dd8fgkoKo90 node dist/index.js
+REMOTE_ID=data_dfj329jfd  node dist/index.js
 ```
 
 ## MCP Tools
@@ -195,7 +195,7 @@ Add to `claude_desktop_config.json`:
       "command": "node",
       "args": ["/path/to/webrtc/mcp/dist/index.js"],
       "env": {
-        "REMOTE_ID": "data_Dd8fgkoKo90",
+        "REMOTE_ID": "data_dfj329jfd ",
         "SIGNALING_URL": "119.45.178.251"
       }
     }
@@ -206,7 +206,7 @@ Add to `claude_desktop_config.json`:
 ## Example Usage via MCP
 
 ```
-1. device_connect { "remoteId": "data_Dd8fgkoKo90" }
+1. device_connect { "remoteId": "data_dfj329jfd " }
    → Connected to remote device
 
 2. device_get_status { "format": "markdown" }

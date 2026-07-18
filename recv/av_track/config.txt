@@ -16,7 +16,7 @@ turn_password = qwertyuiop
 
 [connection]
 # Remote peer ID (device to connect to)
-remote_id = cam_dYFh3H3kf
+remote_id = cam_dfsdf8324n 
 
 # Auto-reconnect on disconnect (true/false)
 auto_reconnect = true
