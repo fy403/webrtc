@@ -27,6 +27,7 @@ window.addEventListener('load', () => {
     let dataSignalingWs = null;
     let dataReconnectInterval = null; // PeerConnection 自动重连定时器
     let dataWsReconnectInterval = null; // WebSocket 重连定时器
+    let dataIsReconnecting = false; // 全局标记：是否正在重连中（用于避免并发连接）
 
     // 更新 DATA LINK 的 ICE 信息展示
     function dataUpdateIceInfoDisplay(id) {
@@ -934,6 +935,8 @@ window.addEventListener('load', () => {
             console.error(err);
             dataUpdateConnStatus('disconnected', 'DISCONNECTED');
             updateStatus('Signaling connection failed: ' + err.message);
+            // 连接失败时也启动重连
+            dataStartWsReconnect(dataUrl);
         });
 
     function dataSendPeerClose() {
@@ -987,6 +990,10 @@ window.addEventListener('load', () => {
                                     updateStatus(`Creating answer for ${id}`);
                                     dataSendLocalDescription(ws, id, pc, 'answer');
                                 }
+                                // 收到 answer 后，重置重连状态
+                                if (type === 'answer') {
+                                    dataIsReconnecting = false;
+                                }
                             })
                             .catch((err) => {
                                 updateStatus(`Error setting remote ${type}: ${err.message}`);
@@ -1012,8 +1019,38 @@ window.addEventListener('load', () => {
             ordered: true,  // 保证按序交付
             maxRetransmits: 10  // 最大重传次数（可靠传输）
         });
+        // 保存 ws 引用到 data channel，用于错误处理时的重连
+        dc._ws = ws;
         dataSetupDataChannel(dc, id);
         dataUpdateConnStatus('connecting', `CONNECTING TO ${id}`);
+
+        // 添加超时检测：如果5秒内没有收到任何 ICE 候选或 answer，认为对端可能不在线
+        pc._connectionTimeout = setTimeout(() => {
+            const currentPc = dataPeerConnectionMap[id];
+            if (currentPc === pc) {
+                const state = pc.connectionState;
+                const iceState = pc.iceConnectionState;
+
+                // 如果还在 new 状态，说明对端没有响应，强制关闭并允许重连
+                if (state === 'new') {
+                    console.warn(`Data connection timeout for ${id}, state: ${state}/${iceState}, forcing close`);
+                    updateStatus(`Data connection timeout to ${id} (no response)`);
+                    try {
+                        pc.close();
+                    } catch (e) {
+                        console.warn('Error closing timed-out data peer connection:', e);
+                    }
+                    if (dataPeerConnectionMap[id] === pc) {
+                        delete dataPeerConnectionMap[id];
+                    }
+                    if (dataDataChannelMap[id]) {
+                        delete dataDataChannelMap[id];
+                    }
+                    dataIsReconnecting = false; // 重置状态，允许重连
+                }
+            }
+        }, 5000); // 5秒超时
+
         dataSendLocalDescription(ws, id, pc, 'offer');
     }
 
@@ -1025,15 +1062,32 @@ window.addEventListener('load', () => {
             dataUpdateIceInfoDisplay(id);
 
             if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                dataIsReconnecting = false; // ICE 连接成功，重置状态
                 dataUpdateConnStatus('connected', 'CONNECTED');
                 // 延迟再次更新 ICE 信息，确保获取到选中的候选对
                 setTimeout(() => dataUpdateIceInfoDisplay(id), 1000);
                 setTimeout(() => dataUpdateIceInfoDisplay(id), 3000);
-            } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+            } else if (pc.iceConnectionState === 'failed') {
+                console.error(`DATA ICE connection failed with ${id}, immediate reconnection`);
+                dataIsReconnecting = false; // 重置连接状态，允许重连
                 dataUpdateConnStatus('disconnected', 'DISCONNECTED');
                 dataToggleNoSignalOverlay(true);
-                // 启动自动重连
-                dataStartAutoReconnect(ws, id);
+                // ICE 连接失败时立即重连
+                if (!dataReconnectInterval) {
+                    dataStartAutoReconnect(ws, id);
+                }
+            } else if (pc.iceConnectionState === 'disconnected') {
+                console.warn(`DATA ICE connection disconnected with ${id}`);
+                dataUpdateConnStatus('disconnected', 'DISCONNECTED');
+                dataToggleNoSignalOverlay(true);
+                // ICE disconnected 快速检查（1秒后）
+                setTimeout(() => {
+                    if (pc.iceConnectionState === 'disconnected' && !dataReconnectInterval) {
+                        console.log(`DATA ICE still disconnected after 1s, reconnecting`);
+                        dataIsReconnecting = false; // 重置连接状态，允许重连
+                        dataStartAutoReconnect(ws, id);
+                    }
+                }, 1000);
             }
         };
         pc.onconnectionstatechange = () => {
@@ -1041,18 +1095,55 @@ window.addEventListener('load', () => {
             // 更新 ICE 信息展示
             dataUpdateIceInfoDisplay(id);
 
+            // 清理超时定时器
+            if (pc._connectionTimeout) {
+                clearTimeout(pc._connectionTimeout);
+                pc._connectionTimeout = null;
+            }
+
             if (pc.connectionState === 'connected') {
+                dataIsReconnecting = false; // 重置连接状态
                 dataUpdateConnStatus('connected', 'CONNECTED');
                 dataToggleNoSignalOverlay(false);
                 dataStopAutoReconnect(); // 连接成功，停止自动重连
                 // 延迟再次更新 ICE 信息，确保获取到选中的候选对
                 setTimeout(() => dataUpdateIceInfoDisplay(id), 1000);
                 setTimeout(() => dataUpdateIceInfoDisplay(id), 3000);
-            } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
+            } else if (pc.connectionState === 'failed') {
+                console.error(`DATA Connection failed with ${id}, immediate reconnection`);
+                dataIsReconnecting = false; // 重置连接状态，允许重连
                 dataUpdateConnStatus('disconnected', 'DISCONNECTED');
                 dataToggleNoSignalOverlay(true);
-                // 启动自动重连
+                // 立即重连，不延迟
                 dataStartAutoReconnect(ws, id);
+            } else if (pc.connectionState === 'disconnected') {
+                console.warn(`DATA Connection disconnected with ${id}`);
+                dataUpdateConnStatus('disconnected', 'DISCONNECTED');
+                dataToggleNoSignalOverlay(true);
+                // disconnected 状态快速检查（1秒后）
+                setTimeout(() => {
+                    if (pc.connectionState === 'disconnected' && !dataReconnectInterval) {
+                        console.log(`DATA Still disconnected after 1s, reconnecting`);
+                        dataIsReconnecting = false; // 重置连接状态，允许重连
+                        dataStartAutoReconnect(ws, id);
+                    }
+                }, 1000);
+            } else if (pc.connectionState === 'closed') {
+                console.log(`DATA Connection closed with ${id}`);
+                dataIsReconnecting = false; // 重置连接状态，允许重连
+                dataUpdateConnStatus('disconnected', 'DISCONNECTED');
+                dataToggleNoSignalOverlay(true);
+                // Clean up the peer connection
+                if (dataPeerConnectionMap[id] === pc) {
+                    delete dataPeerConnectionMap[id];
+                }
+                if (dataDataChannelMap[id]) {
+                    delete dataDataChannelMap[id];
+                }
+                // 连接关闭时立即重连
+                if (!dataReconnectInterval) {
+                    dataStartAutoReconnect(ws, id);
+                }
             }
         };
         pc.onicecandidate = (event) => {
@@ -1090,6 +1181,22 @@ window.addEventListener('load', () => {
                 }
             }
         };
+        dc.onerror = (err) => {
+            console.error(`DataChannel error with ${id}:`, err);
+            updateStatus(`Data channel error with ${id}`);
+            // 数据通道错误时可能需要重连
+            if (!dataReconnectInterval) {
+                // 延迟检查是否需要重连
+                setTimeout(() => {
+                    const pc = dataPeerConnectionMap[id];
+                    if (!pc || pc.connectionState !== 'connected') {
+                        if (dataSignalingWs) {
+                            dataStartAutoReconnect(dataSignalingWs, id);
+                        }
+                    }
+                }, 2000);
+            }
+        };
         dc.onmessage = (ev) => {
             if (ev.data instanceof ArrayBuffer) {
                 const data = new Uint8Array(ev.data);
@@ -1111,30 +1218,112 @@ window.addEventListener('load', () => {
         return dc;
     }
 
-    // 自动重连功能：每秒发送 offer 尝试重新连接
+    // 自动重连功能：快速重连尝试
     function dataStartAutoReconnect(ws, id) {
         // 如果已经在重连，先停止
         dataStopAutoReconnect();
 
         updateStatus(`Auto-reconnecting to ${id}...`);
         dataUpdateConnStatus('connecting', 'RECONNECTING');
+        console.log(`Starting data auto-reconnect to ${id}`);
 
-        dataReconnectInterval = setInterval(() => {
+        let reconnectAttempts = 0;
+        let reconnectDelay = 500; // 初始重连延迟500ms（不要太快，避免ICE冲突）
+        const maxReconnectDelay = 3000; // 最大重连延迟
+
+        const tryReconnect = () => {
+            reconnectAttempts++;
+
             // 检查 signaling 连接是否正常
             if (!ws || ws.readyState !== WebSocket.OPEN) {
-                console.log('Signaling connection lost, cannot reconnect');
+                console.log('Data signaling connection lost, cannot reconnect');
                 return;
             }
 
-            // 清理旧的连接
-            if (dataPeerConnectionMap[id]) {
-                dataPeerConnectionMap[id].close();
-                delete dataPeerConnectionMap[id];
+            // 检查是否已经有成功的连接
+            const existingPc = dataPeerConnectionMap[id];
+            if (existingPc) {
+                const connectionState = existingPc.connectionState;
+                const iceState = existingPc.iceConnectionState;
+
+                // 只有真正连接成功了才停止重连
+                if (connectionState === 'connected' && (iceState === 'connected' || iceState === 'completed')) {
+                    console.log(`Data successfully connected to ${id}, stopping reconnection`);
+                    dataStopAutoReconnect();
+                    return;
+                }
+
+                // 如果正在连接中（checking 或 connecting），不要创建新连接
+                if (connectionState === 'connecting' || connectionState === 'new' ||
+                    iceState === 'checking' || iceState === 'new') {
+                    console.log(`Data connection to ${id} in progress (${connectionState}/${iceState}), waiting...`);
+                    dataIsReconnecting = true;
+
+                    // 设置超时：如果 10s 后还在连接，强制重置
+                    setTimeout(() => {
+                        if (dataPeerConnectionMap[id] === existingPc) {
+                            const currentState = existingPc.connectionState;
+                            const currentIceState = existingPc.iceConnectionState;
+                            if (currentState === 'connecting' || currentState === 'new' ||
+                                currentIceState === 'checking' || currentIceState === 'new') {
+                                console.log(`Data connection stuck for ${id}, forcing close`);
+                                try {
+                                    existingPc.close();
+                                } catch (e) {
+                                    console.warn('Error closing stuck data peer connection:', e);
+                                }
+                                delete dataPeerConnectionMap[id];
+                                if (dataDataChannelMap[id]) {
+                                    delete dataDataChannelMap[id];
+                                }
+                                dataIsReconnecting = false; // 重置状态，允许重连
+                            }
+                        }
+                    }, 10000);
+
+                    return;
+                }
+
+                // 如果是 failed 或 disconnected 状态，清理旧连接
+                if (connectionState === 'failed' || connectionState === 'disconnected' ||
+                    connectionState === 'closed') {
+                    console.log(`Cleaning up old data connection in ${connectionState} state`);
+                    try {
+                        existingPc.close();
+                    } catch (e) {
+                        console.warn('Error closing old data peer connection:', e);
+                    }
+                    delete dataPeerConnectionMap[id];
+                    if (dataDataChannelMap[id]) {
+                        delete dataDataChannelMap[id];
+                    }
+                }
             }
 
+            console.log(`Data reconnection attempt ${reconnectAttempts} to ${id} (delay: ${reconnectDelay}ms)`);
+
+            // 标记正在连接
+            dataIsReconnecting = true;
+
             // 创建新的 PeerConnection 并发送 offer
-            dataOfferPeerConnection(ws, id);
-        }, 1000); // 每秒重试一次
+            try {
+                dataOfferPeerConnection(ws, id);
+            } catch (e) {
+                console.error('Error during data reconnection:', e);
+                dataIsReconnecting = false;
+            }
+
+            // 调整重连延迟（线性增加，避免指数退避太快）
+            if (reconnectDelay < maxReconnectDelay) {
+                reconnectDelay = Math.min(maxReconnectDelay, reconnectDelay + 100);
+            }
+        };
+
+        // 立即尝试第一次连接
+        tryReconnect();
+
+        // 设置定时器继续重连
+        dataReconnectInterval = setInterval(tryReconnect, reconnectDelay);
     }
 
     function dataStopAutoReconnect() {
@@ -1143,6 +1332,8 @@ window.addEventListener('load', () => {
             dataReconnectInterval = null;
             console.log('Data auto-reconnect stopped');
         }
+        // 重置连接状态
+        dataIsReconnecting = false;
     }
 
     // WebSocket 自动重连功能
@@ -1159,6 +1350,10 @@ window.addEventListener('load', () => {
                 .then((ws) => {
                     console.log('Signaling server reconnected');
                     dataStopWsReconnect();
+                    // 关键：WS 重连成功，必须停止之前基于旧 WS 的 PeerConnection 自动重连。
+                    // 否则旧自动重连定时器会持续检查新 PC 状态，并在超时后
+                    // 将新 PC 强制 kill，导致"连上瞬间又断开"的死循环。
+                    dataStopAutoReconnect();
                     dataOfferId.disabled = false;
                     dataOfferBtn.disabled = false;
                     dataOfferBtn.onclick = () => dataOfferPeerConnection(ws, dataOfferId.value);

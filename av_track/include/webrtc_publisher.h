@@ -54,7 +54,12 @@ private:
   std::string localId_;
   std::unordered_map<std::string, shared_ptr<rtc::PeerConnection>> peerConnectionMap_;
   std::unordered_map<std::string, std::shared_ptr<rtc::DataChannel>> dataChannelMap_;
-  
+
+  // 保护 peerConnectionMap_ / dataChannelMap_ 的并发访问
+  // （信令线程的 onMessage 与 libdatachannel 工作线程的回调会同时访问）
+  mutable std::mutex pcMapMutex_;
+  mutable std::mutex dcMapMutex_;
+
   // 重连状态管理
   std::unordered_map<std::string, std::shared_ptr<std::thread>> reconnectThreads_;
   std::mutex reconnectMutex_;

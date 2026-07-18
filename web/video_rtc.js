@@ -859,9 +859,6 @@ window.addEventListener('load', () => {
     // 启动端到端延时统计报告（每2秒通过 DataChannel 推送前端指标到服务端）
     PerformanceOptimizer.startE2EReporting();
 
-    // Initialize with "No Signal" overlay visible
-    toggleNoSignalOverlay(true);
-
     // Fullscreen functionality - handle F key press
     function toggleFullscreen() {
         // Use video-with-overlay to include all status overlays in fullscreen
@@ -1608,20 +1605,11 @@ window.addEventListener('load', () => {
         console.log(`Starting auto-reconnect to ${id}`);
 
         let reconnectAttempts = 0;
-        const maxReconnectAttempts = 120; // 最多重连120次
         let reconnectDelay = 500; // 初始重连延迟500ms（不要太快，避免ICE冲突）
         const maxReconnectDelay = 3000; // 最大重连延迟
 
         const tryReconnect = () => {
             reconnectAttempts++;
-
-            // 检查是否已超过最大重连次数
-            if (reconnectAttempts > maxReconnectAttempts) {
-                console.log(`Max reconnection attempts (${maxReconnectAttempts}) reached`);
-                stopAutoReconnect();
-                updateStatus(`Reconnection failed with ${id}`);
-                return;
-            }
 
             // 检查 signaling 连接是否正常
             if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -1648,7 +1636,7 @@ window.addEventListener('load', () => {
                     console.log(`Connection to ${id} in progress (${connectionState}/${iceState}), waiting...`);
                     isReconnecting = true;
 
-                    // 设置超时：如果3秒后还在连接，强制重置
+                    // 设置超时：如果 10s 后还在连接，强制重置（TURN 中继场景下 ICE 可能需要较长时间）
                     setTimeout(() => {
                         if (peerConnectionMap[id] === existingPc) {
                             const currentState = existingPc.connectionState;
@@ -1668,7 +1656,7 @@ window.addEventListener('load', () => {
                                 isReconnecting = false; // 重置状态，允许重连
                             }
                         }
-                    }, 3000);
+                    }, 10000);
 
                     return;
                 }
@@ -1689,7 +1677,7 @@ window.addEventListener('load', () => {
                 }
             }
 
-            console.log(`Reconnection attempt ${reconnectAttempts}/${maxReconnectAttempts} to ${id} (delay: ${reconnectDelay}ms)`);
+            console.log(`Reconnection attempt ${reconnectAttempts} to ${id} (delay: ${reconnectDelay}ms)`);
 
             // 标记正在连接
             isReconnecting = true;
@@ -1739,6 +1727,10 @@ window.addEventListener('load', () => {
                 .then(async (ws) => {
                     console.log('Signaling server reconnected');
                     stopWsReconnect();
+                    // 关键：WS 重连成功，必须停止之前基于旧 WS 的 PeerConnection 自动重连。
+                    // 否则旧自动重连定时器会每 500ms 检查新 PC 状态，并在 3s 超时后
+                    // 将新 PC 强制 kill，导致"连上瞬间又断开"的死循环。
+                    stopAutoReconnect();
                     updateStatus('Signaling connected');
                     offerId.disabled = false;
                     offerBtn.disabled = false;

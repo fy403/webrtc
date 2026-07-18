@@ -29,7 +29,6 @@ add_executable(webrtc_publisher
         src/4g_tty.cpp
         src/config_parser.cpp
         src/cpu_monitor.cpp
-        src/getopt.cpp
         src/gsm_monitor.cpp
         src/main.cpp
         src/network_monitor.cpp

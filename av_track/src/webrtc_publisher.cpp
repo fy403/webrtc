@@ -9,6 +9,8 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <vector>
+#include <memory>
 
 #include "audio_player.h"
 #include "opus_encoder.h"
@@ -181,8 +183,17 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
       video_capturer_->resume_capture();
     });
 
-    video_track->onClosed([id, this]() {
+    video_track->onClosed([id, pc, this]() {
       std::cout << "Video Track to " << id << " closed" << std::endl;
+      // 仅当该 id 当前仍指向本 PeerConnection 时才清理，避免旧 PC 的异步
+      // onClosed 在新 PC 建立后误删采集回调 / 暂停采集（断联重连后 AV 失效的根因）
+      bool is_current = false;
+      {
+        std::lock_guard<std::mutex> lk(pcMapMutex_);
+        auto it = peerConnectionMap_.find(id);
+        is_current = (it != peerConnectionMap_.end() && it->second == pc);
+      }
+      if (!is_current) return;
       // 检查capturer是否仍然有效
       if (video_capturer_) {
         video_capturer_->remove_track_callback(id);
@@ -263,8 +274,16 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
       audio_capturer_->resume_capture();
     });
 
-    audio_track->onClosed([id, this]() {
+    audio_track->onClosed([id, pc, this]() {
       std::cout << "Audio Track to " << id << " closed" << std::endl;
+      // 身份保护：仅当该 id 当前仍指向本 PeerConnection 时才清理
+      bool is_current = false;
+      {
+        std::lock_guard<std::mutex> lk(pcMapMutex_);
+        auto it = peerConnectionMap_.find(id);
+        is_current = (it != peerConnectionMap_.end() && it->second == pc);
+      }
+      if (!is_current) return;
       // 检查capturer是否仍然有效
       if (audio_capturer_) {
         audio_capturer_->remove_track_callback(id);
@@ -310,11 +329,6 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
 
     dc->onOpen([id, dc]() {
       std::cout << "DataChannel from " << id << " open" << std::endl;
-    });
-
-    dc->onClosed([id, this]() {
-      std::cout << "DataChannel from " << id << " closed" << std::endl;
-      dataChannelMap_.erase(id);
     });
 
     dc->onMessage([id, dc, wws, this](auto data) {
@@ -407,15 +421,38 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
         // TODO: 暂不处理二进制数据
       }
     });
-    dataChannelMap_.emplace(id, dc);
+    // 注意：同一 id 重连时旧 dc 可能还在，必须用 operator[] 覆盖而非
+    // emplace（emplace 不会覆盖，会导致后续关闭旧 dc 时误删新 dc 的映射）
+    {
+      std::lock_guard<std::mutex> lk(dcMapMutex_);
+      dataChannelMap_[id] = dc;
+    }
+    dc->onClosed([id, dc, this]() {
+      std::cout << "DataChannel from " << id << " closed" << std::endl;
+      std::lock_guard<std::mutex> lk(dcMapMutex_);
+      if (dataChannelMap_.count(id) && dataChannelMap_[id] == dc) {
+        dataChannelMap_.erase(id);
+      }
+    });
   });
 
   // 通道关闭时，停止音视频捕获（仅在最后一个peer关闭时）
   pc->onStateChange(
-      [id, wws, this](rtc::PeerConnection::State state) {
+      [id, pc, wws, this](rtc::PeerConnection::State state) {
         if (state == rtc::PeerConnection::State::Disconnected ||
             state == rtc::PeerConnection::State::Failed ||
             state == rtc::PeerConnection::State::Closed) {
+          // 身份保护：仅当该 id 当前仍指向本 PeerConnection 时才清理，
+          // 并立即从 map 中移除，避免旧 PC 的延迟回调在新 PC 建立后
+          // 误删采集回调 / 暂停采集（断联重连后 AV 失效的根因）
+          bool is_current = false;
+          {
+            std::lock_guard<std::mutex> lk(pcMapMutex_);
+            auto it = peerConnectionMap_.find(id);
+            is_current = (it != peerConnectionMap_.end() && it->second == pc);
+            if (is_current) peerConnectionMap_.erase(id);
+          }
+          if (!is_current) return;
           std::cout << "PeerConnection " << id << " closed, removing callbacks..." << std::endl;
           // 检查capturer是否仍然有效，移除对应的回调
           if (video_capturer_ && video_capturer_->is_running()) {
@@ -446,7 +483,10 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
         }
       });
   // 记录 PeerConnection
-  peerConnectionMap_.emplace(id, pc);
+  {
+    std::lock_guard<std::mutex> lk(pcMapMutex_);
+    peerConnectionMap_.emplace(id, pc);
+  }
   return pc;
 }
 
@@ -685,6 +725,35 @@ void WebRTCPublisher::setupWebSocketCallbacks(std::shared_ptr<rtc::WebSocket> ws
 
   ws->onClosed([this]() {
     std::cout << "WebSocket closed" << std::endl;
+    // 关闭所有残留的 PeerConnection，避免断联后旧 PC 一直引用已死的
+    // WebSocket 导致重连后音视频无法恢复
+    std::vector<shared_ptr<rtc::PeerConnection>> pcs;
+    std::vector<std::string> ids;
+    {
+      std::lock_guard<std::mutex> lk(pcMapMutex_);
+      for (auto &kv : peerConnectionMap_) {
+        pcs.push_back(kv.second);
+        ids.push_back(kv.first);
+      }
+      peerConnectionMap_.clear();
+    }
+    {
+      std::lock_guard<std::mutex> lk(dcMapMutex_);
+      dataChannelMap_.clear();
+    }
+    for (auto &p : pcs) {
+      if (p) p->close();
+    }
+    // 旧 PC 的异步回调会因 map 已清空而跳过清理，这里显式移除采集回调并
+    // 暂停采集，避免断联后采集器空转；重连后新轨道 onOpen 会重新恢复
+    if (video_capturer_) {
+      for (auto &id : ids) video_capturer_->remove_track_callback(id);
+      video_capturer_->pause_capture();
+    }
+    if (audio_capturer_) {
+      for (auto &id : ids) audio_capturer_->remove_track_callback(id);
+      audio_capturer_->pause_capture();
+    }
     // 启动 WebSocket 自动重连
     this->startWsReconnect();
   });
@@ -719,21 +788,29 @@ void WebRTCPublisher::setupWebSocketCallbacks(std::shared_ptr<rtc::WebSocket> ws
     }
 
     shared_ptr<rtc::PeerConnection> pc;
-    if (auto jt = peerConnectionMap_.find(id); jt != peerConnectionMap_.end()) {
-      if (type == "offer") {
-        std::cout << "Release old pc" << std::endl;
-        peerConnectionMap_[id]->close();
-        peerConnectionMap_.erase(id);
-        std::cout << "Answering to " + id << std::endl;
-        pc = createPeerConnection(config, wws, id);
+    bool need_create = false;
+    {
+      std::lock_guard<std::mutex> lk(pcMapMutex_);
+      auto jt = peerConnectionMap_.find(id);
+      if (jt != peerConnectionMap_.end()) {
+        if (type == "offer") {
+          std::cout << "Release old pc" << std::endl;
+          jt->second->close();
+          peerConnectionMap_.erase(id);
+          need_create = true;
+        } else {
+          pc = jt->second;
+        }
+      } else if (type == "offer") {
+        need_create = true;
       } else {
-        pc = jt->second;
+        return;
       }
-    } else if (type == "offer") {
+    }
+    // 先释放锁再创建新 PC，避免 createPeerConnection 内部加锁产生死锁
+    if (need_create) {
       std::cout << "Answering to " + id << std::endl;
       pc = createPeerConnection(config, wws, id);
-    } else {
-      return;
     }
 
     if (type == "offer" || type == "answer") {
@@ -754,12 +831,19 @@ void WebRTCPublisher::stop() {
   stopWsReconnect();
 
   // 关闭所有PeerConnection以确保回调被清理
-  for (auto &pair : peerConnectionMap_) {
-    if (pair.second) {
-      pair.second->close();
+  {
+    std::lock_guard<std::mutex> lk(pcMapMutex_);
+    for (auto &pair : peerConnectionMap_) {
+      if (pair.second) {
+        pair.second->close();
+      }
     }
+    peerConnectionMap_.clear();
   }
-  peerConnectionMap_.clear();
+  {
+    std::lock_guard<std::mutex> lk(dcMapMutex_);
+    dataChannelMap_.clear();
+  }
 
   if (ws_) {
     ws_->close();
