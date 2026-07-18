@@ -1419,7 +1419,8 @@ window.addEventListener('load', () => {
 
             // Handle both audio and video tracks from remote peer
             // 检查是否已经设置了媒体源
-            if (remoteVideo.srcObject) {
+            const hadExistingStream = !!remoteVideo.srcObject;
+            if (hadExistingStream) {
                 console.log('Media source already set, adding track:', e.track.kind);
 
                 const stream = remoteVideo.srcObject;
@@ -1434,6 +1435,9 @@ window.addEventListener('load', () => {
                 // 添加新的轨道
                 stream.addTrack(e.track);
                 console.log(`Added ${e.track.kind} track to existing stream`);
+
+                // 重连场景：收到新轨道立即隐藏 NO SIGNAL（避免竞态）
+                toggleNoSignalOverlay(false);
 
                 // Update track status when tracks are replaced
                 setTimeout(updateTrackStatus, 100);
