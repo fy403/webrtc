@@ -7,7 +7,7 @@
   "turnPort": 3478,
   "turnUser": "fy403",
   "turnPass": "qwertyuiop",
-  "remoteId": "data_dfj329jfd ",
+  "remoteId": "data_dfj329jfd",
   "autoReconnect": true,
   "reconnectIntervalMs": 3000,
   "controlTimeoutMs": 500,

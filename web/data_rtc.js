@@ -202,6 +202,13 @@ window.addEventListener('load', () => {
         gpsSatellites: 0,
         homeLatitude: null,
         homeLongitude: null,
+        // IMU data for trajectory
+        accelAx: 0,
+        accelAy: 0,
+        accelAz: 0,
+        attitudePitch: 0,
+        attitudeRoll: 0,
+        attitudeYaw: 0,
     };
 
     let uiSpeed = 0;
@@ -629,6 +636,23 @@ window.addEventListener('load', () => {
         // 连接数
         if (statusData.connection_count !== undefined) {
             dataSystemStatus.connectionCount = parseInt(statusData.connection_count);
+        }
+
+        // ---- IMU 数据（轨迹计算） ----
+        if (statusData.accel_ax !== undefined) dataSystemStatus.accelAx = parseFloat(statusData.accel_ax);
+        if (statusData.accel_ay !== undefined) dataSystemStatus.accelAy = parseFloat(statusData.accel_ay);
+        if (statusData.accel_az !== undefined) dataSystemStatus.accelAz = parseFloat(statusData.accel_az);
+        if (statusData.attitude_pitch !== undefined) dataSystemStatus.attitudePitch = parseFloat(statusData.attitude_pitch);
+        if (statusData.attitude_roll !== undefined) dataSystemStatus.attitudeRoll = parseFloat(statusData.attitude_roll);
+        if (statusData.attitude_yaw !== undefined) dataSystemStatus.attitudeYaw = parseFloat(statusData.attitude_yaw);
+
+        // 喂入轨迹计算器
+        if (window.imuTrajectory) {
+            window.imuTrajectory.update(
+                dataSystemStatus.accelAx, dataSystemStatus.accelAy, dataSystemStatus.accelAz,
+                dataSystemStatus.attitudePitch, dataSystemStatus.attitudeRoll, dataSystemStatus.attitudeYaw,
+                statusData.timestamp
+            );
         }
 
         // 车辆速度
@@ -1210,7 +1234,16 @@ window.addEventListener('load', () => {
                         if (statusData) dataHandleSystemStatusData(statusData);
                     }
                 } else {
-                    console.log('Text message:', ev.data);
+                    // 尝试解析为 JSON 系统状态（C++端通过 text DataChannel 发送）
+                    try {
+                        const statusData = JSON.parse(ev.data);
+                        if (statusData && typeof statusData === 'object') {
+                            console.log('Received JSON system status:', statusData);
+                            dataHandleSystemStatusData(statusData);
+                        }
+                    } catch (e) {
+                        console.log('Text message (non-JSON):', ev.data);
+                    }
                 }
             }
         };

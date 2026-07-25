@@ -821,8 +821,10 @@ window.addEventListener('load', () => {
 
             // 计算平均音量
             let sum = 0;
+            let peak = 0;
             for (let i = 0; i < dataArray.length; i++) {
                 sum += dataArray[i];
+                if (dataArray[i] > peak) peak = dataArray[i];
             }
             const average = sum / dataArray.length;
 
@@ -833,6 +835,12 @@ window.addEventListener('load', () => {
                 } else {
                     micIndicator.classList.remove('active');
                 }
+            }
+
+            // 诊断: 每60帧(~1秒)输出一次麦克风音量
+            checkAudioLevel._frameCount = (checkAudioLevel._frameCount || 0) + 1;
+            if (checkAudioLevel._frameCount % 60 === 0) {
+                console.log(`🎤 Mic Level: avg=${average.toFixed(1)}, peak=${peak}, threshold=30`);
             }
 
             requestAnimationFrame(checkAudioLevel);
@@ -922,14 +930,19 @@ window.addEventListener('load', () => {
             const audioConstraints = {
                 echoCancellation: true,
                 noiseSuppression: true,
-                autoGainControl: false,
-                sampleRate: 48000,         // 使用48kHz采样率(更好的AEC效果)
-                channelCount: 1,           // 单声道(AEC效果更好)
+                autoGainControl: true,
+                sampleRate: 48000,
+                channelCount: 1,
             };
+
+            // 如果选择了特定麦克风, 锁定设备
+            if (micSelector && micSelector.value) {
+                audioConstraints.deviceId = { exact: micSelector.value };
+            }
 
             localStream = await navigator.mediaDevices.getUserMedia({
                 audio: audioConstraints,
-                video: true,
+                video: false,
             });
             console.log('获取本地音频流成功');
         } catch (error) {
@@ -938,12 +951,28 @@ window.addEventListener('load', () => {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({
                     audio: true,
-                    video: true,
+                    video: false,
                 });
                 console.log('获取本地音频流成功(使用基础设置)');
             } catch (fallbackError) {
                 console.error('获取本地音频流失败(回退):', fallbackError);
             }
+        }
+
+        // 诊断: 打印音频轨实际状态
+        if (localStream) {
+            const audioTracks = localStream.getAudioTracks();
+            console.log(`共 ${audioTracks.length} 个音频轨`);
+            audioTracks.forEach((track, i) => {
+                console.log(`音频轨[${i}]: label="${track.label}", enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`, track.getSettings());
+            });
+
+            // 诊断: 列出所有音频设备
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const mics = devices.filter(d => d.kind === 'audioinput');
+                console.log(`检测到 ${mics.length} 个麦克风:`, mics.map(d => `"${d.label}" (${d.deviceId.substring(0,8)}...)`));
+            } catch (e) {}
         }
     }
 
@@ -956,6 +985,11 @@ window.addEventListener('load', () => {
 
             // Get local audio stream before enabling connections
             await getLocalStream();
+
+            // 获得媒体权限后，重新枚举设备以获取设备标签
+            if (localStream) {
+                populateDeviceSelectors();
+            }
 
             offerId.disabled = false;
             offerBtn.disabled = false;
@@ -1066,6 +1100,12 @@ window.addEventListener('load', () => {
                     console.log(`Answering to ${id}`);
                     updateStatus(`Incoming call from ${id}`);
                     pc = createPeerConnection(ws, id);
+
+                    // 添加本地音频轨道到应答连接(修复: 应答方未发送音频的bug)
+                    if (localStream) {
+                        localStream.getAudioTracks().forEach(track => pc.addTrack(track, localStream));
+                        console.log('Added local audio tracks to PeerConnection (answer)');
+                    }
                 }
 
                 switch (type) {
@@ -1120,7 +1160,7 @@ window.addEventListener('load', () => {
         updateStatus(`Offering to ${id}`);
         const pc = createPeerConnection(ws, id);
 
-        // Add only audio tracks to PeerConnection (even though we captured both)
+        // Add only audio tracks to PeerConnection
         if (localStream) {
             localStream.getAudioTracks().forEach(track => pc.addTrack(track, localStream));
             console.log('Added local audio tracks to PeerConnection');
@@ -2013,6 +2053,93 @@ window.addEventListener('load', () => {
 
     // 启动自适应优化
     startAdaptiveOptimization();
+
+    // ========== 麦克风选择器 ==========
+    const micSelector = document.getElementById('micSelector');
+    const speakerSelector = document.getElementById('speakerSelector');
+
+    async function populateDeviceSelectors() {
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const mics = devices.filter(d => d.kind === 'audioinput');
+            const speakers = devices.filter(d => d.kind === 'audiooutput');
+
+            // 填充麦克风选择器
+            if (micSelector) {
+                const currentMic = micSelector.value;
+                micSelector.innerHTML = '<option value="">默认麦克风</option>';
+                mics.forEach(mic => {
+                    const opt = document.createElement('option');
+                    opt.value = mic.deviceId;
+                    opt.textContent = mic.label || `麦克风 ${mic.deviceId.substring(0, 8)}`;
+                    micSelector.appendChild(opt);
+                });
+                // 优先匹配上次保存的设备
+                const savedMic = localStorage.getItem('preferred_mic');
+                if (savedMic && mics.some(m => m.deviceId === savedMic)) {
+                    micSelector.value = savedMic;
+                } else if (currentMic) {
+                    micSelector.value = currentMic;
+                }
+            }
+
+            // 填充扬声器选择器
+            if (speakerSelector) {
+                const currentSpk = speakerSelector.value;
+                speakerSelector.innerHTML = '<option value="">默认扬声器</option>';
+                speakers.forEach(spk => {
+                    const opt = document.createElement('option');
+                    opt.value = spk.deviceId;
+                    opt.textContent = spk.label || `扬声器 ${spk.deviceId.substring(0, 8)}`;
+                    speakerSelector.appendChild(opt);
+                });
+                // 优先匹配上次保存的设备
+                const savedSpk = localStorage.getItem('preferred_speaker');
+                if (savedSpk && speakers.some(s => s.deviceId === savedSpk)) {
+                    speakerSelector.value = savedSpk;
+                } else if (currentSpk) {
+                    speakerSelector.value = currentSpk;
+                }
+                // 自动应用已保存的扬声器
+                const initialSpk = savedSpk && speakers.some(s => s.deviceId === savedSpk) ? savedSpk : '';
+                if (initialSpk && remoteVideo && typeof remoteVideo.setSinkId === 'function') {
+                    remoteVideo.setSinkId(initialSpk)
+                        .then(() => console.log(`扬声器已应用: ${speakerSelector.options[speakerSelector.selectedIndex].text}`))
+                        .catch(err => console.warn('扬声器应用失败:', err));
+                }
+            }
+
+            console.log(`已加载 ${mics.length} 个麦克风, ${speakers.length} 个扬声器`);
+        } catch (e) {
+            console.warn('无法枚举设备:', e);
+        }
+    }
+
+    populateDeviceSelectors();
+    navigator.mediaDevices.addEventListener('devicechange', populateDeviceSelectors);
+
+    // 麦克风选择: 保存到localStorage以便下次自动应用
+    if (micSelector) {
+        micSelector.addEventListener('change', () => {
+            localStorage.setItem('preferred_mic', micSelector.value);
+            console.log(`麦克风已选择: ${micSelector.options[micSelector.selectedIndex].text}`);
+        });
+    }
+
+    // 扬声器选择: 保存到localStorage并立即应用到remoteVideo
+    if (speakerSelector) {
+        speakerSelector.addEventListener('change', () => {
+            if (!remoteVideo || typeof remoteVideo.setSinkId !== 'function') {
+                console.warn('setSinkId 不可用');
+                return;
+            }
+            const deviceId = speakerSelector.value || '';
+            localStorage.setItem('preferred_speaker', deviceId);
+            remoteVideo.setSinkId(deviceId)
+                .then(() => console.log(`扬声器已切换到: ${speakerSelector.options[speakerSelector.selectedIndex].text}`))
+                .catch(err => console.warn('切换扬声器失败:', err));
+        });
+    }
 
     // 页面卸载时停止自动重连
     window.addEventListener('beforeunload', () => {

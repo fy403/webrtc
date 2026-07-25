@@ -33,12 +33,11 @@
                 <div class="config-main-header">
                     <div class="config-name-display" id="currentConfigName">--</div>
                     <div class="config-actions">
-                        <button class="btn btn-secondary" onclick="showRenameConfigModal()">重命名</button>
-                        <button class="btn btn-secondary" onclick="copyCurrentConfig()">复制</button>
                         <button class="btn btn-secondary" onclick="deleteCurrentConfig()">删除</button>
-                        <button class="btn btn-secondary" onclick="ConfigManager.resetCurrentConfig(); loadConfigToForm()">重置为默认</button>
+                        <button class="btn btn-secondary" onclick="showRenameConfigModal()">重命名</button>
+                        <button class="btn btn-secondary" onclick="exportCurrentToClipboard()">复制</button>
+                        <button class="btn btn-secondary" onclick="showPasteConfigModal()">粘贴</button>
                         <button class="btn btn-success" onclick="saveAndApply()">保存并应用</button>
-                        <button class="btn btn-primary" onclick="applyOnly()">仅应用</button>
                         <button class="btn btn-danger" onclick="window.close()">关闭</button>
                     </div>
                 </div>
@@ -135,6 +134,32 @@
                     </select>
                     <input type="number" class="form-input form-custom-input" id="videoBitrateCustom"
                            placeholder="Mbps" min="0.1" max="100" step="0.1" style="display:none; margin-top:6px;">
+                </div>
+            </div>
+        </div>
+
+        <!-- 音频设备配置 -->
+        <div class="config-section">
+            <div class="section-title">
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <line x1="12" x2="12" y1="19" y2="23" />
+                </svg>
+                音频设备配置
+            </div>
+            <div class="config-grid">
+                <div class="form-group">
+                    <label class="form-label">麦克风设备</label>
+                    <select class="form-select" id="configMicSelector">
+                        <option value="">系统默认</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">扬声器设备</label>
+                    <select class="form-select" id="configSpeakerSelector">
+                        <option value="">系统默认</option>
+                    </select>
                 </div>
             </div>
         </div>
@@ -294,6 +319,25 @@
         </div>
     </div>
 
+    <!-- 粘贴配置模态框 -->
+    <div class="modal-overlay" id="pasteConfigModal">
+        <div class="modal" style="max-width: 550px;">
+            <div class="modal-header">从 JSON 粘贴创建配置</div>
+            <div class="form-group">
+                <label class="form-label">配置名称</label>
+                <input type="text" class="form-input" id="pasteConfigName" placeholder="请输入新配置名称">
+            </div>
+            <div class="form-group">
+                <label class="form-label">粘贴配置 JSON</label>
+                <textarea class="form-textarea" id="pasteConfigJson" placeholder="在此粘贴之前复制的配置JSON..." style="min-height:200px;font-family:monospace;font-size:12px;"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="hidePasteConfigModal()">取消</button>
+                <button class="btn btn-primary" onclick="importConfigFromPaste()">创建</button>
+            </div>
+        </div>
+    </div>
+
     <script src="config.js"></script>
     <script>
         // 渲染配置列表
@@ -319,7 +363,7 @@
                                 <polyline points="20 6 9 17 4 12"></polyline>
                             </svg>
                         </button>
-                        <button class="btn-icon-small" onclick="event.stopPropagation(); copyConfig('${escapeHtml(name)}')" title="复制配置">
+                        <button class="btn-icon-small" onclick="event.stopPropagation(); exportConfigToClipboard('${escapeHtml(name)}')" title="复制配置JSON">
                             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14" height="14">
                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -774,32 +818,26 @@
             }
         }
 
-        // 复制当前配置
-        function copyCurrentConfig() {
+        // 复制当前配置 JSON 到剪贴板
+        async function exportCurrentToClipboard() {
             const currentName = ConfigManager.getCurrentConfigName();
-            const newName = `${currentName}_copy`;
-
             try {
-                ConfigManager.copyConfig(currentName, newName);
-                renderConfigList();
-                switchConfig(newName);
-                showMessage('配置复制成功', 'success');
+                const jsonStr = ConfigManager.exportConfigJson(currentName);
+                await navigator.clipboard.writeText(jsonStr);
+                showMessage('配置 JSON 已复制到剪贴板', 'success');
             } catch (e) {
-                showMessage(e.message, 'error');
+                showMessage('复制失败: ' + e.message, 'error');
             }
         }
 
-        // 复制指定配置
-        function copyConfig(name) {
-            const newName = `${name}_copy`;
-
+        // 复制指定配置 JSON 到剪贴板（侧边栏用）
+        async function exportConfigToClipboard(name) {
             try {
-                ConfigManager.copyConfig(name, newName);
-                renderConfigList();
-                switchConfig(newName);
-                showMessage('配置复制成功', 'success');
+                const jsonStr = ConfigManager.exportConfigJson(name);
+                await navigator.clipboard.writeText(jsonStr);
+                showMessage(`"${name}" JSON 已复制到剪贴板`, 'success');
             } catch (e) {
-                showMessage(e.message, 'error');
+                showMessage('复制失败: ' + e.message, 'error');
             }
         }
 
@@ -821,6 +859,45 @@
                 } catch (e) {
                     showMessage(e.message, 'error');
                 }
+            }
+        }
+
+        // 显示粘贴配置模态框
+        function showPasteConfigModal() {
+            document.getElementById('pasteConfigName').value = '';
+            document.getElementById('pasteConfigJson').value = '';
+            document.getElementById('pasteConfigModal').style.display = 'flex';
+            document.getElementById('pasteConfigName').focus();
+        }
+
+        // 隐藏粘贴配置模态框
+        function hidePasteConfigModal() {
+            document.getElementById('pasteConfigModal').style.display = 'none';
+        }
+
+        // 从粘贴的 JSON 导入配置
+        function importConfigFromPaste() {
+            const name = document.getElementById('pasteConfigName').value.trim();
+            const jsonStr = document.getElementById('pasteConfigJson').value.trim();
+
+            if (!name) {
+                showMessage('请输入配置名称', 'error');
+                return;
+            }
+            if (!jsonStr) {
+                showMessage('请粘贴配置 JSON', 'error');
+                return;
+            }
+
+            try {
+                JSON.parse(jsonStr); // 先验证格式
+                ConfigManager.importConfig(name, jsonStr);
+                hidePasteConfigModal();
+                renderConfigList();
+                switchConfig(name);
+                showMessage(`配置 "${name}" 创建成功`, 'success');
+            } catch (e) {
+                showMessage('导入失败: ' + e.message, 'error');
             }
         }
 
@@ -983,6 +1060,9 @@
                 ConfigManager.updateCmdConfig(cmdConfig);
                 ConfigManager.updateTheme(themeColors);
 
+                // 保存音频设备偏好
+                saveDevicePreferences();
+
                 showMessage('配置已保存', 'success');
 
                 // 通知主页面配置已更新
@@ -1033,6 +1113,9 @@
                 ConfigManager.updateDataConfig(dataConfig);
                 ConfigManager.updateCmdConfig(cmdConfig);
 
+                // 保存音频设备偏好
+                saveDevicePreferences();
+
                 showMessage('配置已应用', 'success');
 
                 // 通知主页面配置已更新
@@ -1058,11 +1141,60 @@
             }, 3000);
         }
 
+        // ========== 音频设备选择器(配置页) ==========
+        async function loadDeviceSelectors() {
+            const micSel = document.getElementById('configMicSelector');
+            const spkSel = document.getElementById('configSpeakerSelector');
+            if (!micSel && !spkSel) return;
+
+            try {
+                // 先获取一次权限以拿到设备标签
+                await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                    .then(s => s.getTracks().forEach(t => t.stop()))
+                    .catch(() => {});
+
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const mics = devices.filter(d => d.kind === 'audioinput');
+                const speakers = devices.filter(d => d.kind === 'audiooutput');
+
+                const savedMic = localStorage.getItem('preferred_mic');
+                const savedSpk = localStorage.getItem('preferred_speaker');
+
+                if (micSel) {
+                    micSel.innerHTML = '<option value="">系统默认</option>';
+                    mics.forEach(m => {
+                        micSel.innerHTML += `<option value="${m.deviceId}">${m.label || '未知麦克风'}</option>`;
+                    });
+                    if (savedMic && mics.some(m => m.deviceId === savedMic)) micSel.value = savedMic;
+                }
+
+                if (spkSel) {
+                    spkSel.innerHTML = '<option value="">系统默认</option>';
+                    speakers.forEach(s => {
+                        spkSel.innerHTML += `<option value="${s.deviceId}">${s.label || '未知扬声器'}</option>`;
+                    });
+                    if (savedSpk && speakers.some(s => s.deviceId === savedSpk)) spkSel.value = savedSpk;
+                }
+
+                console.log(`[Config] 已加载 ${mics.length} 个麦克风, ${speakers.length} 个扬声器`);
+            } catch (e) {
+                console.warn('[Config] 无法枚举设备:', e);
+            }
+        }
+
+        function saveDevicePreferences() {
+            const micSel = document.getElementById('configMicSelector');
+            const spkSel = document.getElementById('configSpeakerSelector');
+            if (micSel) localStorage.setItem('preferred_mic', micSel.value);
+            if (spkSel) localStorage.setItem('preferred_speaker', spkSel.value);
+        }
+
         // 页面加载时加载配置
         window.addEventListener('load', function() {
             ConfigManager.init();
             renderConfigList();
             loadConfigToForm();
+            loadDeviceSelectors();
             // 从 localStorage 恢复用户保存的 preset 值到按钮
             applyPresetsToButtons();
         });

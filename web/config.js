@@ -245,7 +245,7 @@ const ConfigManager = {
         return config;
     },
 
-    // 复制配置
+    // 复制配置（本地副本）
     copyConfig(sourceName, newName) {
         if (!this.configs[sourceName]) {
             throw new Error('源配置不存在');
@@ -260,6 +260,45 @@ const ConfigManager = {
         this.configs[newName] = copiedConfig;
         this.saveConfigs();
         return copiedConfig;
+    },
+
+    // 导出配置为 JSON 字符串（不含内部字段）
+    exportConfigJson(name) {
+        if (!this.configs[name]) {
+            throw new Error('配置不存在');
+        }
+        const config = JSON.parse(JSON.stringify(this.configs[name]));
+        // 移除内部字段
+        delete config.name;
+        delete config.description;
+        delete config.createdAt;
+        delete config.updatedAt;
+        return JSON.stringify(config, null, 2);
+    },
+
+    // 从 JSON 导入配置
+    importConfig(name, jsonStr) {
+        if (!name || name.trim() === '') {
+            throw new Error('配置名称不能为空');
+        }
+        if (this.configs[name]) {
+            throw new Error('配置名称已存在');
+        }
+        let data;
+        try {
+            data = JSON.parse(jsonStr);
+        } catch (e) {
+            throw new Error('JSON 格式无效: ' + e.message);
+        }
+        // 合并默认值，确保所有字段完整
+        const merged = this.mergeWithDefaults(data);
+        merged.name = name;
+        merged.description = data.description || '';
+        merged.createdAt = new Date().toISOString();
+        merged.updatedAt = new Date().toISOString();
+        this.configs[name] = merged;
+        this.saveConfigs();
+        return merged;
     },
 
     // 重置当前配置为默认值
@@ -284,7 +323,8 @@ const ConfigManager = {
     // 深度合并
     deepMerge(target, source) {
         for (const key in source) {
-            if (source[key] instanceof Object && key in target) {
+            if (source[key] instanceof Object && !Array.isArray(source[key])
+                && target[key] != null && typeof target[key] === 'object' && !Array.isArray(target[key])) {
                 this.deepMerge(target[key], source[key]);
             } else {
                 target[key] = source[key];
