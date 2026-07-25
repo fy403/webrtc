@@ -81,6 +81,24 @@ const ConfigManager = {
         primaryDim: '#CC8400',
         secondaryColor: '#00CED1',
         secondaryDim: '#008B8B'
+    },
+    // UI 界面元素显示控制（全部默认显示）
+    uiVisibility: {
+        // 左上区域
+        gpsRadar: true,
+        gpsCoords: true,
+        satelliteIndicator: true,
+        micIndicator: true,
+        speakerIndicator: true,
+        // 右上区域
+        videoStatsPanel: true,
+        // 左下区域
+        speedGauge: true,
+        throttleGauge: true,
+        // 右下区域
+        systemStatus: true,
+        // 底部
+        statusBar: true
     }
     },
 
@@ -479,6 +497,28 @@ const ConfigManager = {
         const primaryColor = this.hexToRgb(theme.primaryColor);
         root.style.setProperty('--titan-glow', `0 0 10px rgba(${primaryColor.r}, ${primaryColor.g}, ${primaryColor.b}, 0.5)`);
         root.style.setProperty('--titan-glow-strong', `0 0 20px rgba(${primaryColor.r}, ${primaryColor.g}, ${primaryColor.b}, 0.8)`);
+    },
+
+    // 获取 UI 可见性配置
+    getUIVisibility() {
+        const config = this.getCurrentConfig();
+        return config && config.uiVisibility ? config.uiVisibility : this.defaultConfigTemplate.uiVisibility;
+    },
+
+    // 更新 UI 可见性配置
+    updateUIVisibility(visibilityData) {
+        const config = this.getCurrentConfig();
+        if (!config) {
+            this.init();
+        }
+        const freshConfig = this.getCurrentConfig();
+        if (!freshConfig.uiVisibility) {
+            freshConfig.uiVisibility = {};
+        }
+        Object.assign(freshConfig.uiVisibility, visibilityData);
+        freshConfig.updatedAt = new Date().toISOString();
+        this.saveConfigs();
+        return freshConfig.uiVisibility;
     },
 
     // 将十六进制颜色转换为RGB

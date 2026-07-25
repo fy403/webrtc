@@ -278,7 +278,7 @@
                     </div>
 
                     <!-- 底部状态面板 -->
-                    <div class="status-overlay bottom-overlay">
+                    <div class="status-overlay bottom-overlay" id="statusBar">
                         <div class="network-speed-container">
                             <div class="network-speed-item tx-speed">
                                 <svg class="network-speed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -400,7 +400,6 @@
 
                     <div class="control-buttons">
                         <button class="btn" id="reconnectBtn">RECONNECT</button>
-                        <button class="btn" id="stopAllBtn">STOP ALL (Space)</button>
                         <button class="btn" id="muteMicBtn" title="MUTE MICROPHONE">🎤</button>
                         <button class="btn" id="muteSpeakerBtn" title="MUTE SPEAKER">🔊</button>
                         <button class="btn" id="helperLinesBtn" title="TOGGLE HELPER LINES">📐</button>
@@ -408,6 +407,7 @@
                         <button class="btn" id="clockBtn" title="PRECISION CLOCK">🕐</button>
                         <button class="btn" id="curveBtn" title="SPEED CURVE">📈</button>
                         <button class="btn" id="imuTrajectoryBtn" title="IMU 3D TRAJECTORY">🧭</button>
+                        <button class="btn" id="fullscreenBtn" title="FULLSCREEN (F)">⛶</button>
                         <button class="btn" id="configBtn" title="CONFIG">⚙️</button>
                     </div>
                 </div>
@@ -860,10 +860,43 @@
             }
         }
 
+        // 应用 UI 可见性配置
+        function applyUIVisibility() {
+            ConfigManager.init();
+            const vis = ConfigManager.getUIVisibility();
+            if (!vis) return;
+
+            const setVisible = (selector, show) => {
+                const el = document.querySelector(selector);
+                if (el) el.style.display = show ? '' : 'none';
+            };
+
+            // 左上区域
+            setVisible('#gpsRadar', vis.gpsRadar);
+            setVisible('#gpsCoords', vis.gpsCoords);
+            setVisible('#satelliteIndicator', vis.satelliteIndicator);
+            setVisible('#micIndicator', vis.micIndicator);
+            setVisible('#speakerIndicator', vis.speakerIndicator);
+
+            // 右上区域
+            setVisible('#videoStatsPanel', vis.videoStatsPanel);
+
+            // 左下区域
+            setVisible('.vehicle-speed-container', vis.speedGauge);
+            setVisible('.throttle-gauge-container', vis.throttleGauge);
+
+            // 右下区域
+            setVisible('.system-status-panel', vis.systemStatus);
+
+            // 底部状态栏
+            setVisible('#statusBar', vis.statusBar);
+        }
+
         // 页面加载完成后执行检查
         document.addEventListener('DOMContentLoaded', function () {
             ConfigManager.init();
             ConfigManager.applyTheme();
+            applyUIVisibility();
 
             // 监听 localStorage 变化
             window.addEventListener('storage', handleConfigUpdate);

@@ -417,3 +417,53 @@
     border-radius: 50%;
     border: 2px solid #3a3a4e;
 }
+
+/* UI 可见性控制 */
+.ui-visibility-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+}
+
+.vis-group {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 14px 16px;
+    min-width: 180px;
+    flex: 1 1 auto;
+}
+
+.vis-group-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #888;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.vis-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    font-size: 14px;
+    color: #ccc;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s;
+}
+
+.vis-toggle:hover {
+    color: #fff;
+}
+
+.vis-toggle input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #007BFF;
+    cursor: pointer;
+    margin: 0;
+    flex-shrink: 0;
+}

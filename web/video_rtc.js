@@ -885,7 +885,7 @@ window.addEventListener('load', () => {
         if (isFullscreen) {
             // Exit fullscreen
             if (document.exitFullscreen) {
-                document.exitFullscreen();
+                document.exitFullscreen().catch(err => console.warn('Exit fullscreen:', err.message));
             } else if (document.webkitExitFullscreen) {
                 document.webkitExitFullscreen();
             } else if (document.mozCancelFullScreen) {
@@ -898,7 +898,7 @@ window.addEventListener('load', () => {
         } else {
             // Enter fullscreen
             if (videoWithOverlay.requestFullscreen) {
-                videoWithOverlay.requestFullscreen();
+                videoWithOverlay.requestFullscreen().catch(err => console.warn('Fullscreen not available:', err.message));
             } else if (videoWithOverlay.webkitRequestFullscreen) {
                 videoWithOverlay.webkitRequestFullscreen();
             } else if (videoWithOverlay.mozRequestFullScreen) {
@@ -923,6 +923,14 @@ window.addEventListener('load', () => {
             toggleFullscreen();
         }
     });
+
+    // Fullscreen button click handler
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    if (fullscreenBtn) {
+        fullscreenBtn.addEventListener('click', () => {
+            toggleFullscreen();
+        });
+    }
 
     // Get local audio stream with echo cancellation enabled
     async function getLocalStream() {
