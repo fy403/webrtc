@@ -392,8 +392,8 @@
                 <div class="control-panel">
                     <div class="connection-info">
                         <div id="connStatus"><span class="status-dot dot-red"></span><span
-                                class="mono">DISCONNECTED</span></div>
-                        <div class="hint" style="visibility: hidden;">TARGET: <span class="mono"
+                                class="mono privacy-mask-text">DISCONNECTED</span></div>
+                        <div class="hint" style="visibility: hidden;">TARGET: <span class="mono privacy-mask-text"
                                 id="endpointText">ws://fy403.cn:8766</span>
                         </div>
                     </div>
@@ -402,12 +402,13 @@
                         <button class="btn" id="reconnectBtn">RECONNECT</button>
                         <button class="btn" id="muteMicBtn" title="MUTE MICROPHONE">🎤</button>
                         <button class="btn" id="muteSpeakerBtn" title="MUTE SPEAKER">🔊</button>
+                        <button class="btn" id="fullscreenBtn" title="FULLSCREEN (F)">⛶</button>
                         <button class="btn" id="helperLinesBtn" title="TOGGLE HELPER LINES">📐</button>
+                        <button class="btn" id="imuTrajectoryBtn" title="IMU 3D TRAJECTORY">🧭</button>
                         <button class="btn" id="rotateBtn" title="ROTATE VIDEO">🔄</button>
                         <button class="btn" id="clockBtn" title="PRECISION CLOCK">🕐</button>
+                        <button class="btn" id="privacyBtn" title="PRIVACY MODE">🔒</button>
                         <button class="btn" id="curveBtn" title="SPEED CURVE">📈</button>
-                        <button class="btn" id="imuTrajectoryBtn" title="IMU 3D TRAJECTORY">🧭</button>
-                        <button class="btn" id="fullscreenBtn" title="FULLSCREEN (F)">⛶</button>
                         <button class="btn" id="configBtn" title="CONFIG">⚙️</button>
                     </div>
                 </div>
@@ -553,13 +554,13 @@
                 <div class="connection-info">
                     <div class="info-row">
                         <span class="label">LOCAL ID:</span>
-                        <span class="value mono" id="localId">--</span>
+                        <span class="value mono privacy-mask-text" id="localId">--</span>
                     </div>
                     <div class="info-row">
                         <span class="label">STATUS:</span>
-                        <span class="status-text" id="status">NOT CONNECTED</span>
+                        <span class="status-text privacy-mask-text" id="status">NOT CONNECTED</span>
                     </div>
-                    <div class="info-row connect-control">
+                    <div class="info-row connect-control remote-id-row">
                         <span class="badge">REMOTE ID:</span>
                         <input class="input mono input-compact" id="offerId" placeholder="remote ID"
                             value="" />
@@ -601,13 +602,13 @@
                 <div class="connection-info">
                     <div class="info-row">
                         <span class="label">LOCAL ID:</span>
-                        <span class="value mono" id="dataLocalId">--</span>
+                        <span class="value mono privacy-mask-text" id="dataLocalId">--</span>
                     </div>
                     <div class="info-row">
                         <span class="label">STATUS:</span>
-                        <span class="status-text" id="dataStatus">NOT CONNECTED</span>
+                        <span class="status-text privacy-mask-text" id="dataStatus">NOT CONNECTED</span>
                     </div>
-                    <div class="info-row connect-control">
+                    <div class="info-row connect-control remote-id-row">
                         <span class="badge">REMOTE ID:</span>
                         <input class="input mono input-compact" id="dataOfferId" placeholder="remote ID"
                             value="" />
@@ -650,13 +651,13 @@
                 <div class="connection-info">
                     <div class="info-row">
                         <span class="label">LOCAL ID:</span>
-                        <span class="value mono" id="cmdLocalId">--</span>
+                        <span class="value mono privacy-mask-text" id="cmdLocalId">--</span>
                     </div>
                     <div class="info-row">
                         <span class="label">STATUS:</span>
-                        <span class="status-text" id="cmdStatus">NOT CONNECTED</span>
+                        <span class="status-text privacy-mask-text" id="cmdStatus">NOT CONNECTED</span>
                     </div>
-                    <div class="info-row connect-control">
+                    <div class="info-row connect-control remote-id-row">
                         <span class="badge">REMOTE ID:</span>
                         <input class="input mono input-compact" id="cmdOfferId" placeholder="remote ID"
                             value="" />
@@ -906,6 +907,34 @@
             if (configBtn) {
                 configBtn.addEventListener('click', function() {
                     window.open('config.html', 'config', 'width=900,height=700,scrollbars=yes,resizable=yes');
+                });
+            }
+
+            // 初始化隐私模式按钮
+            const PRIVACY_KEY = 'webrtc_privacy_mode';
+            const privacyBtn = document.getElementById('privacyBtn');
+            if (privacyBtn) {
+                // 从 localStorage 恢复隐私模式状态
+                const privacyEnabled = localStorage.getItem(PRIVACY_KEY) === 'true';
+                if (privacyEnabled) {
+                    document.body.classList.add('privacy-mode');
+                    privacyBtn.classList.add('btn-active');
+                    privacyBtn.textContent = '🔓';
+                    privacyBtn.title = 'PRIVACY MODE (ON)';
+                }
+
+                privacyBtn.addEventListener('click', function() {
+                    const isActive = document.body.classList.toggle('privacy-mode');
+                    if (isActive) {
+                        privacyBtn.classList.add('btn-active');
+                        privacyBtn.textContent = '🔓';
+                        privacyBtn.title = 'PRIVACY MODE (ON)';
+                    } else {
+                        privacyBtn.classList.remove('btn-active');
+                        privacyBtn.textContent = '🔒';
+                        privacyBtn.title = 'PRIVACY MODE';
+                    }
+                    localStorage.setItem(PRIVACY_KEY, isActive.toString());
                 });
             }
 

@@ -209,6 +209,7 @@ window.addEventListener('load', () => {
         attitudePitch: 0,
         attitudeRoll: 0,
         attitudeYaw: 0,
+        hasImuHeading: false,   // true when IMU yaw data has been received
     };
 
     let uiSpeed = 0;
@@ -546,15 +547,26 @@ window.addEventListener('load', () => {
         // 更新CPU状态 - 显示百分比数值
         updateStatusItem('cpu', cpuUsage, cpuUsage, '%', 80);
 
-        // 更新内存状态 - 显示已用MB数
+        // 更新内存状态 - 超过1024MB显示GB
         const memPercent = memTotal > 0 ? (memUsed / memTotal) * 100 : 0;
-        const memValueText = memUsed > 0 ? `${memUsed} MB` : '0 MB';
+        let memValueText = '0 MB';
+        if (memUsed > 0) {
+            if (memUsed >= 1024) {
+                memValueText = `${(memUsed / 1024).toFixed(2)} GB`;
+            } else {
+                memValueText = `${memUsed} MB`;
+            }
+        }
         updateStatusItem('mem', memPercent, memValueText, 90);
 
         // 更新连接数
         const connCountElement = document.getElementById('connCount');
+        const connStatusItem = connCountElement?.closest('.status-item');
         if (connCountElement) {
             connCountElement.textContent = connectionCount || 0;
+        }
+        if (connStatusItem) {
+            connStatusItem.style.display = (connectionCount > 0) ? '' : 'none';
         }
     }
 
@@ -563,6 +575,13 @@ window.addEventListener('load', () => {
 
         const valueElement = document.getElementById(`${type}Value`);
         const barElement = document.getElementById(`${type}Bar`);
+
+        // 值为0时隐藏整个面板
+        const statusItem = valueElement?.closest('.status-item');
+        if (statusItem) {
+            statusItem.style.display = (percent > 0) ? '' : 'none';
+        }
+        if (!statusItem || percent <= 0) return;
 
         if (valueElement) {
             if (typeof displayValue === 'number') {
@@ -576,7 +595,6 @@ window.addEventListener('load', () => {
             barElement.style.width = `${percent}%`;
 
             // 根据负载改变颜色
-            const statusItem = barElement.closest('.status-item');
             if (statusItem) {
                 if (percent >= highLoadThreshold) {
                     statusItem.classList.add('high-load');
@@ -638,13 +656,16 @@ window.addEventListener('load', () => {
             dataSystemStatus.connectionCount = parseInt(statusData.connection_count);
         }
 
-        // ---- IMU 数据（轨迹计算） ----
+        // ---- IMU 数据（轨迹计算 / 水平方向） ----
         if (statusData.accel_ax !== undefined) dataSystemStatus.accelAx = parseFloat(statusData.accel_ax);
         if (statusData.accel_ay !== undefined) dataSystemStatus.accelAy = parseFloat(statusData.accel_ay);
         if (statusData.accel_az !== undefined) dataSystemStatus.accelAz = parseFloat(statusData.accel_az);
         if (statusData.attitude_pitch !== undefined) dataSystemStatus.attitudePitch = parseFloat(statusData.attitude_pitch);
         if (statusData.attitude_roll !== undefined) dataSystemStatus.attitudeRoll = parseFloat(statusData.attitude_roll);
-        if (statusData.attitude_yaw !== undefined) dataSystemStatus.attitudeYaw = parseFloat(statusData.attitude_yaw);
+        if (statusData.attitude_yaw !== undefined) {
+            dataSystemStatus.attitudeYaw = parseFloat(statusData.attitude_yaw);
+            dataSystemStatus.hasImuHeading = true;   // 标记已收到 IMU 航向数据
+        }
 
         // 喂入轨迹计算器
         if (window.imuTrajectory) {
@@ -772,8 +793,9 @@ window.addEventListener('load', () => {
             }
         }
 
-        // 计算当前方向角度（相对于起点的方位角）
-        let bearing = 0;
+        // 计算 GPS 方位角（从起点到当前位置），用于 H 标记定位
+        let gpsBearing = 0;
+        let hasGpsBearing = false;
 
         if (dataSystemStatus.homeLatitude !== null && dataSystemStatus.homeLongitude !== null &&
             dataSystemStatus.gpsLatitude !== 0 && dataSystemStatus.gpsLongitude !== 0) {
@@ -787,15 +809,16 @@ window.addEventListener('load', () => {
             const x = Math.sin(dLon) * Math.cos(lat2);
             const y = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
 
-            bearing = Math.atan2(x, y) * 180 / Math.PI;
-            bearing = (bearing + 360) % 360; // 转换为 0-360 度
+            gpsBearing = Math.atan2(x, y) * 180 / Math.PI;
+            gpsBearing = (gpsBearing + 360) % 360; // 转换为 0-360 度
+            hasGpsBearing = true;
 
             // 显示H标记
             radarHome.style.display = 'block';
 
             // 计算H在圆圈边缘的位置（相对于起点的相反方向）
             // 圆心(40,40), 外圈半径35, H标记放在内圈半径处确保不越界
-            const homeAngle = (bearing + 180) % 360;
+            const homeAngle = (gpsBearing + 180) % 360;
             const homeRadius = 25; // H标记距离中心的距离（内圈）
             const homeRad = (homeAngle - 90) * Math.PI / 180; // 调整角度以匹配SVG坐标系
             const homeX = Math.cos(homeRad) * homeRadius;
@@ -803,14 +826,29 @@ window.addEventListener('load', () => {
 
             radarHome.setAttribute('transform', `translate(40, 40) translate(${homeX}, ${homeY})`);
         } else {
-            // 没有GPS数据或没有起始位置时，箭头指向上方，H隐藏
-            bearing = 0;
+            // 没有GPS数据或没有起始位置时，H隐藏
             radarHome.style.display = 'none';
         }
 
-        // 转换为SVG旋转角度（0度指向上方，顺时针旋转）
-        const svgAngle = bearing - 90;
-        radarArrow.setAttribute('transform', `translate(40, 40) rotate(${svgAngle})`);
+        // 箭头方向：优先使用 IMU yaw（实时航向），无 IMU 时回退到 GPS 方位角
+        // 两者都不可用时隐藏箭头
+        if (!dataSystemStatus.hasImuHeading && !hasGpsBearing) {
+            radarArrow.style.display = 'none';
+        } else {
+            radarArrow.style.display = '';
+            let arrowBearing = 0;
+            if (dataSystemStatus.hasImuHeading) {
+                // IMU attitude_yaw 为水平方向角（0=北, 顺时针增加）
+                arrowBearing = dataSystemStatus.attitudeYaw;
+            } else {
+                // 回退：使用 GPS 计算的方位角
+                arrowBearing = gpsBearing;
+            }
+
+            // 箭头默认朝上=北，rotate(0)=北, rotate(90)=东, rotate(180)=南, rotate(270)=西
+            const svgAngle = arrowBearing;
+            radarArrow.setAttribute('transform', `translate(40, 40) rotate(${svgAngle})`);
+        }
     }
 
     // 初始化速度表盘刻度

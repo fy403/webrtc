@@ -422,6 +422,20 @@ body.mobile-layout {
     text-shadow: 0 0 10px var(--titan-primary) !important;
 }
 
+/* 隐私模式 - 隐藏RemoteID信息 */
+body.privacy-mode .remote-id-row {
+    display: none !important;
+}
+
+/* 隐私模式 - 敏感文本显示为*** */
+body.privacy-mode .privacy-mask-text {
+    font-size: 0 !important;
+}
+body.privacy-mode .privacy-mask-text::after {
+    content: '***';
+    font-size: 13px !important;
+}
+
 .btn-muted {
     background: linear-gradient(180deg, rgba(255, 69, 0, 0.3) 0%, rgba(255, 69, 0, 0.15) 100%) !important;
     border-color: var(--titan-warning) !important;
