@@ -667,15 +667,6 @@ window.addEventListener('load', () => {
             dataSystemStatus.hasImuHeading = true;   // 标记已收到 IMU 航向数据
         }
 
-        // 喂入轨迹计算器
-        if (window.imuTrajectory) {
-            window.imuTrajectory.update(
-                dataSystemStatus.accelAx, dataSystemStatus.accelAy, dataSystemStatus.accelAz,
-                dataSystemStatus.attitudePitch, dataSystemStatus.attitudeRoll, dataSystemStatus.attitudeYaw,
-                statusData.timestamp
-            );
-        }
-
         // 车辆速度
         if (statusData.gps_speed_kmh !== undefined) {
             dataSystemStatus.vehicleSpeed = parseFloat(statusData.gps_speed_kmh);

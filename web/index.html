@@ -18,7 +18,6 @@
     <script src="xbox_controller.js"></script>
     <script src="controller_manager.js"></script>
     <script src="channel_key_binder.js"></script>
-    <script src="imu_trajectory.js"></script>
     <script src="data_rtc.js"></script>
     <script src="cmd_rtc.js"></script>
     <!-- xterm.js for terminal rendering (UMD, creates global Terminal) -->
@@ -404,7 +403,6 @@
                         <button class="btn" id="muteSpeakerBtn" title="MUTE SPEAKER">🔊</button>
                         <button class="btn" id="fullscreenBtn" title="FULLSCREEN (F)">⛶</button>
                         <button class="btn" id="helperLinesBtn" title="TOGGLE HELPER LINES">📐</button>
-                        <button class="btn" id="imuTrajectoryBtn" title="IMU 3D TRAJECTORY">🧭</button>
                         <button class="btn" id="rotateBtn" title="ROTATE VIDEO">🔄</button>
                         <button class="btn" id="clockBtn" title="PRECISION CLOCK">🕐</button>
                         <button class="btn" id="privacyBtn" title="PRIVACY MODE">🔒</button>
@@ -1472,99 +1470,6 @@
         });
     </script>
 
-    <!-- IMU 2D Trajectory Panel (三视图) -->
-    <div id="imuTrajectoryPanel" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
-        z-index:10000; background:#0c0c1d; border:1px solid #00cc66; border-radius:8px;
-        box-shadow:0 0 30px rgba(0,204,102,0.3); flex-direction:column;">
-        <div style="display:flex; justify-content:space-between; align-items:center;
-            padding:8px 14px; background:#12122a; border-radius:7px 7px 0 0; border-bottom:1px solid #1a1a3a;">
-            <span style="color:#00ff88; font-family:monospace; font-size:13px; font-weight:bold;">IMU TRAJECTORY</span>
-            <div style="display:flex; gap:4px; align-items:center;">
-                <button class="imu-view-btn" data-view="all" style="background:#1a1a3a; color:#00ff88; border:1px solid #00ff88;
-                    padding:3px 8px; border-radius:4px; cursor:pointer; font-family:monospace; font-size:10px;
-                    box-shadow:0 0 6px rgba(0,255,136,0.4);">三视图</button>
-                <button class="imu-view-btn" data-view="top" style="background:#1a1a3a; color:#669988; border:1px solid #1a3a3a;
-                    padding:3px 8px; border-radius:4px; cursor:pointer; font-family:monospace; font-size:10px;">俯视</button>
-                <button class="imu-view-btn" data-view="front" style="background:#1a1a3a; color:#669988; border:1px solid #1a3a3a;
-                    padding:3px 8px; border-radius:4px; cursor:pointer; font-family:monospace; font-size:10px;">正视</button>
-                <button class="imu-view-btn" data-view="side" style="background:#1a1a3a; color:#669988; border:1px solid #1a3a3a;
-                    padding:3px 8px; border-radius:4px; cursor:pointer; font-family:monospace; font-size:10px;">侧视</button>
-                <span style="color:#1a3a3a; margin:0 4px;">|</span>
-                <button id="imuFollowBtn" style="background:#1a1a3a; color:#00ff88; border:1px solid #00ff88;
-                    padding:3px 8px; border-radius:4px; cursor:pointer; font-family:monospace; font-size:10px;"
-                    title="Toggle center-follow">跟随</button>
-                <button id="imuGravityBtn" style="background:#1a1a3a; color:#669988; border:1px solid #1a3a3a;
-                    padding:3px 8px; border-radius:4px; cursor:pointer; font-family:monospace; font-size:10px;"
-                    title="Subtract gravity (only if accel contains gravity)">重力</button>
-                <button id="imuTrajectoryResetBtn" style="background:#1a1a3a; color:#00cc66; border:1px solid #006633;
-                    padding:3px 8px; border-radius:4px; cursor:pointer; font-family:monospace; font-size:10px;"
-                    title="Reset trajectory">↺</button>
-                <button id="imuTrajectoryCloseBtn" style="background:#1a1a3a; color:#ff4444; border:1px solid #660000;
-                    padding:3px 8px; border-radius:4px; cursor:pointer; font-family:monospace; font-size:12px;"
-                    title="Close panel">✕</button>
-            </div>
-        </div>
-        <canvas id="imuTrajectoryCanvas" width="520" height="520"
-            style="display:block; background:#080818; border-radius:0 0 7px 7px; cursor:crosshair;"></canvas>
-    </div>
-
-    <script>
-        // IMU Trajectory panel toggle
-        (function() {
-            const btn = document.getElementById('imuTrajectoryBtn');
-            const panel = document.getElementById('imuTrajectoryPanel');
-            const closeBtn = document.getElementById('imuTrajectoryCloseBtn');
-            const resetBtn = document.getElementById('imuTrajectoryResetBtn');
-            const followBtn = document.getElementById('imuFollowBtn');
-            const gravityBtn = document.getElementById('imuGravityBtn');
-
-            function updateToggleBtn(el, active, activeText) {
-                if (!el) return;
-                el.style.borderColor = active ? '#00ff88' : '#1a3a3a';
-                el.style.color = active ? '#00ff88' : '#669988';
-                el.style.boxShadow = active ? '0 0 6px rgba(0,255,136,0.4)' : 'none';
-                if (activeText) el.textContent = activeText;
-            }
-
-            if (btn && panel && window.imuTrajectory) {
-                btn.addEventListener('click', function() {
-                    window.imuTrajectory.togglePanel('imuTrajectoryPanel');
-                    btn.style.borderColor = window.imuTrajectory.panelVisible ? '#00ff88' : '';
-                    btn.style.boxShadow = window.imuTrajectory.panelVisible ? '0 0 8px rgba(0,255,136,0.5)' : '';
-                    updateToggleBtn(followBtn, window.imuTrajectory.followCurrent);
-                    updateToggleBtn(gravityBtn, window.imuTrajectory.subtractGravity);
-                });
-
-                closeBtn.addEventListener('click', function() {
-                    window.imuTrajectory.hidePanel('imuTrajectoryPanel');
-                    btn.style.borderColor = '';
-                    btn.style.boxShadow = '';
-                });
-
-                resetBtn.addEventListener('click', function() {
-                    window.imuTrajectory.reset();
-                });
-
-                followBtn.addEventListener('click', function() {
-                    window.imuTrajectory.followCurrent = !window.imuTrajectory.followCurrent;
-                    updateToggleBtn(followBtn, window.imuTrajectory.followCurrent);
-                    if (window.imuTrajectory.panelVisible) window.imuTrajectory.draw();
-                });
-
-                gravityBtn.addEventListener('click', function() {
-                    window.imuTrajectory.subtractGravity = !window.imuTrajectory.subtractGravity;
-                    updateToggleBtn(gravityBtn, window.imuTrajectory.subtractGravity);
-                });
-
-                // 视图切换按钮
-                document.querySelectorAll('.imu-view-btn').forEach(vb => {
-                    vb.addEventListener('click', function() {
-                        window.imuTrajectory.setView(this.dataset.view);
-                    });
-                });
-            }
-        })();
-    </script>
 
 </body>
 
