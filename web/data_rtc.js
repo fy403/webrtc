@@ -182,6 +182,10 @@ window.addEventListener('load', () => {
         keyboardStatus: document.getElementById('keyboardStatus'),
         xboxStatus: document.getElementById('xboxStatus'),
         gyroStatus: document.getElementById('gyroStatus'),
+        batteryValue: document.getElementById('batteryValue'),
+        batteryBar: document.getElementById('batteryBar'),
+        batteryIcon: document.getElementById('batteryIcon'),
+        batteryChargeIcon: document.getElementById('batteryChargeIcon'),
     };
 
     // System status snapshot
@@ -194,6 +198,10 @@ window.addEventListener('load', () => {
         connectionCount: 0,
         vehicleSpeed: 0,
         lastUpdate: null,
+        // 电池数据
+        batteryLevel: -1,        // 电量百分比 (-1 表示未收到)
+        batteryCharging: false,  // 是否充电中
+        batteryReceived: false,  // 是否已收到过电池数据
         // GPS data
         gpsLatitude: 0,
         gpsLongitude: 0,
@@ -215,7 +223,7 @@ window.addEventListener('load', () => {
     let uiSpeed = 0;
     let lastSentState = { forward: 0, turn: 0 };
     let actualSentForward = 0; // 实际发送的油门值（经过限幅）
-    let heartbeatInterval = null;
+    // let heartbeatInterval = null;
     let controlInterval = null; // 定时发送控制帧，确保长按时持续发送
 
     // SBUS control pipeline
@@ -300,6 +308,7 @@ window.addEventListener('load', () => {
         }
     }
 
+    /*
     // 启动心跳机制：定期发送心跳包，保持DataChannel活跃
     // 心跳包只更新心跳时间，不调用电机控制
     function startHeartbeat() {
@@ -323,6 +332,7 @@ window.addEventListener('load', () => {
             heartbeatInterval = null;
         }
     }
+    */
 
     // 定时发送控制帧：只在有实际操作时持续发送（非中位），确保长按时数据不中断
     function startControlLoop() {
@@ -568,6 +578,41 @@ window.addEventListener('load', () => {
         if (connStatusItem) {
             connStatusItem.style.display = (connectionCount > 0) ? '' : 'none';
         }
+
+        // 更新电池状态（电量百分比 + 充电图标）
+        updateBatteryPanel();
+    }
+
+    function updateBatteryPanel() {
+        if (!dataSystemStatus.batteryReceived) return; // 未收到过电池数据则不显示
+
+        const {batteryLevel, batteryCharging} = dataSystemStatus;
+        const batteryItem = dataElements.batteryValue?.closest('.status-item');
+
+        // 显示电池块
+        if (batteryItem) batteryItem.style.display = '';
+
+        // 电量数值
+        if (dataElements.batteryValue) {
+            dataElements.batteryValue.textContent = `${Math.max(0, Math.min(100, batteryLevel))}%`;
+        }
+        // 电量进度条
+        if (dataElements.batteryBar) {
+            dataElements.batteryBar.style.width = `${Math.max(0, Math.min(100, batteryLevel))}%`;
+            // 低电量变红, 充电时变绿
+            if (batteryCharging) {
+                dataElements.batteryBar.style.background = '#32CD32';
+            } else if (batteryLevel <= 20) {
+                dataElements.batteryBar.style.background = '#FF4500';
+            } else {
+                dataElements.batteryBar.style.background = '';
+            }
+        }
+        // 充电图标切换
+        if (dataElements.batteryChargeIcon && dataElements.batteryIcon) {
+            dataElements.batteryChargeIcon.style.display = batteryCharging ? '' : 'none';
+            dataElements.batteryIcon.style.display = batteryCharging ? 'none' : '';
+        }
     }
 
     function updateStatusItem(type, value, displayValue, suffix, highLoadThreshold) {
@@ -651,6 +696,19 @@ window.addEventListener('load', () => {
             dataSystemStatus.memUsed = parseInt(statusData.mem_used_mb);
         }
 
+        // 电池信息
+        if (statusData.battery_level !== undefined) {
+            dataSystemStatus.batteryLevel = parseInt(statusData.battery_level);
+            dataSystemStatus.batteryReceived = true;
+        }
+        if (statusData.battery_charging !== undefined) {
+            dataSystemStatus.batteryCharging = (statusData.battery_charging === '1'
+                || statusData.battery_charging === 1
+                || statusData.battery_charging === true
+                || statusData.battery_charging === 'true');
+            dataSystemStatus.batteryReceived = true;
+        }
+
         // 连接数
         if (statusData.connection_count !== undefined) {
             dataSystemStatus.connectionCount = parseInt(statusData.connection_count);
@@ -705,26 +763,33 @@ window.addEventListener('load', () => {
     }
 
     function updateThrottleGauge(throttlePercent) {
-        const throttleProgress = document.getElementById('throttleGaugeProgress');
+        const ringFill = document.getElementById('throttleRingFill');
         const throttleValue = document.getElementById('throttleValue');
         
-        if (throttleProgress && throttleValue) {
-            // 仪表盘弧的总长度是 251.2 (2 * PI * 40 * 0.8)
-            const maxDash = 251.2;
+        if (ringFill && throttleValue) {
             const percent = Math.max(0, Math.min(100, throttlePercent));
-            const dashOffset = maxDash - (percent / 100) * maxDash;
+            // 圆周长 = 2 * PI * 60 ≈ 376.99
+            const circumference = 376.99;
+            const dashOffset = circumference - (percent / 100) * circumference;
             
-            throttleProgress.style.strokeDashoffset = dashOffset;
-            throttleValue.textContent = Math.round(percent);
+            ringFill.style.strokeDashoffset = dashOffset;
+            throttleValue.textContent = Math.round(percent) + '%';
             
             // 根据百分比改变颜色
+            let color, glow;
             if (percent >= 80) {
-                throttleProgress.style.stroke = '#FF4500';
+                color = '#ef4444';
+                glow = '0 0 8px rgba(239, 68, 68, 0.6)';
             } else if (percent >= 50) {
-                throttleProgress.style.stroke = '#FFA500';
+                color = '#f97316';
+                glow = '0 0 8px rgba(249, 115, 22, 0.6)';
             } else {
-                throttleProgress.style.stroke = '#32CD32';
+                color = '#22c55e';
+                glow = '0 0 8px rgba(34, 197, 94, 0.6)';
             }
+            ringFill.style.stroke = color;
+            throttleValue.style.color = color;
+            throttleValue.style.textShadow = glow;
         }
     }
 
@@ -961,7 +1026,7 @@ window.addEventListener('load', () => {
 
     // Send peer_close on page unload
     window.addEventListener('beforeunload', () => {
-        stopHeartbeat();
+        // stopHeartbeat();
         stopControlLoop();
         dataStopAutoReconnect(); // 页面卸载时停止自动重连
         dataStopWsReconnect(); // 页面卸载时停止 WebSocket 重连
@@ -1215,8 +1280,8 @@ window.addEventListener('load', () => {
             // 重连时复位状态并发送中位值，防止残留旧值
             lastSentState = { forward: 0, turn: 0 };
             dataSendSbus(0, 0);
-            // 启动心跳和控制循环
-            startHeartbeat();
+            // 启动控制循环
+            // startHeartbeat();
             startControlLoop();
             dataStopAutoReconnect(); // 数据通道打开，停止自动重连
         };
@@ -1225,8 +1290,8 @@ window.addEventListener('load', () => {
             if (dataCurrentDataChannel === dc) {
                 dataCurrentDataChannel = null;
                 dataUpdateConnStatus('disconnected', 'DISCONNECTED');
-                // 停止心跳和控制循环
-                stopHeartbeat();
+                // 停止控制循环
+                // stopHeartbeat();
                 stopControlLoop();
                 // 启动自动重连
                 if (dataSignalingWs) {
