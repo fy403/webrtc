@@ -334,15 +334,12 @@ window.addEventListener('load', () => {
     }
     */
 
-    // 定时发送控制帧：只在有实际操作时持续发送（非中位），确保长按时数据不中断
+    // 定时发送控制帧：始终发送（包括中位），保持 Android 端 watchdog 不触发
     function startControlLoop() {
         if (controlInterval) clearInterval(controlInterval);
         controlInterval = setInterval(() => {
             if (dataCurrentDataChannel && dataCurrentDataChannel.readyState === 'open') {
-                // 只有非中位（有操作）时才发送控制帧
-                if (lastSentState.forward !== 0 || lastSentState.turn !== 0) {
-                    dataSendSbus(lastSentState.forward, lastSentState.turn);
-                }
+                dataSendSbus(lastSentState.forward, lastSentState.turn);
             }
         }, 50); // 20Hz
     }
@@ -680,8 +677,9 @@ window.addEventListener('load', () => {
     function dataHandleSystemStatusData(statusData) {
         // console.log("Data: ", statusData)
         if (!statusData) return;
-        if (statusData.rx_speed !== undefined) dataSystemStatus.rxSpeed = (parseInt(statusData.rx_speed) * 8) / 100;
-        if (statusData.tx_speed !== undefined) dataSystemStatus.txSpeed = (parseInt(statusData.tx_speed) * 8) / 100;
+        // 网速：Android 发送 bps，直接用于显示（Kbps = bps / 1000）
+        if (statusData.rx_speed !== undefined) dataSystemStatus.rxSpeed = parseInt(statusData.rx_speed) / 1000;
+        if (statusData.tx_speed !== undefined) dataSystemStatus.txSpeed = parseInt(statusData.tx_speed) / 1000;
 
         // CPU信息
         if (statusData.cpu_usage !== undefined) {

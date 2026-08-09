@@ -33,7 +33,9 @@
 <div class="main">
   <!-- Video -->
   <div class="video-area" id="videoArea">
-    <video id="remoteVideo" autoplay playsinline muted></video>
+    <video id="remoteVideo" autoplay playsinline muted
+      style="image-rendering:crisp-edges;-webkit-transform:translateZ(0);"
+      preload="auto" x-webkit-airplay="deny"></video>
     <div class="no-signal-overlay" id="noSignal">等待视频流...</div>
     <div class="video-stats-overlay" id="videoOverlayStats"></div>
     <!-- 实时时钟 -->
@@ -418,11 +420,18 @@ function createPeerConnection(id) {
         log('contentHint 设置失败: ' + ex.message, 'warn');
       }
 
-      // ====== 优化: 配置 transceiver 优先级和降级策略 ======
+      // ====== 优化: 配置 transceiver 低延迟 ======
       if (e.transceiver) {
         try {
-          // 设置 transceiver 方向为 recvonly（只接收）
           e.transceiver.direction = 'recvonly';
+
+          // 设置 playoutDelayHint = 0（最小播放延迟）
+          try {
+            e.transceiver.receiver.playoutDelayHint = 0.0;
+            log('✅ playoutDelayHint 设为 0 (最小播放延迟)');
+          } catch(ex) {
+            log('playoutDelayHint 不支持: ' + ex.message, 'warn');
+          }
 
           // 设置 receiver 参数（如果浏览器支持）
           const receiverParams = e.transceiver.receiver.getParameters();
