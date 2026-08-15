@@ -17,3 +17,6 @@ av_track/.history
 recv/mcp/node_modules/
 recv/mcp/dist/
 recv/*.py
+
+signaling_server/golang/
+turn_server/pion
