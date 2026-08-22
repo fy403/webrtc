@@ -31,11 +31,13 @@
     <div class="github-star-banner" id="githubStarBanner">
         <a href="https://github.com/fy403/webrtc" target="_blank" class="github-star-link">
             <svg class="github-icon" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                <path
+                    d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
             </svg>
             <span class="github-star-text">If you find this project helpful, please star it on GitHub</span>
             <svg class="star-icon" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                <path
+                    d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
             </svg>
         </a>
         <button class="close-banner" id="closeGithubBanner" title="关闭">&times;</button>
@@ -60,24 +62,33 @@
                             <div class="gps-radar" id="gpsRadar" title="GPS方位">
                                 <svg class="radar-svg" viewBox="0 0 80 80">
                                     <!-- 雷达圆圈背景 -->
-                                    <circle class="radar-circle-outer" cx="40" cy="40" r="35" fill="none" stroke="rgba(0, 165, 0, 0.3)" stroke-width="1"/>
-                                    <circle class="radar-circle-middle" cx="40" cy="40" r="25" fill="none" stroke="rgba(0, 165, 0, 0.5)" stroke-width="1"/>
-                                    <circle class="radar-circle-inner" cx="40" cy="40" r="15" fill="none" stroke="rgba(0, 165, 0, 0.8)" stroke-width="1"/>
+                                    <circle class="radar-circle-outer" cx="40" cy="40" r="35" fill="none"
+                                        stroke="rgba(0, 165, 0, 0.3)" stroke-width="1" />
+                                    <circle class="radar-circle-middle" cx="40" cy="40" r="25" fill="none"
+                                        stroke="rgba(0, 165, 0, 0.5)" stroke-width="1" />
+                                    <circle class="radar-circle-inner" cx="40" cy="40" r="15" fill="none"
+                                        stroke="rgba(0, 165, 0, 0.8)" stroke-width="1" />
                                     <!-- 方向箭头 -->
                                     <g class="radar-arrow" id="radarArrow" transform="translate(40, 40)">
-                                        <polygon points="0,-10 -6,6 0,2 6,6" fill="#FF4500"/>
+                                        <polygon points="0,-10 -6,6 0,2 6,6" fill="#FF4500" />
                                     </g>
-                                <!-- H标记（起点） -->
-                                <g class="radar-home" id="radarHome" transform="translate(40, 40)" style="display: none;">
-                                    <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="var(--titan-primary)" font-size="14" font-weight="900">H</text>
-                                </g>
+                                    <!-- H标记（起点） -->
+                                    <g class="radar-home" id="radarHome" transform="translate(40, 40)"
+                                        style="display: none;">
+                                        <text x="0" y="0" text-anchor="middle" dominant-baseline="central"
+                                            fill="var(--titan-primary)" font-size="14" font-weight="900">H</text>
+                                    </g>
                                     <!-- 中心点 -->
                                     <!-- <circle cx="40" cy="40" r="3" fill="var(--titan-primary)"/> -->
                                     <!-- 刻度线 -->
-                                    <line x1="40" y1="5" x2="40" y2="12" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1"/>
-                                    <line x1="40" y1="68" x2="40" y2="75" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1"/>
-                                    <line x1="5" y1="40" x2="12" y2="40" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1"/>
-                                    <line x1="68" y1="40" x2="75" y2="40" stroke="rgba(255, 255, 255, 0.3)" stroke-width="1"/>
+                                    <line x1="40" y1="5" x2="40" y2="12" stroke="rgba(255, 255, 255, 0.3)"
+                                        stroke-width="1" />
+                                    <line x1="40" y1="68" x2="40" y2="75" stroke="rgba(255, 255, 255, 0.3)"
+                                        stroke-width="1" />
+                                    <line x1="5" y1="40" x2="12" y2="40" stroke="rgba(255, 255, 255, 0.3)"
+                                        stroke-width="1" />
+                                    <line x1="68" y1="40" x2="75" y2="40" stroke="rgba(255, 255, 255, 0.3)"
+                                        stroke-width="1" />
                                 </svg>
                             </div>
                             <div class="gps-coords" id="gpsCoords">
@@ -85,7 +96,8 @@
                             </div>
                             <div class="gps-toggle" id="gpsToggle" title="显示/隐藏经纬度">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="12" cy="12" r="3"/><path d="M12 5v2M12 17v2M5 12h2M17 12h2"/>
+                                    <circle cx="12" cy="12" r="3" />
+                                    <path d="M12 5v2M12 17v2M5 12h2M17 12h2" />
                                 </svg>
                             </div>
                         </div>
@@ -132,7 +144,8 @@
                     <!-- 右上角 - 视频参数面板 -->
                     <div class="video-stats-panel" id="videoStatsPanel">
                         <div class="video-stats-header">
-                            <svg class="video-stats-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg class="video-stats-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
                                 <rect height="16" rx="2" width="20" x="2" y="4" />
                                 <polygon points="10 8 16 12 10 16 10 8" />
                             </svg>
@@ -182,16 +195,21 @@
                                     <!-- 仪表盘背景 -->
                                     <!-- <path class="speed-gauge-bg" d="M 30 150 A 120 120 0 1 1 270 150" fill="none" stroke="#1a1a1a" stroke-width="20"/> -->
                                     <!-- 油门比例圆环 (内嵌) -->
-                                    <circle class="throttle-ring-bg" cx="150" cy="150" r="60" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="6"/>
-                                    <circle class="throttle-ring-fill" id="throttleRingFill" cx="150" cy="150" r="60" fill="none" stroke="#32CD32" stroke-width="6" stroke-linecap="round" stroke-dasharray="376.99" stroke-dashoffset="376.99" transform="rotate(90 150 150)"/>
+                                    <circle class="throttle-ring-bg" cx="150" cy="150" r="60" fill="none"
+                                        stroke="rgba(255,255,255,0.06)" stroke-width="6" />
+                                    <circle class="throttle-ring-fill" id="throttleRingFill" cx="150" cy="150" r="60"
+                                        fill="none" stroke="#32CD32" stroke-width="6" stroke-linecap="round"
+                                        stroke-dasharray="376.99" stroke-dashoffset="376.99"
+                                        transform="rotate(90 150 150)" />
                                     <!-- 速度刻度 -->
                                     <g id="speedTicks"></g>
                                     <!-- 速度数字 -->
                                     <g id="speedNumbers"></g>
                                     <!-- 指针 -->
                                     <g class="pointer-group">
-                                        <line class="pointer-line" id="speedPointer" x1="150" y1="150" x2="150" y2="50" stroke="#FF4500" stroke-width="4" stroke-linecap="round"/>
-                                        <circle class="pointer-center" cx="150" cy="150" r="8" fill="#FF4500"/>
+                                        <line class="pointer-line" id="speedPointer" x1="150" y1="150" x2="150" y2="50"
+                                            stroke="#FF4500" stroke-width="4" stroke-linecap="round" />
+                                        <circle class="pointer-center" cx="150" cy="150" r="8" fill="#FF4500" />
                                     </g>
                                 </svg>
                                 <div class="speed-display-value">
@@ -211,11 +229,12 @@
                         <!-- CPU -->
                         <div class="status-item cpu-status">
                             <div class="status-icon-circle">
-                                <svg class="status-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="4" y="4" width="16" height="16" rx="2"/>
-                                    <line x1="9" y1="9" x2="9" y2="9"/>
-                                    <line x1="15" y1="9" x2="15" y2="9"/>
-                                    <line x1="9" y1="15" x2="15" y2="15"/>
+                                <svg class="status-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <rect x="4" y="4" width="16" height="16" rx="2" />
+                                    <line x1="9" y1="9" x2="9" y2="9" />
+                                    <line x1="15" y1="9" x2="15" y2="9" />
+                                    <line x1="9" y1="15" x2="15" y2="15" />
                                 </svg>
                             </div>
                             <div class="status-item-content">
@@ -231,10 +250,11 @@
                         <!-- Memory -->
                         <div class="status-item memory-status">
                             <div class="status-icon-circle">
-                                <svg class="status-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M4 6h16v12H4z"/>
-                                    <line x1="4" y1="10" x2="20" y2="10"/>
-                                    <line x1="4" y1="14" x2="20" y2="14"/>
+                                <svg class="status-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M4 6h16v12H4z" />
+                                    <line x1="4" y1="10" x2="20" y2="10" />
+                                    <line x1="4" y1="14" x2="20" y2="14" />
                                 </svg>
                             </div>
                             <div class="status-item-content">
@@ -249,12 +269,14 @@
                         <!-- Battery -->
                         <div class="status-item battery-status" style="display:none">
                             <div class="status-icon-circle">
-                                <svg class="status-item-icon" id="batteryChargeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
-                                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                                <svg class="status-item-icon" id="batteryChargeIcon" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" style="display:none">
+                                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                                 </svg>
-                                <svg class="status-item-icon" id="batteryIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="2" y="7" width="16" height="10" rx="2"/>
-                                    <line x1="22" y1="11" x2="22" y2="13"/>
+                                <svg class="status-item-icon" id="batteryIcon" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="7" width="16" height="10" rx="2" />
+                                    <line x1="22" y1="11" x2="22" y2="13" />
                                 </svg>
                             </div>
                             <div class="status-item-content">
@@ -269,11 +291,12 @@
                         <!-- Connection Count -->
                         <div class="status-item connection-status">
                             <div class="status-icon-circle">
-                                <svg class="status-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                                    <circle cx="9" cy="7" r="4"/>
-                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                                <svg class="status-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                    <circle cx="9" cy="7" r="4" />
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                                 </svg>
                             </div>
                             <div class="status-item-content">
@@ -287,15 +310,17 @@
                     <div class="status-overlay bottom-overlay" id="statusBar">
                         <div class="network-speed-container">
                             <div class="network-speed-item tx-speed">
-                                <svg class="network-speed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M12 19V5M5 12l7-7 7 7"/>
+                                <svg class="network-speed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M12 19V5M5 12l7-7 7 7" />
                                 </svg>
                                 <div class="network-speed-value" id="txSpeed">0</div>
                                 <div class="network-speed-unit" id="txSpeedUnit">Kbps</div>
                             </div>
                             <div class="network-speed-item rx-speed">
-                                <svg class="network-speed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M12 5v14M5 12l7 7 7-7"/>
+                                <svg class="network-speed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M12 5v14M5 12l7 7 7-7" />
                                 </svg>
                                 <div class="network-speed-value" id="rxSpeed">0</div>
                                 <div class="network-speed-unit" id="rxSpeedUnit">Kbps</div>
@@ -384,7 +409,8 @@
                             <div class="clock-title">北京时间精确到毫秒</div>
                             <div class="clock-date" id="clockDate"></div>
                             <div class="clock-sync">本时间同步国家授时中心精确到毫秒</div>
-                            <div class="clock-time" id="clockTime"><span id="clockTimeMain"></span><span class="clock-ms">.<span id="clockMs"></span></span></div>
+                            <div class="clock-time" id="clockTime"><span id="clockTimeMain"></span><span
+                                    class="clock-ms">.<span id="clockMs"></span></span></div>
                         </div>
                         <!-- 画质切换提示（inside video-container, visible in fullscreen） -->
                         <div id="qualityToast" class="quality-toast"></div>
@@ -567,9 +593,9 @@
                     </div>
                     <div class="info-row connect-control remote-id-row">
                         <span class="badge">REMOTE ID:</span>
-                        <input class="input mono input-compact" id="offerId" placeholder="remote ID"
-                            value="" />
+                        <input class="input mono input-compact" id="offerId" placeholder="remote ID" value="" />
                         <button class="btn btn-compact" id="offerBtn">CONNECT</button>
+                        <button class="btn btn-compact btn-disconnect" id="disconnectBtn">DISCONNECT</button>
                     </div>
                     <!-- ICE 连接详细信息 -->
                     <div class="ice-info-section">
@@ -615,9 +641,9 @@
                     </div>
                     <div class="info-row connect-control remote-id-row">
                         <span class="badge">REMOTE ID:</span>
-                        <input class="input mono input-compact" id="dataOfferId" placeholder="remote ID"
-                            value="" />
+                        <input class="input mono input-compact" id="dataOfferId" placeholder="remote ID" value="" />
                         <button class="btn btn-compact" id="dataOfferBtn">CONNECT</button>
+                        <button class="btn btn-compact btn-disconnect" id="dataDisconnectBtn">DISCONNECT</button>
                     </div>
                     <!-- ICE 连接详细信息 -->
                     <div class="ice-info-section">
@@ -664,9 +690,9 @@
                     </div>
                     <div class="info-row connect-control remote-id-row">
                         <span class="badge">REMOTE ID:</span>
-                        <input class="input mono input-compact" id="cmdOfferId" placeholder="remote ID"
-                            value="" />
+                        <input class="input mono input-compact" id="cmdOfferId" placeholder="remote ID" value="" />
                         <button class="btn btn-compact" id="cmdOfferBtn">CONNECT</button>
+                        <button class="btn btn-compact btn-disconnect" id="cmdDisconnectBtn">DISCONNECT</button>
                     </div>
                     <!-- ICE 连接详细信息 -->
                     <div class="ice-info-section">
@@ -698,9 +724,12 @@
                 <button class="btn btn-apply" id="applyVideoConfigBtn">APPLY</button>
             </div>
             <div class="quality-preset-bar" id="qualityPresetBar" style="margin-bottom:10px; gap:6px;">
-                <button class="quality-preset-btn active" data-preset="medium" data-fps="30" data-bitrate="4000000" tabindex="0">中画质</button>
-                <button class="quality-preset-btn" data-preset="low" data-fps="15" data-bitrate="1000000" tabindex="-1">低画质</button>
-                <button class="quality-preset-btn" data-preset="high" data-fps="60" data-bitrate="8000000" tabindex="-1">高画质</button>
+                <button class="quality-preset-btn active" data-preset="medium" data-fps="30" data-bitrate="4000000"
+                    tabindex="0">中画质</button>
+                <button class="quality-preset-btn" data-preset="low" data-fps="15" data-bitrate="1000000"
+                    tabindex="-1">低画质</button>
+                <button class="quality-preset-btn" data-preset="high" data-fps="60" data-bitrate="8000000"
+                    tabindex="-1">高画质</button>
                 <span class="quality-hint" title="按 V 键快速切换画质">V</span>
             </div>
             <div class="config-row">
@@ -713,8 +742,8 @@
                         <option value="60">60</option>
                         <option value="__custom__">Custom...</option>
                     </select>
-                    <input type="number" class="config-custom-input" id="fpsCustomInput"
-                           placeholder="1-120" min="1" max="120" style="display:none;">
+                    <input type="number" class="config-custom-input" id="fpsCustomInput" placeholder="1-120" min="1"
+                        max="120" style="display:none;">
                 </div>
                 <div class="config-group">
                     <label class="config-label">BITRATE (BPS)</label>
@@ -725,8 +754,8 @@
                         <option value="8000000">8 Mbps</option>
                         <option value="__custom__">Custom...</option>
                     </select>
-                    <input type="number" class="config-custom-input" id="bitrateCustomInput"
-                           placeholder="Mbps" min="0.1" max="100" step="0.1" style="display:none;">
+                    <input type="number" class="config-custom-input" id="bitrateCustomInput" placeholder="Mbps"
+                        min="0.1" max="100" step="0.1" style="display:none;">
                 </div>
             </div>
         </div>
@@ -740,7 +769,7 @@
             <div class="corner-decoration top-right"></div>
             <div class="corner-decoration bottom-left"></div>
             <div class="corner-decoration bottom-right"></div>
-            
+
             <div class="terminal-header">
                 <div class="terminal-header-left">
                     <span class="status-dot dot-red" id="shellStatusDot"></span>
@@ -749,12 +778,13 @@
                 </div>
                 <div class="terminal-header-right">
                     <button class="terminal-restart-btn" id="restartAvBtn" title="重启音视频容器 (webrtc_av_track)">AV</button>
-                    <button class="terminal-restart-btn" id="restartDataBtn" title="重启控制信号容器 (webrtc_data_track)">DT</button>
+                    <button class="terminal-restart-btn" id="restartDataBtn"
+                        title="重启控制信号容器 (webrtc_data_track)">DT</button>
                     <button class="terminal-kill-btn" id="shellKillBtn" title="Ctrl+C (SIGINT)">C</button>
                     <button class="terminal-toggle-btn" id="shellTerminalToggleBtn" title="折叠终端">_</button>
                 </div>
             </div>
-            
+
             <div class="terminal-xterm-container" id="terminalXtermContainer"></div>
         </div>
     </div>
@@ -766,7 +796,7 @@
             <div class="corner-decoration top-right"></div>
             <div class="corner-decoration bottom-left"></div>
             <div class="corner-decoration bottom-right"></div>
-            
+
             <div class="modal-header">
                 <h3>CHANNEL KEY BINDING</h3>
                 <button class="modal-close" id="closeBindingModal">&times;</button>
@@ -798,24 +828,28 @@
                     </div>
                     <div class="form-group" id="valueGroup">
                         <label>VALUE:</label>
-                        <input type="number" class="range-input" id="bindingValue" value="2000" step="1" min="1000" max="2000">
+                        <input type="number" class="range-input" id="bindingValue" value="2000" step="1" min="1000"
+                            max="2000">
                     </div>
                     <div class="form-group" id="continuousRangeGroup" style="display: none;">
                         <label>VALUE RANGE:</label>
                         <div class="range-inputs">
                             <div>
                                 <label>MIN:</label>
-                                <input type="number" class="range-input" id="bindingMinValue" value="1000" step="1" min="1000" max="2000">
+                                <input type="number" class="range-input" id="bindingMinValue" value="1000" step="1"
+                                    min="1000" max="2000">
                             </div>
                             <div>
                                 <label>MAX:</label>
-                                <input type="number" class="range-input" id="bindingMaxValue" value="2000" step="1" min="1000" max="2000">
+                                <input type="number" class="range-input" id="bindingMaxValue" value="2000" step="1"
+                                    min="1000" max="2000">
                             </div>
                         </div>
                     </div>
                     <div class="form-group" id="neutralValueGroup">
                         <label>NEUTRAL VALUE:</label>
-                        <input type="number" class="range-input" id="bindingNeutralValue" value="1500" step="1" min="1000" max="2000">
+                        <input type="number" class="range-input" id="bindingNeutralValue" value="1500" step="1"
+                            min="1000" max="2000">
                     </div>
                     <div class="form-group" id="invertGroup">
                         <label>INVERT:</label>
@@ -831,11 +865,14 @@
                             <select class="curve-select" id="bindingCurveSelect">
                                 <option value="linear">LINEAR</option>
                             </select>
-                            <button class="btn-curve-edit" id="bindingCurveEditBtn" title="Open Curve Editor">&#9998;</button>
+                            <button class="btn-curve-edit" id="bindingCurveEditBtn"
+                                title="Open Curve Editor">&#9998;</button>
                         </div>
                     </div>
                     <div class="binding-info">
-                        <strong>INSTRUCTIONS:</strong> Click on the key display area and press the desired key to bind. Use Single mode for on/off control or Continuous mode for variable control. Select a speed curve to control how fast the value ramps up when holding keys.
+                        <strong>INSTRUCTIONS:</strong> Click on the key display area and press the desired key to bind.
+                        Use Single mode for on/off control or Continuous mode for variable control. Select a speed curve
+                        to control how fast the value ramps up when holding keys.
                     </div>
                 </div>
             </div>
@@ -910,7 +947,7 @@
             // 初始化配置按钮
             const configBtn = document.getElementById('configBtn');
             if (configBtn) {
-                configBtn.addEventListener('click', function() {
+                configBtn.addEventListener('click', function () {
                     window.open('config.html', 'config', 'width=900,height=700,scrollbars=yes,resizable=yes');
                 });
             }
@@ -928,7 +965,7 @@
                     privacyBtn.title = 'PRIVACY MODE (ON)';
                 }
 
-                privacyBtn.addEventListener('click', function() {
+                privacyBtn.addEventListener('click', function () {
                     const isActive = document.body.classList.toggle('privacy-mode');
                     if (isActive) {
                         privacyBtn.classList.add('btn-active');
@@ -946,7 +983,7 @@
             // 初始化曲线编辑器按钮
             const curveBtn = document.getElementById('curveBtn');
             if (curveBtn) {
-                curveBtn.addEventListener('click', function() {
+                curveBtn.addEventListener('click', function () {
                     window.open('curve_editor.html', 'curveEditor', 'width=1200,height=800,scrollbars=yes,resizable=yes');
                 });
             }
@@ -958,8 +995,8 @@
                 // 默认不显示辅助线
                 helperLines.style.display = 'none';
                 helperLinesBtn.classList.remove('btn-active');
-                
-                helperLinesBtn.addEventListener('click', function() {
+
+                helperLinesBtn.addEventListener('click', function () {
                     if (helperLines.style.display === 'block') {
                         helperLines.style.display = 'none';
                         helperLinesBtn.classList.remove('btn-active');
@@ -1052,7 +1089,7 @@
             let clockVisible = false;
 
             if (clockBtn && precisionClock) {
-                clockBtn.addEventListener('click', function() {
+                clockBtn.addEventListener('click', function () {
                     if (clockVisible) {
                         cancelAnimationFrame(clockRafId);
                         clockRafId = null;
@@ -1097,7 +1134,7 @@
                 const h = String(now.getHours()).padStart(2, '0');
                 const m = String(now.getMinutes()).padStart(2, '0');
                 const s = String(now.getSeconds()).padStart(2, '0');
-                
+
                 // 毫秒用高精度时间戳（performance.now % 1000），连续递增不跳变
                 const msVal = Math.floor((t % 1000));
                 clockTimeMainEl.textContent = `${h}:${m}:${s}`;
@@ -1118,13 +1155,13 @@
 
             // 关闭按钮事件
             if (closeBtn) {
-                closeBtn.addEventListener('click', function() {
+                closeBtn.addEventListener('click', function () {
                     banner.style.display = 'none';
                 });
             }
 
             // 全屏时自动隐藏横幅
-            document.addEventListener('fullscreenchange', function() {
+            document.addEventListener('fullscreenchange', function () {
                 if (document.fullscreenElement) {
                     banner.style.display = 'none';
                 } else {
@@ -1143,7 +1180,7 @@
             channelWrappers.forEach(wrapper => {
                 const channelNum = parseInt(wrapper.getAttribute('data-channel'));
                 wrapper.style.cursor = 'pointer';
-                wrapper.addEventListener('click', function() {
+                wrapper.addEventListener('click', function () {
                     openBindingModal(channelNum);
                 });
             });
@@ -1292,18 +1329,18 @@
             }
 
             // 关闭模态框
-            document.getElementById('closeBindingModal').addEventListener('click', function() {
+            document.getElementById('closeBindingModal').addEventListener('click', function () {
                 modal.style.display = 'none';
                 stopKeyCapture();
             });
 
-            document.getElementById('cancelBinding').addEventListener('click', function() {
+            document.getElementById('cancelBinding').addEventListener('click', function () {
                 modal.style.display = 'none';
                 stopKeyCapture();
             });
 
             // 删除绑定
-            document.getElementById('deleteBinding').addEventListener('click', function() {
+            document.getElementById('deleteBinding').addEventListener('click', function () {
                 if (!currentChannelNum || !window.channelKeyBinder) return;
 
                 if (confirm(`Are you sure you want to delete the binding for CH${currentChannelNum}?`)) {
@@ -1315,7 +1352,7 @@
             });
 
             // 保存绑定
-            document.getElementById('saveBinding').addEventListener('click', function() {
+            document.getElementById('saveBinding').addEventListener('click', function () {
                 if (!currentChannelNum || !window.channelKeyBinder) return;
 
                 const type = document.getElementById('bindingTypeSelect').value;
@@ -1389,20 +1426,20 @@
             }
 
             // 按键类型改变
-            document.getElementById('bindingTypeSelect').addEventListener('change', function() {
+            document.getElementById('bindingTypeSelect').addEventListener('change', function () {
                 updateFormByType(this.value);
             });
 
             // 曲线编辑按钮
             const curveEditBtn = document.getElementById('bindingCurveEditBtn');
             if (curveEditBtn) {
-                curveEditBtn.addEventListener('click', function() {
+                curveEditBtn.addEventListener('click', function () {
                     window.open('curve_editor.html', 'curveEditor', 'width=1200,height=800,scrollbars=yes,resizable=yes');
                 });
             }
 
             // 监听 storage 变化，刷新曲线列表（当曲线编辑器保存后）
-            window.addEventListener('storage', function(e) {
+            window.addEventListener('storage', function (e) {
                 if (e.key === 'customSpeedCurves') {
                     // 先重新加载自定义曲线，再刷新下拉列表和缓存
                     if (typeof speedCurveManager !== 'undefined' && speedCurveManager.reloadCustomCurves) {
@@ -1428,7 +1465,7 @@
                 targetDisplay.textContent = 'PRESS ANY KEY...';
                 targetDisplay.classList.add('recording');
 
-                keyCaptureHandler = function(e) {
+                keyCaptureHandler = function (e) {
                     e.preventDefault();
                     const code = e.code;
                     targetDisplay.textContent = formatKeyName(code);
@@ -1450,20 +1487,20 @@
             }
 
             // 为按键显示区域添加点击事件
-            document.getElementById('singleKeyDisplay').addEventListener('click', function() {
+            document.getElementById('singleKeyDisplay').addEventListener('click', function () {
                 startKeyCapture(this);
             });
 
-            document.getElementById('negativeKeyDisplay').addEventListener('click', function() {
+            document.getElementById('negativeKeyDisplay').addEventListener('click', function () {
                 startKeyCapture(this);
             });
 
-            document.getElementById('positiveKeyDisplay').addEventListener('click', function() {
+            document.getElementById('positiveKeyDisplay').addEventListener('click', function () {
                 startKeyCapture(this);
             });
 
             // 点击模态框外部关闭
-            modal.addEventListener('click', function(e) {
+            modal.addEventListener('click', function (e) {
                 if (e.target === modal) {
                     modal.style.display = 'none';
                     stopKeyCapture();
@@ -1472,7 +1509,7 @@
         }
 
         // 页面卸载时移除监听器
-        window.addEventListener('beforeunload', function() {
+        window.addEventListener('beforeunload', function () {
             window.removeEventListener('storage', handleConfigUpdate);
         });
     </script>

@@ -21,7 +21,9 @@ window.addEventListener('load', () => {
         cmdConfig = {
             signalingUrl: 'ws://localhost:8000',
             remoteId: '',
-            iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }]
+            iceServers: [{
+                urls: ['stun:stun.l.google.com:19302']
+            }]
         };
     }
 
@@ -73,8 +75,12 @@ window.addEventListener('load', () => {
     // ── Inline FitAddon (avoids CDN/CORS issues with module addons) ──
     const fitAddon = {
         _terminal: null,
-        activate(t) { this._terminal = t; },
-        dispose() { this._terminal = null; },
+        activate(t) {
+            this._terminal = t;
+        },
+        dispose() {
+            this._terminal = null;
+        },
         fit() {
             const t = this._terminal;
             if (!t || !t.element) return;
@@ -103,7 +109,11 @@ window.addEventListener('load', () => {
 
     // Fit terminal to container
     if (fitAddon) {
-        setTimeout(() => { try { fitAddon.fit(); } catch (e) {} }, 100);
+        setTimeout(() => {
+            try {
+                fitAddon.fit();
+            } catch (e) {}
+        }, 100);
     }
 
     // =========================================================================
@@ -118,6 +128,7 @@ window.addEventListener('load', () => {
     let cmdWsReconnectInterval = null;
     let cmdRttInterval = null;
     let cmdSessionActive = false;
+    let cmdManuallyDisconnected = false; // 手动断开标记：为 true 时禁止任何自动重连
 
     // =========================================================================
     // Connection Info Panel Elements
@@ -126,6 +137,7 @@ window.addEventListener('load', () => {
     const cmdStatusEl = document.getElementById('cmdStatus');
     const cmdOfferIdEl = document.getElementById('cmdOfferId');
     const cmdOfferBtnEl = document.getElementById('cmdOfferBtn');
+    const cmdDisconnectBtnEl = document.getElementById('cmdDisconnectBtn');
     const cmdIceStatusEl = document.getElementById('cmdIceStatus');
     const cmdConnectionTypeEl = document.getElementById('cmdConnectionType');
     const cmdRttEl = document.getElementById('cmdRtt');
@@ -202,17 +214,17 @@ window.addEventListener('load', () => {
                             }
 
                             // RTT
-                            const rttMs = report.currentRoundTripTime
-                                ? (report.currentRoundTripTime * 1000).toFixed(0) + ' ms' : '--';
+                            const rttMs = report.currentRoundTripTime ?
+                                (report.currentRoundTripTime * 1000).toFixed(0) + ' ms' : '--';
                             if (cmdRttEl) cmdRttEl.textContent = rttMs;
 
                             // Local IP
-                            const localAddr = localCand.address
-                                || localCand.ip || localCand.ipAddress || '--';
+                            const localAddr = localCand.address ||
+                                localCand.ip || localCand.ipAddress || '--';
                             const localPort = localCand.port || '';
                             if (cmdLocalCandEl) {
-                                cmdLocalCandEl.textContent = localPort
-                                    ? `${localAddr}:${localPort}` : localAddr;
+                                cmdLocalCandEl.textContent = localPort ?
+                                    `${localAddr}:${localPort}` : localAddr;
                                 cmdLocalCandEl.title =
                                     `Type: ${localType}\n` +
                                     `Protocol: ${localCand.protocol || '--'}\n` +
@@ -220,12 +232,12 @@ window.addEventListener('load', () => {
                             }
 
                             // Remote IP
-                            const remoteAddr = remoteCand.address
-                                || remoteCand.ip || remoteCand.ipAddress || '--';
+                            const remoteAddr = remoteCand.address ||
+                                remoteCand.ip || remoteCand.ipAddress || '--';
                             const remotePort = remoteCand.port || '';
                             if (cmdRemoteCandEl) {
-                                cmdRemoteCandEl.textContent = remotePort
-                                    ? `${remoteAddr}:${remotePort}` : remoteAddr;
+                                cmdRemoteCandEl.textContent = remotePort ?
+                                    `${remoteAddr}:${remotePort}` : remoteAddr;
                                 cmdRemoteCandEl.title =
                                     `Type: ${remoteCand.candidateType || 'unknown'}\n` +
                                     `Protocol: ${remoteCand.protocol || '--'}\n` +
@@ -249,12 +261,20 @@ window.addEventListener('load', () => {
         cmdRttInterval = setInterval(() => {
             if (!dc || dc.readyState !== 'open') return;
             const start = performance.now();
-            try { dc.send(JSON.stringify({ type: 'ping', t: start })); } catch (e) {}
+            try {
+                dc.send(JSON.stringify({
+                    type: 'ping',
+                    t: start
+                }));
+            } catch (e) {}
         }, 2000);
     }
 
     function cmdStopRttMeasurement() {
-        if (cmdRttInterval) { clearInterval(cmdRttInterval); cmdRttInterval = null; }
+        if (cmdRttInterval) {
+            clearInterval(cmdRttInterval);
+            cmdRttInterval = null;
+        }
     }
 
     // =========================================================================
@@ -271,7 +291,8 @@ window.addEventListener('load', () => {
         if (data.length === 1 && data.charCodeAt(0) === 3) {
             try {
                 cmdCurrentDataChannel.send(JSON.stringify({
-                    type: 'shell_kill', signal: 'SIGINT'
+                    type: 'shell_kill',
+                    signal: 'SIGINT'
                 }));
             } catch (e) {}
         }
@@ -287,11 +308,16 @@ window.addEventListener('load', () => {
     });
 
     // Terminal resize → notify server via JSON
-    term.onResize(({ cols, rows }) => {
+    term.onResize(({
+        cols,
+        rows
+    }) => {
         if (!cmdCurrentDataChannel || cmdCurrentDataChannel.readyState !== 'open') return;
         try {
             cmdCurrentDataChannel.send(JSON.stringify({
-                type: 'shell_resize', rows: rows, cols: cols
+                type: 'shell_resize',
+                rows: rows,
+                cols: cols
             }));
         } catch (e) {}
     });
@@ -303,7 +329,8 @@ window.addEventListener('load', () => {
             if (cmdCurrentDataChannel && cmdCurrentDataChannel.readyState === 'open') {
                 try {
                     cmdCurrentDataChannel.send(JSON.stringify({
-                        type: 'shell_kill', signal: 'SIGINT'
+                        type: 'shell_kill',
+                        signal: 'SIGINT'
                     }));
                     // Also send raw Ctrl+C byte to PTY
                     cmdCurrentDataChannel.send(new Uint8Array([3]));
@@ -350,7 +377,9 @@ window.addEventListener('load', () => {
     // Click anywhere on terminal container → focus terminal
     if (xtermContainer) {
         xtermContainer.addEventListener('click', () => {
-            try { term.focus(); } catch (e) {}
+            try {
+                term.focus();
+            } catch (e) {}
         });
     }
 
@@ -377,7 +406,11 @@ window.addEventListener('load', () => {
 
             // Fit terminal after connection
             if (fitAddon) {
-                setTimeout(() => { try { fitAddon.fit(); } catch (e) {} }, 300);
+                setTimeout(() => {
+                    try {
+                        fitAddon.fit();
+                    } catch (e) {}
+                }, 300);
             }
 
             term.writeln('\x1b[32m[INFO] Connected. Shell session starting...\x1b[0m');
@@ -462,6 +495,8 @@ window.addEventListener('load', () => {
             term.writeln('\x1b[31m[ERROR] Missing remote ID\x1b[0m');
             return;
         }
+        // 手动发起连接，解除手动断开标记，允许后续自动重连
+        cmdManuallyDisconnected = false;
         const pc = cmdCreatePeerConnection(ws, id);
         const dc = pc.createDataChannel('cmd');
         cmdSetupDataChannel(dc, id);
@@ -526,7 +561,10 @@ window.addEventListener('load', () => {
             ws.onmessage = (e) => {
                 if (typeof e.data !== 'string') return;
                 const message = JSON.parse(e.data);
-                const {id, type} = message;
+                const {
+                    id,
+                    type
+                } = message;
 
                 let pc = cmdPeerConnectionMap[id];
                 if (!pc) {
@@ -537,7 +575,10 @@ window.addEventListener('load', () => {
                 switch (type) {
                     case 'offer':
                     case 'answer':
-                        pc.setRemoteDescription({sdp: message.description, type: message.type})
+                        pc.setRemoteDescription({
+                                sdp: message.description,
+                                type: message.type
+                            })
                             .then(() => {
                                 if (type === 'offer') {
                                     cmdSendLocalDescription(ws, id, pc, 'answer');
@@ -546,7 +587,10 @@ window.addEventListener('load', () => {
                             .catch((err) => console.error(`CMD Error setting remote ${type}:`, err));
                         break;
                     case 'candidate':
-                        pc.addIceCandidate({candidate: message.candidate, sdpMid: message.mid});
+                        pc.addIceCandidate({
+                            candidate: message.candidate,
+                            sdpMid: message.mid
+                        });
                         break;
                 }
             };
@@ -558,22 +602,39 @@ window.addEventListener('load', () => {
     // =========================================================================
     function cmdSendLocalDescription(ws, id, pc, type) {
         (type === 'offer' ? pc.createOffer() : pc.createAnswer())
-            .then((desc) => pc.setLocalDescription(desc))
+        .then((desc) => pc.setLocalDescription(desc))
             .then(() => {
-                const {sdp, type} = pc.localDescription;
-                ws.send(JSON.stringify({id, type, description: sdp}));
+                const {
+                    sdp,
+                    type
+                } = pc.localDescription;
+                ws.send(JSON.stringify({
+                    id,
+                    type,
+                    description: sdp
+                }));
             })
             .catch((err) => console.error(`CMD Error creating ${type}:`, err));
     }
 
     function cmdSendLocalCandidate(ws, id, cand) {
-        ws.send(JSON.stringify({id, type: 'candidate', candidate: cand.candidate, mid: cand.sdpMid}));
+        ws.send(JSON.stringify({
+            id,
+            type: 'candidate',
+            candidate: cand.candidate,
+            mid: cand.sdpMid
+        }));
     }
 
     // =========================================================================
     // Auto-reconnect
     // =========================================================================
     function cmdStartAutoReconnect(ws, id) {
+        // 手动断开后禁止自动重连
+        if (cmdManuallyDisconnected) {
+            console.log('CMD auto-reconnect blocked (manually disconnected)');
+            return;
+        }
         cmdStopAutoReconnect();
         cmdUpdateStatus('RECONNECTING');
         cmdReconnectInterval = setInterval(() => {
@@ -587,10 +648,61 @@ window.addEventListener('load', () => {
     }
 
     function cmdStopAutoReconnect() {
-        if (cmdReconnectInterval) { clearInterval(cmdReconnectInterval); cmdReconnectInterval = null; }
+        if (cmdReconnectInterval) {
+            clearInterval(cmdReconnectInterval);
+            cmdReconnectInterval = null;
+        }
+    }
+
+    // 单独断开该通道（停止自动重连并关闭所有 PeerConnection）
+    function cmdDisconnect() {
+        // 设置手动断开标记，禁止后续任何自动重连
+        cmdManuallyDisconnected = true;
+        // 停止自动重连
+        cmdStopAutoReconnect();
+        cmdStopWsReconnect();
+        cmdStopRttMeasurement();
+
+        // 关闭所有 PeerConnection 和 DataChannel
+        const peerIds = Object.keys(cmdPeerConnectionMap);
+        peerIds.forEach((id) => {
+            const pc = cmdPeerConnectionMap[id];
+            if (pc) {
+                try {
+                    pc.close();
+                } catch (e) {
+                    console.warn('[CMD] Error closing peer connection:', e);
+                }
+            }
+            delete cmdPeerConnectionMap[id];
+            if (cmdDataChannelMap[id]) delete cmdDataChannelMap[id];
+        });
+        cmdCurrentPeerConnection = null;
+        cmdCurrentDataChannel = null;
+        cmdSessionActive = false;
+
+        // 重置 UI 状态
+        cmdUpdateStatus('DISCONNECTED');
+        if (cmdIceStatusEl) cmdIceStatusEl.textContent = '--';
+        if (cmdConnectionTypeEl) cmdConnectionTypeEl.textContent = '--';
+        if (cmdRttEl) cmdRttEl.textContent = '--';
+        if (cmdLocalCandEl) cmdLocalCandEl.textContent = '--';
+        if (cmdRemoteCandEl) cmdRemoteCandEl.textContent = '--';
+        term.writeln('\x1b[33m[DISCONNECTED] Channel manually disconnected\x1b[0m');
+
+        console.log('CMD channel disconnected');
+    }
+
+    if (cmdDisconnectBtnEl) {
+        cmdDisconnectBtnEl.addEventListener('click', cmdDisconnect);
     }
 
     function cmdStartWsReconnect(url) {
+        // 手动断开后禁止自动重连
+        if (cmdManuallyDisconnected) {
+            console.log('CMD WS auto-reconnect blocked (manually disconnected)');
+            return;
+        }
         cmdStopWsReconnect();
         cmdWsReconnectInterval = setInterval(() => {
             cmdOpenSignaling(url)
@@ -606,7 +718,10 @@ window.addEventListener('load', () => {
     }
 
     function cmdStopWsReconnect() {
-        if (cmdWsReconnectInterval) { clearInterval(cmdWsReconnectInterval); cmdWsReconnectInterval = null; }
+        if (cmdWsReconnectInterval) {
+            clearInterval(cmdWsReconnectInterval);
+            cmdWsReconnectInterval = null;
+        }
     }
 
     // =========================================================================
@@ -616,7 +731,9 @@ window.addEventListener('load', () => {
         cmdStopAutoReconnect();
         cmdStopWsReconnect();
         cmdStopRttMeasurement();
-        try { term.dispose(); } catch (e) {}
+        try {
+            term.dispose();
+        } catch (e) {}
     });
 
     // =========================================================================
@@ -643,7 +760,9 @@ window.addEventListener('load', () => {
     if (terminalCard) {
         terminalCard.addEventListener('click', (e) => {
             if (e.target.tagName === 'BUTTON') return;
-            try { term.focus(); } catch (e) {}
+            try {
+                term.focus();
+            } catch (e) {}
         });
     }
 

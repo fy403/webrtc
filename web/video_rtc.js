@@ -2,7 +2,7 @@ window.addEventListener('load', () => {
 
     // 从配置管理器加载视频配置
     const videoConfig = ConfigManager.getVideoConfig();
-    
+
     // 获取视频参数配置
     const videoParams = ConfigManager.getVideoParams();
 
@@ -34,6 +34,7 @@ window.addEventListener('load', () => {
     let reconnectInterval = null; // PeerConnection 自动重连定时器
     let wsReconnectInterval = null; // WebSocket 重连定时器
     let isReconnecting = false; // 全局标记：是否正在重连中（用于避免并发连接）
+    let manuallyDisconnected = false; // 手动断开标记：为 true 时禁止任何自动重连
 
     // ICE 信息存储
     const iceInfoMap = {};
@@ -79,9 +80,9 @@ window.addEventListener('load', () => {
                                 }
 
                                 // 更新连接类型
-                                const connectionTypeEl = type === 'video' 
-                                    ? document.getElementById('connectionType') 
-                                    : document.getElementById('dataConnectionType');
+                                const connectionTypeEl = type === 'video' ?
+                                    document.getElementById('connectionType') :
+                                    document.getElementById('dataConnectionType');
                                 if (connectionTypeEl) {
                                     const localType = localCandidate.candidateType || 'unknown';
                                     const isRelay = localType === 'relay';
@@ -90,15 +91,15 @@ window.addEventListener('load', () => {
                                 }
 
                                 // 更新本地候选（尝试多种可能的字段名）
-                                const localCandidateEl = type === 'video'
-                                    ? document.getElementById('localCandidate')
-                                    : document.getElementById('dataLocalCandidate');
+                                const localCandidateEl = type === 'video' ?
+                                    document.getElementById('localCandidate') :
+                                    document.getElementById('dataLocalCandidate');
                                 if (localCandidateEl) {
                                     // 尝试多种可能的地址字段名
-                                    const address = localCandidate.address 
-                                        || localCandidate.ip 
-                                        || localCandidate.ipAddress 
-                                        || '(hidden)';
+                                    const address = localCandidate.address ||
+                                        localCandidate.ip ||
+                                        localCandidate.ipAddress ||
+                                        '(hidden)';
                                     const port = localCandidate.port || '--';
                                     const protocol = localCandidate.protocol || '--';
                                     const candidateType = localCandidate.candidateType || 'unknown';
@@ -107,9 +108,9 @@ window.addEventListener('load', () => {
                                 }
 
                                 // 更新RTT显示
-                                const rttEl = type === 'video'
-                                    ? document.getElementById('videoRtt')
-                                    : document.getElementById('dataRtt');
+                                const rttEl = type === 'video' ?
+                                    document.getElementById('videoRtt') :
+                                    document.getElementById('dataRtt');
                                 if (rttEl) {
                                     rttEl.textContent = rttText;
                                     if (rttMs > 150) {
@@ -122,14 +123,14 @@ window.addEventListener('load', () => {
                                 }
 
                                 // 更新远程候选（尝试多种可能的字段名）
-                                const remoteCandidateEl = type === 'video'
-                                    ? document.getElementById('remoteCandidate')
-                                    : document.getElementById('dataRemoteCandidate');
+                                const remoteCandidateEl = type === 'video' ?
+                                    document.getElementById('remoteCandidate') :
+                                    document.getElementById('dataRemoteCandidate');
                                 if (remoteCandidateEl) {
-                                    const address = remoteCandidate.address 
-                                        || remoteCandidate.ip 
-                                        || remoteCandidate.ipAddress 
-                                        || '(hidden)';
+                                    const address = remoteCandidate.address ||
+                                        remoteCandidate.ip ||
+                                        remoteCandidate.ipAddress ||
+                                        '(hidden)';
                                     const port = remoteCandidate.port || '--';
                                     const protocol = remoteCandidate.protocol || '--';
                                     const candidateType = remoteCandidate.candidateType || 'unknown';
@@ -152,7 +153,7 @@ window.addEventListener('load', () => {
     // 解析 ICE 候选字符串
     function parseIceCandidate(candidateStr) {
         if (!candidateStr || candidateStr === '') return null;
-        
+
         const parts = candidateStr.split(' ');
         if (parts.length < 8) return null;
 
@@ -170,6 +171,7 @@ window.addEventListener('load', () => {
 
     const offerId = document.getElementById('offerId');
     const offerBtn = document.getElementById('offerBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
     const _localId = document.getElementById('localId');
     const remoteVideo = document.getElementById('remoteVideo');
     const statusDiv = document.getElementById('status');
@@ -222,9 +224,21 @@ window.addEventListener('load', () => {
     // ==================== 画质挡位 (V键切换) ====================
     const PRESETS_KEY = 'webrtc_quality_presets';
     const defaultPresets = {
-        low:    { fps: 15, bitrate: 1000000, label: '低画质' },
-        medium: { fps: 30, bitrate: 4000000, label: '中画质' },
-        high:   { fps: 60, bitrate: 8000000, label: '高画质' }
+        low: {
+            fps: 15,
+            bitrate: 1000000,
+            label: '低画质'
+        },
+        medium: {
+            fps: 30,
+            bitrate: 4000000,
+            label: '中画质'
+        },
+        high: {
+            fps: 60,
+            bitrate: 8000000,
+            label: '高画质'
+        }
     };
     // 从 localStorage 同步 config 中用户保存的 preset 值
     let qualityPresets;
@@ -374,7 +388,7 @@ window.addEventListener('load', () => {
     // 从配置加载视频参数默认值
     function loadVideoParamsFromConfig() {
         if (!videoParams) return;
-        
+
         // 设置帧率
         if (fpsSelect && videoParams.fps) {
             const fpsOptions = Array.from(fpsSelect.options);
@@ -387,7 +401,7 @@ window.addEventListener('load', () => {
                 if (fpsCustomInput) fpsCustomInput.value = videoParams.fps;
             }
         }
-        
+
         // 设置码率
         if (bitrateSelect && videoParams.bitrate) {
             const bitrateOptions = Array.from(bitrateSelect.options);
@@ -402,12 +416,12 @@ window.addEventListener('load', () => {
         }
 
         toggleCustomInputs();
-        
+
         // 匹配画质挡位
         const mp = matchQualityPreset(videoParams.fps || 30, videoParams.bitrate || 8000000);
-        highlightQualityPreset(mp);  // 无匹配不高亮假 preset
+        highlightQualityPreset(mp); // 无匹配不高亮假 preset
     }
-    
+
     // 页面加载时从配置加载默认值
     loadVideoParamsFromConfig();
 
@@ -525,7 +539,7 @@ window.addEventListener('load', () => {
 
     let lastBytesReceived = 0;
     let lastTimestamp = Date.now();
-    
+
     // ========== 关键帧请求控制 ==========
     let lastFirCount = 0;
     let lastPliCount = 0;
@@ -611,9 +625,9 @@ window.addEventListener('load', () => {
 
             // ========== 帧间延迟监控 ==========
             const interFrameDelayStDev = videoStats.totalSquaredInterFrameDelay / (videoStats.framesDecoded || 1);
-            
+
             // 如果帧间延迟标准差过大，警告
-            if (interFrameDelayStDev > 0.0001) {  // 阈值：0.0001秒 = 0.1ms
+            if (interFrameDelayStDev > 0.0001) { // 阈值：0.0001秒 = 0.1ms
                 // console.warn('⚠️ High inter-frame delay variation:', {
                 //     '标准差': (interFrameDelayStDev * 1000).toFixed(2) + 'ms',
                 //     '平均帧间隔': ((videoStats.totalInterFrameDelay / videoStats.framesDecoded) * 1000).toFixed(2) + 'ms',
@@ -669,36 +683,36 @@ window.addEventListener('load', () => {
             // ========== 关键帧请求监控 ==========
             const firCount = videoStats.firCount || 0;
             const pliCount = videoStats.pliCount || 0;
-            
+
             // 检测FIR请求
             if (firCount > lastFirCount) {
                 const now = Date.now();
                 firRequestTimes.push(now);
-                
+
                 // 清理10秒前的记录
                 firRequestTimes = firRequestTimes.filter(t => now - t < 10000);
-                
+
                 // 如果10秒内FIR请求超过3次，警告
                 if (firRequestTimes.length > 3) {
                     console.warn('⚠️ FIR request too frequent:', firRequestTimes.length, 'times in 10s');
                 }
-                
+
                 lastFirCount = firCount;
             }
-            
+
             // 检测PLI请求
             if (pliCount > lastPliCount) {
                 const now = Date.now();
                 pliRequestTimes.push(now);
-                
+
                 // 清理10秒前的记录
                 pliRequestTimes = pliRequestTimes.filter(t => now - t < 10000);
-                
+
                 // 如果10秒内PLI请求超过5次，警告
                 if (pliRequestTimes.length > 5) {
                     console.warn('⚠️ PLI request too frequent:', pliRequestTimes.length, 'times in 10s');
                 }
-                
+
                 lastPliCount = pliCount;
             }
 
@@ -788,7 +802,7 @@ window.addEventListener('load', () => {
 
         try {
             // 创建音频上下文
-            audioContext = new (window.AudioContext || window['webkitAudioContext'])();
+            audioContext = new(window.AudioContext || window['webkitAudioContext'])();
 
             // 创建分析器
             analyser = audioContext.createAnalyser();
@@ -851,7 +865,7 @@ window.addEventListener('load', () => {
 
     // 在获取本地流后初始化音频分析
     const originalGetLocalStream = getLocalStream;
-    getLocalStream = async function() {
+    getLocalStream = async function () {
         await originalGetLocalStream();
         if (localStream) {
             setupAudioAnalysis();
@@ -945,7 +959,9 @@ window.addEventListener('load', () => {
 
             // 如果选择了特定麦克风, 锁定设备
             if (micSelector && micSelector.value) {
-                audioConstraints.deviceId = { exact: micSelector.value };
+                audioConstraints.deviceId = {
+                    exact: micSelector.value
+                };
             }
 
             localStream = await navigator.mediaDevices.getUserMedia({
@@ -1162,6 +1178,9 @@ window.addEventListener('load', () => {
             alert('Please enter a remote ID');
             return;
         }
+
+        // 手动发起连接，解除手动断开标记，允许后续自动重连
+        manuallyDisconnected = false;
 
         // Create PeerConnection
         console.log(`Offering to ${id}`);
@@ -1512,10 +1531,10 @@ window.addEventListener('load', () => {
 
                 // 应用缓冲区最小化
                 PerformanceOptimizer.adaptBufferSize();
-                
+
                 // 限制PLI/FIR请求频率（避免频繁请求关键帧）
                 setTimeout(() => {
-                    PerformanceOptimizer.limitPLIRequests(2000);  // 最小间隔2秒
+                    PerformanceOptimizer.limitPLIRequests(2000); // 最小间隔2秒
                 }, 1000);
             }
 
@@ -1625,7 +1644,7 @@ window.addEventListener('load', () => {
         };
         dc.onmessage = (e) => {
             if (typeof (e.data) != 'string') return;
-            
+
             try {
                 const msg = JSON.parse(e.data);
 
@@ -1646,6 +1665,11 @@ window.addEventListener('load', () => {
 
     // 自动重连功能：快速重连尝试
     function startAutoReconnect(ws, id) {
+        // 手动断开后禁止自动重连
+        if (manuallyDisconnected) {
+            console.log('Video auto-reconnect blocked (manually disconnected)');
+            return;
+        }
         // 如果已经在重连，先停止
         stopAutoReconnect();
 
@@ -1761,8 +1785,57 @@ window.addEventListener('load', () => {
         isReconnecting = false;
     }
 
+    // 单独断开该通道（停止自动重连并关闭所有 PeerConnection）
+    function disconnect() {
+        // 设置手动断开标记，禁止后续任何自动重连
+        manuallyDisconnected = true;
+        // 停止自动重连，避免立即触发重连
+        stopAutoReconnect();
+        isReconnecting = false;
+
+        // 通知信令服务器关闭对端连接
+        const peerIds = Object.keys(peerConnectionMap);
+        peerIds.forEach((id) => {
+            const pc = peerConnectionMap[id];
+            if (pc) {
+                try {
+                    pc.close();
+                } catch (e) {
+                    console.warn('Error closing peer connection:', e);
+                }
+            }
+            delete peerConnectionMap[id];
+            if (dataChannelMap[id]) delete dataChannelMap[id];
+        });
+
+        // 重置 UI 状态
+        statusDiv.textContent = 'NOT CONNECTED';
+        const iceStatusEl = document.getElementById('iceStatus');
+        const connectionTypeEl = document.getElementById('connectionType');
+        const rttEl = document.getElementById('videoRtt');
+        const localCandidateEl = document.getElementById('localCandidate');
+        const remoteCandidateEl = document.getElementById('remoteCandidate');
+        if (iceStatusEl) iceStatusEl.textContent = '--';
+        if (connectionTypeEl) connectionTypeEl.textContent = '--';
+        if (rttEl) rttEl.textContent = '--';
+        if (localCandidateEl) localCandidateEl.textContent = '--';
+        if (remoteCandidateEl) remoteCandidateEl.textContent = '--';
+        toggleNoSignalOverlay(true);
+
+        console.log('Video channel disconnected');
+    }
+
+    if (disconnectBtn) {
+        disconnectBtn.addEventListener('click', disconnect);
+    }
+
     // WebSocket 自动重连功能
     function startWsReconnect(url) {
+        // 手动断开后禁止自动重连
+        if (manuallyDisconnected) {
+            console.log('Video WS auto-reconnect blocked (manually disconnected)');
+            return;
+        }
         // 如果已经在重连，先停止
         stopWsReconnect();
 

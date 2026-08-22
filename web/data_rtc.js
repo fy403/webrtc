@@ -10,8 +10,8 @@ window.addEventListener('load', () => {
 
     const rtcConfig = {
         iceServers: dataConfig.iceServers || [{
-            urls: ['stun:stun.l.google.com:19302']
-        },
+                urls: ['stun:stun.l.google.com:19302']
+            },
             {
                 urls: ['turn:tx.fy403.cn:3478?transport=udp'],
                 username: 'fy403',
@@ -28,6 +28,7 @@ window.addEventListener('load', () => {
     let dataReconnectInterval = null; // PeerConnection 自动重连定时器
     let dataWsReconnectInterval = null; // WebSocket 重连定时器
     let dataIsReconnecting = false; // 全局标记：是否正在重连中（用于避免并发连接）
+    let dataManuallyDisconnected = false; // 手动断开标记：为 true 时禁止任何自动重连
 
     // 更新 DATA LINK 的 ICE 信息展示
     function dataUpdateIceInfoDisplay(id) {
@@ -54,7 +55,7 @@ window.addEventListener('load', () => {
                         if (localCandidateId && remoteCandidateId) {
                             const localCandidate = stats.get(localCandidateId);
                             const remoteCandidate = stats.get(remoteCandidateId);
-                            
+
                             if (localCandidate && remoteCandidate) {
                                 // 计算RTT（在更大的作用域内定义，方便后面使用）
                                 const rttText = report.currentRoundTripTime ? (report.currentRoundTripTime * 1000).toFixed(0) + 'ms' : '--';
@@ -72,10 +73,10 @@ window.addEventListener('load', () => {
                                 // 更新本地候选（尝试多种可能的字段名）
                                 const localCandidateEl = document.getElementById('dataLocalCandidate');
                                 if (localCandidateEl) {
-                                    const address = localCandidate.address 
-                                        || localCandidate.ip 
-                                        || localCandidate.ipAddress 
-                                        || '(hidden)';
+                                    const address = localCandidate.address ||
+                                        localCandidate.ip ||
+                                        localCandidate.ipAddress ||
+                                        '(hidden)';
                                     const port = localCandidate.port || '--';
                                     const protocol = localCandidate.protocol || '--';
                                     const candidateType = localCandidate.candidateType || 'unknown';
@@ -99,10 +100,10 @@ window.addEventListener('load', () => {
                                 // 更新远程候选（尝试多种可能的字段名）
                                 const remoteCandidateEl = document.getElementById('dataRemoteCandidate');
                                 if (remoteCandidateEl) {
-                                    const address = remoteCandidate.address 
-                                        || remoteCandidate.ip 
-                                        || remoteCandidate.ipAddress 
-                                        || '(hidden)';
+                                    const address = remoteCandidate.address ||
+                                        remoteCandidate.ip ||
+                                        remoteCandidate.ipAddress ||
+                                        '(hidden)';
                                     const port = remoteCandidate.port || '--';
                                     const protocol = remoteCandidate.protocol || '--';
                                     const candidateType = remoteCandidate.candidateType || 'unknown';
@@ -124,6 +125,7 @@ window.addEventListener('load', () => {
 
     const dataOfferId = document.getElementById('dataOfferId');
     const dataOfferBtn = document.getElementById('dataOfferBtn');
+    const dataDisconnectBtn = document.getElementById('dataDisconnectBtn');
     const dataLocalIdElement = document.getElementById('dataLocalId');
     const dataStatusDiv = document.getElementById('dataStatus');
     dataLocalIdElement.textContent = dataLocalId;
@@ -134,16 +136,45 @@ window.addEventListener('load', () => {
     }
 
     // UI state
-    const dataState = {W: false, A: false, S: false, D: false};
+    const dataState = {
+        W: false,
+        A: false,
+        S: false,
+        D: false
+    };
     const dataThrottlePresets = {
-        Digit1: {limit: 0.25, label: '25%'},
-        Digit2: {limit: 0.5, label: '50%'},
-        Digit3: {limit: 0.75, label: '75%'},
-        Digit4: {limit: 1.0, label: '100%'},
-        Numpad1: {limit: 0.25, label: '25%'},
-        Numpad2: {limit: 0.5, label: '50%'},
-        Numpad3: {limit: 0.75, label: '75%'},
-        Numpad4: {limit: 1.0, label: '100%'},
+        Digit1: {
+            limit: 0.25,
+            label: '25%'
+        },
+        Digit2: {
+            limit: 0.5,
+            label: '50%'
+        },
+        Digit3: {
+            limit: 0.75,
+            label: '75%'
+        },
+        Digit4: {
+            limit: 1.0,
+            label: '100%'
+        },
+        Numpad1: {
+            limit: 0.25,
+            label: '25%'
+        },
+        Numpad2: {
+            limit: 0.5,
+            label: '50%'
+        },
+        Numpad3: {
+            limit: 0.75,
+            label: '75%'
+        },
+        Numpad4: {
+            limit: 1.0,
+            label: '100%'
+        },
     };
     let dataThrottleLimit = 1.0; // 默认不限速
 
@@ -199,9 +230,9 @@ window.addEventListener('load', () => {
         vehicleSpeed: 0,
         lastUpdate: null,
         // 电池数据
-        batteryLevel: -1,        // 电量百分比 (-1 表示未收到)
-        batteryCharging: false,  // 是否充电中
-        batteryReceived: false,  // 是否已收到过电池数据
+        batteryLevel: -1, // 电量百分比 (-1 表示未收到)
+        batteryCharging: false, // 是否充电中
+        batteryReceived: false, // 是否已收到过电池数据
         // GPS data
         gpsLatitude: 0,
         gpsLongitude: 0,
@@ -217,18 +248,24 @@ window.addEventListener('load', () => {
         attitudePitch: 0,
         attitudeRoll: 0,
         attitudeYaw: 0,
-        hasImuHeading: false,   // true when IMU yaw data has been received
+        hasImuHeading: false, // true when IMU yaw data has been received
     };
 
     let uiSpeed = 0;
-    let lastSentState = { forward: 0, turn: 0 };
+    let lastSentState = {
+        forward: 0,
+        turn: 0
+    };
     let actualSentForward = 0; // 实际发送的油门值（经过限幅）
     // let heartbeatInterval = null;
     let controlInterval = null; // 定时发送控制帧，确保长按时持续发送
 
     // SBUS control pipeline
     const controllerManager = new ControllerManager((state) => {
-        lastSentState = { forward: state.forward || 0, turn: state.turn || 0 };
+        lastSentState = {
+            forward: state.forward || 0,
+            turn: state.turn || 0
+        };
         dataSendSbus(lastSentState.forward, lastSentState.turn);
     });
 
@@ -262,7 +299,10 @@ window.addEventListener('load', () => {
         const limitedForward = dataApplyThrottleLimit(forward);
         actualSentForward = limitedForward;
         uiSpeed = Math.round(Math.abs(limitedForward) * 100);
-        lastSentState = { forward: limitedForward, turn: turn || 0 };
+        lastSentState = {
+            forward: limitedForward,
+            turn: turn || 0
+        };
         dataUpdateSystemStatusDisplay();
 
         // ChannelKeyBinder 是全部16个通道的唯一数据源（包括 CH1/CH2）
@@ -508,18 +548,31 @@ window.addEventListener('load', () => {
         // speed 已经是 Kbps 单位
         if (speed >= 1000000) {
             const value = speed / 1000000;
-            return { value: value >= 100 ? Math.round(value).toString() : value.toFixed(1), unit: 'Gbps' };
+            return {
+                value: value >= 100 ? Math.round(value).toString() : value.toFixed(1),
+                unit: 'Gbps'
+            };
         } else if (speed >= 1000) {
             const value = speed / 1000;
-            return { value: value >= 100 ? Math.round(value).toString() : value.toFixed(1), unit: 'Mbps' };
+            return {
+                value: value >= 100 ? Math.round(value).toString() : value.toFixed(1),
+                unit: 'Mbps'
+            };
         } else {
             const value = speed;
-            return { value: value >= 100 ? Math.round(value).toString() : value.toFixed(1), unit: 'Kbps' };
+            return {
+                value: value >= 100 ? Math.round(value).toString() : value.toFixed(1),
+                unit: 'Kbps'
+            };
         }
     }
 
     function dataUpdateSystemStatusDisplay() {
-        const {rxSpeed, txSpeed, lastUpdate} = dataSystemStatus;
+        const {
+            rxSpeed,
+            txSpeed,
+            lastUpdate
+        } = dataSystemStatus;
 
         if (dataElements.rxSpeed && dataElements.rxSpeedUnit) {
             const rxSpeedFormatted = formatSpeed(rxSpeed);
@@ -549,7 +602,12 @@ window.addEventListener('load', () => {
     }
 
     function updateSystemStatusPanel() {
-        const {cpuUsage, memUsed, memTotal, connectionCount} = dataSystemStatus;
+        const {
+            cpuUsage,
+            memUsed,
+            memTotal,
+            connectionCount
+        } = dataSystemStatus;
 
         // 更新CPU状态 - 显示百分比数值
         updateStatusItem('cpu', cpuUsage, cpuUsage, '%', 80);
@@ -583,7 +641,10 @@ window.addEventListener('load', () => {
     function updateBatteryPanel() {
         if (!dataSystemStatus.batteryReceived) return; // 未收到过电池数据则不显示
 
-        const {batteryLevel, batteryCharging} = dataSystemStatus;
+        const {
+            batteryLevel,
+            batteryCharging
+        } = dataSystemStatus;
         const batteryItem = dataElements.batteryValue?.closest('.status-item');
 
         // 显示电池块
@@ -700,10 +761,10 @@ window.addEventListener('load', () => {
             dataSystemStatus.batteryReceived = true;
         }
         if (statusData.battery_charging !== undefined) {
-            dataSystemStatus.batteryCharging = (statusData.battery_charging === '1'
-                || statusData.battery_charging === 1
-                || statusData.battery_charging === true
-                || statusData.battery_charging === 'true');
+            dataSystemStatus.batteryCharging = (statusData.battery_charging === '1' ||
+                statusData.battery_charging === 1 ||
+                statusData.battery_charging === true ||
+                statusData.battery_charging === 'true');
             dataSystemStatus.batteryReceived = true;
         }
 
@@ -720,7 +781,7 @@ window.addEventListener('load', () => {
         if (statusData.attitude_roll !== undefined) dataSystemStatus.attitudeRoll = parseFloat(statusData.attitude_roll);
         if (statusData.attitude_yaw !== undefined) {
             dataSystemStatus.attitudeYaw = parseFloat(statusData.attitude_yaw);
-            dataSystemStatus.hasImuHeading = true;   // 标记已收到 IMU 航向数据
+            dataSystemStatus.hasImuHeading = true; // 标记已收到 IMU 航向数据
         }
 
         // 车辆速度
@@ -763,16 +824,16 @@ window.addEventListener('load', () => {
     function updateThrottleGauge(throttlePercent) {
         const ringFill = document.getElementById('throttleRingFill');
         const throttleValue = document.getElementById('throttleValue');
-        
+
         if (ringFill && throttleValue) {
             const percent = Math.max(0, Math.min(100, throttlePercent));
             // 圆周长 = 2 * PI * 60 ≈ 376.99
             const circumference = 376.99;
             const dashOffset = circumference - (percent / 100) * circumference;
-            
+
             ringFill.style.strokeDashoffset = dashOffset;
             throttleValue.textContent = Math.round(percent) + '%';
-            
+
             // 根据百分比改变颜色
             let color, glow;
             if (percent >= 80) {
@@ -909,28 +970,28 @@ window.addEventListener('load', () => {
     function initSpeedGaugeTicks() {
         const speedTicksGroup = document.getElementById('speedTicks');
         const speedNumbersGroup = document.getElementById('speedNumbers');
-        
+
         if (!speedTicksGroup || !speedNumbersGroup) return;
-        
+
         const maxSpeed = 160;
         const centerX = 150;
         const centerY = 150;
         const radius = 100;
-        
+
         // 生成刻度 (每10km/h一个主刻度,每20km/h一个数字)
         for (let speed = 0; speed <= maxSpeed; speed += 10) {
             const angle = -120 + (speed / maxSpeed) * 240;
             const angleRad = (angle * Math.PI) / 180;
-            
+
             const isMajor = speed % 20 === 0;
             const length = isMajor ? 12 : 8;
             const strokeWidth = isMajor ? 2 : 1;
-            
+
             const innerX = centerX + (radius - length) * Math.sin(angleRad);
             const innerY = centerY - (radius - length) * Math.cos(angleRad);
             const outerX = centerX + radius * Math.sin(angleRad);
             const outerY = centerY - radius * Math.cos(angleRad);
-            
+
             const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
             line.setAttribute('x1', innerX);
             line.setAttribute('y1', innerY);
@@ -939,13 +1000,13 @@ window.addEventListener('load', () => {
             line.setAttribute('stroke', speed >= 120 ? '#FF4500' : '#fff');
             line.setAttribute('stroke-width', strokeWidth);
             speedTicksGroup.appendChild(line);
-            
+
             // 每20km/h显示数字
             if (isMajor && speed > 0) {
                 const textRadius = radius - 25;
                 const textX = centerX + textRadius * Math.sin(angleRad);
                 const textY = centerY - textRadius * Math.cos(angleRad);
-                
+
                 const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                 text.setAttribute('x', textX);
                 text.setAttribute('y', textY);
@@ -1061,7 +1122,10 @@ window.addEventListener('load', () => {
         if (peerIds.length > 0) {
             try {
                 peerIds.forEach((id) => {
-                    dataSignalingWs.send(JSON.stringify({id, type: 'peer_close'}));
+                    dataSignalingWs.send(JSON.stringify({
+                        id,
+                        type: 'peer_close'
+                    }));
                 });
             } catch (e) {
                 console.error('Failed to send peer_close message:', e);
@@ -1091,7 +1155,10 @@ window.addEventListener('load', () => {
             ws.onmessage = (e) => {
                 if (typeof e.data !== 'string') return;
                 const message = JSON.parse(e.data);
-                const {id, type} = message;
+                const {
+                    id,
+                    type
+                } = message;
                 let pc = dataPeerConnectionMap[id];
                 if (!pc) {
                     if (type !== 'offer') return;
@@ -1100,7 +1167,10 @@ window.addEventListener('load', () => {
                 switch (type) {
                     case 'offer':
                     case 'answer':
-                        pc.setRemoteDescription({sdp: message.description, type: message.type})
+                        pc.setRemoteDescription({
+                                sdp: message.description,
+                                type: message.type
+                            })
                             .then(() => {
                                 if (type === 'offer') {
                                     updateStatus(`Creating answer for ${id}`);
@@ -1117,7 +1187,10 @@ window.addEventListener('load', () => {
                             });
                         break;
                     case 'candidate':
-                        pc.addIceCandidate({candidate: message.candidate, sdpMid: message.mid});
+                        pc.addIceCandidate({
+                            candidate: message.candidate,
+                            sdpMid: message.mid
+                        });
                         break;
                 }
             };
@@ -1129,11 +1202,13 @@ window.addEventListener('load', () => {
             alert('Please enter a remote ID');
             return;
         }
+        // 手动发起连接，解除手动断开标记，允许后续自动重连
+        dataManuallyDisconnected = false;
         const pc = dataCreatePeerConnection(ws, id);
         // 显式配置为可靠 + 有序（确保SCTP层自动重排）
         const dc = pc.createDataChannel('control', {
-            ordered: true,  // 保证按序交付
-            maxRetransmits: 10  // 最大重传次数（可靠传输）
+            ordered: true, // 保证按序交付
+            maxRetransmits: 10 // 最大重传次数（可靠传输）
         });
         // 保存 ws 引用到 data channel，用于错误处理时的重连
         dc._ws = ws;
@@ -1276,7 +1351,10 @@ window.addEventListener('load', () => {
             dataCurrentDataChannel = dc;
             dataUpdateConnStatus('connected', 'CONNECTED');
             // 重连时复位状态并发送中位值，防止残留旧值
-            lastSentState = { forward: 0, turn: 0 };
+            lastSentState = {
+                forward: 0,
+                turn: 0
+            };
             dataSendSbus(0, 0);
             // 启动控制循环
             // startHeartbeat();
@@ -1345,6 +1423,11 @@ window.addEventListener('load', () => {
 
     // 自动重连功能：快速重连尝试
     function dataStartAutoReconnect(ws, id) {
+        // 手动断开后禁止自动重连
+        if (dataManuallyDisconnected) {
+            console.log('Data auto-reconnect blocked (manually disconnected)');
+            return;
+        }
         // 如果已经在重连，先停止
         dataStopAutoReconnect();
 
@@ -1461,8 +1544,66 @@ window.addEventListener('load', () => {
         dataIsReconnecting = false;
     }
 
+    // 单独断开该通道（停止自动重连并关闭所有 PeerConnection）
+    function dataDisconnect() {
+        // 设置手动断开标记，禁止后续任何自动重连
+        dataManuallyDisconnected = true;
+        // 停止自动重连，避免立即触发重连
+        dataStopAutoReconnect();
+        dataStopWsReconnect();
+        dataIsReconnecting = false;
+
+        // 停止控制循环
+        stopControlLoop();
+
+        // 发送 peer_close 通知对端
+        dataSendPeerClose();
+
+        // 关闭所有 PeerConnection 和 DataChannel
+        const peerIds = Object.keys(dataPeerConnectionMap);
+        peerIds.forEach((id) => {
+            const pc = dataPeerConnectionMap[id];
+            if (pc) {
+                try {
+                    pc.close();
+                } catch (e) {
+                    console.warn('Error closing data peer connection:', e);
+                }
+            }
+            delete dataPeerConnectionMap[id];
+            if (dataDataChannelMap[id]) delete dataDataChannelMap[id];
+        });
+        dataCurrentDataChannel = null;
+
+        // 重置 UI 状态
+        dataStatusDiv.textContent = 'NOT CONNECTED';
+        dataUpdateConnStatus('disconnected', 'DISCONNECTED');
+        const iceStatusEl = document.getElementById('dataIceStatus');
+        const connectionTypeEl = document.getElementById('dataConnectionType');
+        const rttEl = document.getElementById('dataRtt');
+        const localCandidateEl = document.getElementById('dataLocalCandidate');
+        const remoteCandidateEl = document.getElementById('dataRemoteCandidate');
+        if (iceStatusEl) iceStatusEl.textContent = '--';
+        if (connectionTypeEl) connectionTypeEl.textContent = '--';
+        if (rttEl) rttEl.textContent = '--';
+        if (localCandidateEl) localCandidateEl.textContent = '--';
+        if (remoteCandidateEl) remoteCandidateEl.textContent = '--';
+        dataToggleNoSignalOverlay(true);
+
+        console.log('Data channel disconnected');
+    }
+
+    if (dataDisconnectBtn) {
+        dataDisconnectBtn.addEventListener('click', dataDisconnect);
+    }
+
     // WebSocket 自动重连功能
     function dataStartWsReconnect(url) {
+        // 手动断开后禁止自动重连
+        if (dataManuallyDisconnected) {
+            console.log('Data WS auto-reconnect blocked (manually disconnected)');
+            return;
+        }
         // 如果已经在重连，先停止
         dataStopWsReconnect();
 
@@ -1505,12 +1646,22 @@ window.addEventListener('load', () => {
     }
 
     function dataSendLocalDescription(ws, id, pc, type) {
-        const options = type === 'offer' ? {offerToReceiveAudio: true, offerToReceiveVideo: true} : {};
+        const options = type === 'offer' ? {
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true
+        } : {};
         (type === 'offer' ? pc.createOffer(options) : pc.createAnswer())
-            .then((desc) => pc.setLocalDescription(desc))
+        .then((desc) => pc.setLocalDescription(desc))
             .then(() => {
-                const {sdp, type} = pc.localDescription;
-                ws.send(JSON.stringify({id, type, description: sdp}));
+                const {
+                    sdp,
+                    type
+                } = pc.localDescription;
+                ws.send(JSON.stringify({
+                    id,
+                    type,
+                    description: sdp
+                }));
             })
             .catch((err) => {
                 console.error(`Error creating ${type}:`, err);
@@ -1519,8 +1670,16 @@ window.addEventListener('load', () => {
     }
 
     function dataSendLocalCandidate(ws, id, cand) {
-        const {candidate, sdpMid} = cand;
-        ws.send(JSON.stringify({id, type: 'candidate', candidate, mid: sdpMid}));
+        const {
+            candidate,
+            sdpMid
+        } = cand;
+        ws.send(JSON.stringify({
+            id,
+            type: 'candidate',
+            candidate,
+            mid: sdpMid
+        }));
     }
 
     function dataRandomId(length) {
@@ -1529,4 +1688,3 @@ window.addEventListener('load', () => {
         return [...Array(length)].map(pickRandom).join('');
     }
 });
-
