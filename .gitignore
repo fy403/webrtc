@@ -21,3 +21,7 @@ recv/*.py
 signaling_server/golang/
 turn_server/pion
 web/data_rtc.js
+logs/pion-turn.log
+.deploy/
+*.zip
+*.tar.gz

@@ -1245,6 +1245,21 @@ window.addEventListener('load', () => {
             try {
                 const receiver = transceiver.receiver;
 
+                // ========== 权威 API：RTCRtpReceiver.jitterBufferTarget ==========
+                // Chrome 88+ 提供此属性，是控制 jitter buffer 最可靠的手段，
+                // 直接映射底层 x-google-max-playout-delay-ms，运行时 settable。
+                // 单位：秒。设为 0.05 (50ms)：略高于实测网络抖动(~36ms)，
+                // 既能吸收抖动、避免解码重排，又不浪费延迟。
+                // 注意：设太小(如20ms)会因抖动吸收不足触发丢帧/重排，反而更慢。
+                if ('jitterBufferTarget' in receiver) {
+                    try {
+                        receiver.jitterBufferTarget = 0.05; // 50ms
+                        console.log('jitterBufferTarget set to 50ms');
+                    } catch (e) {
+                        console.warn('Failed to set jitterBufferTarget:', e);
+                    }
+                }
+
                 // 检查 getParameters 方法是否存在
                 if (typeof receiver.getParameters !== 'function') {
                     // 静默返回，依赖 SDP 优化
@@ -1283,20 +1298,21 @@ window.addEventListener('load', () => {
                 }
 
                 // ========== 关键优化：降低抖动缓冲区延迟 ==========
-                // 设置最小播放延迟（目标：30-50ms，而不是默认的 200ms+）
-                // 注意：这些属性可能在某些浏览器中不可用
+                // 必须与 SDP 注入的 x-google-max-playout-delay-ms 保持一致。
+                // 实测网络抖动 ~36ms，故 max 设为 50ms（略高于抖动，留余量）。
+                // 设太小(20ms)会导致抖包时频繁重排/丢帧，延迟不降反升。
                 let hasDelayParams = false;
                 if (parameters.minPlayoutDelay !== undefined) {
-                    parameters.minPlayoutDelay = 0.03; // 30ms（秒为单位）
+                    parameters.minPlayoutDelay = 0.0; // 0ms（秒为单位）
                     hasDelayParams = true;
-                    console.log('Setting minPlayoutDelay to 30ms');
+                    console.log('Setting minPlayoutDelay to 0ms');
                 }
 
-                // 设置最大播放延迟
+                // 设置最大播放延迟：50ms，略高于实测抖动(~36ms)
                 if (parameters.maxPlayoutDelay !== undefined) {
-                    parameters.maxPlayoutDelay = 0.1; // 100ms（秒为单位）
+                    parameters.maxPlayoutDelay = 0.05; // 50ms（秒为单位）
                     hasDelayParams = true;
-                    console.log('Setting maxPlayoutDelay to 100ms');
+                    console.log('Setting maxPlayoutDelay to 50ms');
                 }
 
                 // 只有在有可修改的参数时才调用 setParameters
@@ -1909,10 +1925,10 @@ window.addEventListener('load', () => {
                         if (!sdp.includes('x-google-min-playout-delay-ms') &&
                             !sdp.includes('x-google-max-playout-delay-ms')) {
 
-                            // 插入最小播放延迟（5ms - 更激进的低延迟设置）
-                            const minDelayLine = 'a=x-google-min-playout-delay-ms:5\r\n';
-                            // 插入最大播放延迟（20ms）
-                            const maxDelayLine = 'a=x-google-max-playout-delay-ms:20\r\n';
+                            // 插入最小播放延迟（0ms）
+                            const minDelayLine = 'a=x-google-min-playout-delay-ms:0\r\n';
+                            // 插入最大播放延迟（50ms，略高于实测抖动~36ms）
+                            const maxDelayLine = 'a=x-google-max-playout-delay-ms:50\r\n';
 
                             // 在视频媒体行后插入延迟设置
                             sdp = sdp.slice(0, insertPosition) +
@@ -1920,7 +1936,7 @@ window.addEventListener('load', () => {
                                 maxDelayLine +
                                 sdp.slice(insertPosition);
 
-                            console.log('Added jitter buffer delay control to SDP (5-20ms)');
+                            console.log('Added jitter buffer delay control to SDP (0-50ms)');
                         }
                     }
 
