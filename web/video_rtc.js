@@ -210,9 +210,14 @@ window.addEventListener('load', () => {
         return bitrateSelect ? parseInt(bitrateSelect.value) : 8000000;
     }
 
-    // 设备端是否支持下发具体分辨率（由 DataChannel 的 video_caps 能力协商决定）。
-    // 未收到能力通告前一律按 '-1' 处理，保证连接旧固件时不会把画面搞花。
-    let deviceSupportsResolutionSwitch = false;
+    // 分辨率下发开关（config.html 可配）：
+    //   'auto' 等设备的 video_caps 协商（旧固件不会发 → 保持 -1，最安全）
+    //   'on'   强制下发，不等协商（设备已升级但未发 caps 时用）
+    //   'off'  始终 -1
+    const resolutionSwitchMode = (videoParams && videoParams.resolutionSwitch) || 'auto';
+
+    // 设备端是否支持下发具体分辨率
+    let deviceSupportsResolutionSwitch = (resolutionSwitchMode === 'on');
 
     // 获取当前分辨率（'1920x1080' 或 '-1' 表示保持设备当前值）
     function getCurrentResolution() {
@@ -517,7 +522,10 @@ window.addEventListener('load', () => {
         toggleCustomInputs();
 
         // 匹配画质挡位（老配置无 resolution 字段时按 fps+bitrate 匹配）
-        const mp = matchQualityPreset(videoParams.fps || 30, videoParams.bitrate || 8000000, videoParams.resolution);
+        let mp = matchQualityPreset(videoParams.fps || 30, videoParams.bitrate || 8000000, videoParams.resolution);
+        if (!mp) {
+            mp = matchQualityPreset(videoParams.fps || 30, videoParams.bitrate || 8000000);
+        }
         highlightQualityPreset(mp); // 无匹配不高亮假 preset
     }
 
@@ -1773,9 +1781,13 @@ window.addEventListener('load', () => {
                 if (msg.type === 'e2e_backend' || msg.type === 'latency_report') {
                     PerformanceOptimizer.onBackendLatency(msg);
                 } else if (msg.type === 'video_caps') {
-                    // 设备端能力协商：只有明确声明支持时才下发具体分辨率
-                    deviceSupportsResolutionSwitch = msg.resolution_switch === true;
-                    console.log(`Device video caps: resolution_switch=${deviceSupportsResolutionSwitch}`);
+                    // 设备端能力协商：只有明确声明支持时才下发具体分辨率。
+                    // 注意：av_track 必须重新构建镜像才会发这条消息；Android 端需升级 App。
+                    // 两者都还没升级时会一直保持 '-1'（此时可在 config.html 里把开关设成 on 强制下发）。
+                    if (resolutionSwitchMode === 'auto') {
+                        deviceSupportsResolutionSwitch = msg.resolution_switch === true;
+                    }
+                    console.log(`Device video caps: resolution_switch=${msg.resolution_switch === true}, mode=${resolutionSwitchMode}, active=${deviceSupportsResolutionSwitch}`);
                 } else {
                     console.log(`Message from ${id}:`, msg.type || e.data.substring(0, 50));
                 }

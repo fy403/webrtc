@@ -21,10 +21,12 @@ const ConfigManager = {
             encodedInsertableStreams: false,
             // 视频参数配置
             // resolution: '-1' 表示保持设备当前分辨率；可填 '1920x1080' 这类具体值
+            // resolutionSwitch: 'auto'=等设备 video_caps 协商 / 'on'=强制下发 / 'off'=始终 -1
             videoConfig: {
                 fps: 30,
                 bitrate: 8000000,
-                resolution: '-1'
+                resolution: '-1',
+                resolutionSwitch: 'auto'
             }
         },
         // 数据连接配置

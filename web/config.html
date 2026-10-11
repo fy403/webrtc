@@ -147,6 +147,14 @@
                     <input type="text" class="form-input form-custom-input" id="videoResolutionCustom"
                            placeholder="1920x1080" maxlength="9" style="display:none; margin-top:6px;">
                 </div>
+                <div class="form-group">
+                    <label class="form-label">分辨率下发</label>
+                    <select class="form-select" id="videoResolutionSwitch">
+                        <option value="auto">自动（等设备协商）</option>
+                        <option value="on">强制下发</option>
+                        <option value="off">关闭（始终 -1）</option>
+                    </select>
+                </div>
             </div>
         </div>
 
@@ -510,6 +518,12 @@
             return normalizeResolution(sel ? sel.value : KEEP_RESOLUTION);
         }
         
+        function configGetResolutionSwitch() {
+            const sel = document.getElementById('videoResolutionSwitch');
+            const v = sel ? sel.value : 'auto';
+            return (v === 'on' || v === 'off') ? v : 'auto';
+        }
+        
         document.getElementById('videoFps').addEventListener('change', configToggleCustomInputs);
         document.getElementById('videoBitrate').addEventListener('change', configToggleCustomInputs);
         document.getElementById('videoResolution').addEventListener('change', configToggleCustomInputs);
@@ -567,20 +581,20 @@
         // 保存后将当前画质值持久化到当前激活的 preset 和 localStorage
         function persistPresetAfterSave(fps, bitrate, resolution) {
             const res = (resolution === undefined || resolution === null) ? KEEP_RESOLUTION : normalizeResolution(resolution);
-            // 优先更新当前高亮的 preset（用户选中的那个）
-            const active = getActivePreset();
-            if (active && qualityPresets[active]) {
-                qualityPresets[active].fps = fps;
-                qualityPresets[active].bitrate = bitrate;
-                qualityPresets[active].resolution = res;
-            } else {
-                // fallback: 更新匹配的 preset
-                const matched = matchQualityPreset(fps, bitrate, res);
-                if (matched) {
-                    qualityPresets[matched].fps = fps;
-                    qualityPresets[matched].bitrate = bitrate;
-                    qualityPresets[matched].resolution = res;
-                }
+            // 目标 preset 三级回退：① 当前高亮 ② fps+bitrate+resolution 全匹配 ③ 只按 fps+bitrate
+            // ③ 非常关键：用户"只改分辨率"时三元组不再匹配，没有它新分辨率根本写不回 preset，
+            //    导致 index.html 按 V 键仍然取到旧分辨率。
+            let target = getActivePreset();
+            if (!target || !qualityPresets[target]) {
+                target = matchQualityPreset(fps, bitrate, res);
+            }
+            if (!target) {
+                target = matchQualityPreset(fps, bitrate);
+            }
+            if (target && qualityPresets[target]) {
+                qualityPresets[target].fps = fps;
+                qualityPresets[target].bitrate = bitrate;
+                qualityPresets[target].resolution = res;
             }
             // 持久化到 localStorage
             localStorage.setItem(PRESETS_KEY, JSON.stringify(qualityPresets));
@@ -590,15 +604,22 @@
 
         // 将已保存的 fps/bitrate/resolution 同步回 preset（页面加载时用）
         function syncPresetsFromSavedConfig(fps, bitrate, resolution) {
-            const matched = matchQualityPreset(fps, bitrate, resolution);
-            if (matched) {
-                qualityPresets[matched].fps = fps;
-                qualityPresets[matched].bitrate = bitrate;
-                if (resolution !== undefined && resolution !== null) {
-                    qualityPresets[matched].resolution = normalizeResolution(resolution);
-                }
-                localStorage.setItem(PRESETS_KEY, JSON.stringify(qualityPresets));
+            const hasRes = resolution !== undefined && resolution !== null && resolution !== ''
+                && normalizeResolution(resolution) !== KEEP_RESOLUTION;
+            let matched = matchQualityPreset(fps, bitrate, hasRes ? resolution : undefined);
+            if (!matched) {
+                matched = matchQualityPreset(fps, bitrate);
             }
+            if (!matched) {
+                return;
+            }
+            qualityPresets[matched].fps = fps;
+            qualityPresets[matched].bitrate = bitrate;
+            // '-1'(保持) 不覆盖 preset 自带分辨率，否则按 V 会退化成永远不下发分辨率
+            if (hasRes) {
+                qualityPresets[matched].resolution = normalizeResolution(resolution);
+            }
+            localStorage.setItem(PRESETS_KEY, JSON.stringify(qualityPresets));
         }
 
         function applyQualityPreset(presetKey) {
@@ -742,11 +763,22 @@
             // 设置分辨率（'-1' 或非法值 → 自动/保持）
             setResolutionControl(resolutionValue);
 
+            // 分辨率下发开关
+            const resSwitchEl = document.getElementById('videoResolutionSwitch');
+            if (resSwitchEl) {
+                resSwitchEl.value = videoConfig.resolutionSwitch || 'auto';
+            }
+
             configToggleCustomInputs();
             
             // 同步画质挡位：用已保存的配置更新 preset 值，不写死
             syncPresetsFromSavedConfig(fpsValue, bitrateValue, resolutionValue);
-            const matchedPreset = matchQualityPreset(fpsValue, bitrateValue, resolutionValue);
+            // 先三元组匹配，失败则退化成 fps+bitrate 二元组，保证有 preset 被高亮
+            // （否则 getActivePreset() 为空，保存时无法定位要更新哪个 preset）
+            let matchedPreset = matchQualityPreset(fpsValue, bitrateValue, resolutionValue);
+            if (!matchedPreset) {
+                matchedPreset = matchQualityPreset(fpsValue, bitrateValue);
+            }
             highlightQualityPreset(matchedPreset);  // 无匹配时不高亮 fake preset
 
             // 视频 ICE 服务器
@@ -1184,7 +1216,8 @@
                     videoConfig: {
                         fps: configGetFps(),
                         bitrate: configGetBitrate(),
-                        resolution: configGetResolution()
+                        resolution: configGetResolution(),
+                        resolutionSwitch: configGetResolutionSwitch()
                     }
                 };
 
@@ -1256,7 +1289,8 @@
                     videoConfig: {
                         fps: configGetFps(),
                         bitrate: configGetBitrate(),
-                        resolution: configGetResolution()
+                        resolution: configGetResolution(),
+                        resolutionSwitch: configGetResolutionSwitch()
                     }
                 };
 
