@@ -64,7 +64,12 @@ wsServer.on('request', (req) => {
     }
   });
   conn.on('close', () => {
-    delete clients[id];
+    // 关键修复：重连时"新连接先注册、旧连接的 close 事件后到"，
+    // 无条件 delete 会把刚注册的新连接删掉，导致该 id 之后的 ping 全部
+    // "not found"、客户端收不到回显 → 每 10s 误判超时 → 无限重连循环。
+    if (clients[id] === conn) {
+      delete clients[id];
+    }
     console.error(`Client ${id} disconnected`);
   });
 

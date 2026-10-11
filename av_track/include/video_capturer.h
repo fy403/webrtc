@@ -83,7 +83,15 @@ private:
   AVFilterContext *fps_buffer_sink_ = nullptr;
   int target_fps_;  // 目标输出帧率
 
-  bool init_fps_filter(int width, int height, int fps, AVPixelFormat in_pix_fmt = AV_PIX_FMT_YUV420P);
+  // 上一次显式下发的码率（bitrate=-1 表示保持时复用它）。
+  // 旧实现在 bitrate=-1 时传 0 给 open_encoder，会触发自动码率，
+  // 导致只改分辨率/帧率时把用户设置的码率清掉。
+  int64_t last_bitrate_ = 0;
+
+  // in_width/in_height 必须为解码器实际输出尺寸（buffer src 的声明尺寸）；
+  // out_width/out_height 为编码器输入尺寸，两者不一致时会在滤镜链中插入 scale 滤镜。
+  bool init_fps_filter(int in_width, int in_height, int fps, AVPixelFormat in_pix_fmt,
+                       int out_width, int out_height);
   void cleanup_fps_filter();
 
   // 端到端延时跟踪器

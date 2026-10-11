@@ -335,8 +335,9 @@ bool VideoCapturer::start() {
   // 初始化 FPS 滤镜：当摄像头实际帧率与目标帧率不一致时自动补帧/丢帧
   // in_pix_fmt 使用解码器输出格式（如 YUYV/MJPEG/YUV420P），滤镜内部自动转为 YUV420P
   std::cout << "Decoder output format: " << av_get_pix_fmt_name(codec_context_->pix_fmt) << std::endl;
-  if (!init_fps_filter(encoder_out_width_, encoder_out_height_, framerate_,
-                       codec_context_->pix_fmt)) {
+  if (!init_fps_filter(codec_context_->width, codec_context_->height, framerate_,
+                       codec_context_->pix_fmt,
+                       encoder_out_width_, encoder_out_height_)) {
       std::cerr << "ERROR: FPS filter init failed! This will cause format mismatch errors." << std::endl;
       std::cerr << "  Decoder output: " << av_get_pix_fmt_name(codec_context_->pix_fmt) << std::endl;
       std::cerr << "  Encoder expects: yuv420p" << std::endl;
@@ -445,16 +446,19 @@ void VideoCapturer::set_profile(const std::string &profile) {
   std::cout << "Video profile set to: " << profile_ << std::endl;
 }
 
-bool VideoCapturer::init_fps_filter(int width, int height, int fps, AVPixelFormat in_pix_fmt) {
+bool VideoCapturer::init_fps_filter(int in_width, int in_height, int fps,
+                                    AVPixelFormat in_pix_fmt,
+                                    int out_width, int out_height) {
   cleanup_fps_filter();
 
   const AVFilter *buffersrc = avfilter_get_by_name("buffer");
   const AVFilter *buffersink = avfilter_get_by_name("buffersink");
   const AVFilter *fps_filter = avfilter_get_by_name("fps");
   const AVFilter *format_filter = avfilter_get_by_name("format");
+  const AVFilter *scale_filter = avfilter_get_by_name("scale");
 
-  if (!buffersrc || !buffersink || !fps_filter || !format_filter) {
-    std::cerr << "Cannot find required filters (buffer/buffersink/fps/format), "
+  if (!buffersrc || !buffersink || !fps_filter || !format_filter || !scale_filter) {
+    std::cerr << "Cannot find required filters (buffer/buffersink/fps/format/scale), "
               << "FFmpeg may be compiled without libavfilter" << std::endl;
     return false;
   }
@@ -465,19 +469,24 @@ bool VideoCapturer::init_fps_filter(int width, int height, int fps, AVPixelForma
     return false;
   }
 
-  // 变量提前声明，避免 goto 跨越初始化
+  // 变量提前声明，避免 goto 跨越初始化（C++ 不允许 goto 跳过带初始化的声明）
   char args[256];
   int ret;
   enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_YUV420P, AV_PIX_FMT_NONE };
   const char *fmt_name = av_get_pix_fmt_name(in_pix_fmt);
   AVFilterContext *fmt_ctx = nullptr;
   AVFilterContext *fps_ctx = nullptr;
+  AVFilterContext *scale_ctx = nullptr;
+  AVFilterContext *last_ctx = nullptr;
+  bool need_scale = false;
 
-  // 构建 filtergraph: buffer(in_pix_fmt) → format(yuv420p) → fps=N → buffersink
+  // 构建 filtergraph: buffer(in_pix_fmt) → format(yuv420p) → [scale] → fps=N → buffersink
   // 支持任意输入像素格式（YUYV/BGR0/MJPEG/YUV420P 等），自动转换为 YUV420P
+  // ⚠️ buffer src 必须声明"解码器实际输出尺寸"（喂进来的帧就是这个尺寸）。
+  //    旧实现误用编码器输出尺寸，分辨率动态切换后两者不一致会导致链路尺寸错配。
   snprintf(args, sizeof(args),
            "video_size=%dx%d:pix_fmt=%d:time_base=1/1000000:frame_rate=%d",
-           width, height, in_pix_fmt, fps);
+           in_width, in_height, in_pix_fmt, fps);
 
   ret = avfilter_graph_create_filter(&fps_buffer_src_, buffersrc, "in", args, nullptr, fps_filter_graph_);
   if (ret < 0) { goto cleanup; }
@@ -494,15 +503,33 @@ bool VideoCapturer::init_fps_filter(int width, int height, int fps, AVPixelForma
   ret = av_opt_set_int_list(fps_buffer_sink_, "pix_fmts", pix_fmts, AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
   if (ret < 0) { goto cleanup; }
 
+  // scale 滤镜（可选）：分辨率动态切换时，把解码帧缩放到编码器输出尺寸。
+  // 这样无需重开 V4L2 采集设备（重开会导致断流 + 线程/track 重建）。
+  // 不允许上采样：调用方已把请求尺寸 clamp 到采集分辨率，这里只做校验。
+  need_scale = (out_width > 0 && out_height > 0 &&
+                (out_width != in_width || out_height != in_height));
+  if (need_scale) {
+    snprintf(args, sizeof(args), "w=%d:h=%d:flags=bilinear", out_width, out_height);
+    ret = avfilter_graph_create_filter(&scale_ctx, scale_filter, "scale", args,
+                                       nullptr, fps_filter_graph_);
+    if (ret < 0) { goto cleanup; }
+  }
+
   // fps 滤镜：帧率调整（补帧/丢帧）
   snprintf(args, sizeof(args), "fps=%d", fps);
   ret = avfilter_graph_create_filter(&fps_ctx, fps_filter, "fps", args, nullptr, fps_filter_graph_);
   if (ret < 0) { goto cleanup; }
 
-  // 连接: in → format → fps → out
+  // 连接: in → format → [scale] → fps → out
   ret = avfilter_link(fps_buffer_src_, 0, fmt_ctx, 0);
   if (ret < 0) { goto cleanup; }
-  ret = avfilter_link(fmt_ctx, 0, fps_ctx, 0);
+  last_ctx = fmt_ctx;
+  if (need_scale) {
+    ret = avfilter_link(last_ctx, 0, scale_ctx, 0);
+    if (ret < 0) { goto cleanup; }
+    last_ctx = scale_ctx;
+  }
+  ret = avfilter_link(last_ctx, 0, fps_ctx, 0);
   if (ret < 0) { goto cleanup; }
   ret = avfilter_link(fps_ctx, 0, fps_buffer_sink_, 0);
   if (ret < 0) { goto cleanup; }
@@ -515,8 +542,10 @@ bool VideoCapturer::init_fps_filter(int width, int height, int fps, AVPixelForma
 
   target_fps_ = fps;
 
-  std::cout << "FPS filter initialized: " << width << "x" << height
-            << " @ " << fps << "fps (input=" << fmt_name << " -> yuv420p -> vf=fps=" << fps << ")" << std::endl;
+  std::cout << "FPS filter initialized: " << in_width << "x" << in_height
+            << " @ " << fps << "fps (input=" << fmt_name << " -> yuv420p"
+            << (need_scale ? " -> scale=" + std::to_string(out_width) + "x" + std::to_string(out_height) : "")
+            << " -> vf=fps=" << fps << ")" << std::endl;
 
   return true;
 
@@ -542,10 +571,33 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
 
   std::cout << "Reconfiguring video capturer (stability mode)..." << std::endl;
 
-  // -1/空值表示保持当前值不变
+  // ===== 分辨率："-1"/空 表示保持当前值不变 =====
+  // 兼容旧协议：旧客户端只会传 "-1"。新客户端可传 "1920x1080" 这类具体值。
+  // 这里只改"编码分辨率"：采集设备保持原分辨率，由 FPS 滤镜链中的 scale 滤镜缩放，
+  // 避免重开 V4L2 导致断流与线程/track 重建。
+  int new_w = 0, new_h = 0;
   if (resolution != "-1" && !resolution.empty()) {
-    resolution_ = resolution;
-    std::cout << "  resolution changed to: " << resolution_ << std::endl;
+    if (sscanf(resolution.c_str(), "%dx%d", &new_w, &new_h) == 2 && new_w > 0 && new_h > 0) {
+      // 安全约束：不允许上采样（超过采集分辨率只是浪费码率、画质不会变好）
+      int src_w = codec_context_ ? codec_context_->width : new_w;
+      int src_h = codec_context_ ? codec_context_->height : new_h;
+      if (new_w > src_w || new_h > src_h) {
+        std::cout << "  requested " << new_w << "x" << new_h
+                  << " exceeds capture " << src_w << "x" << src_h << ", clamped" << std::endl;
+        new_w = std::min(new_w, src_w);
+        new_h = std::min(new_h, src_h);
+      }
+      // H.264/H.265 要求宽高为偶数
+      new_w &= ~1;
+      new_h &= ~1;
+      if (new_w < 16) new_w = 16;
+      if (new_h < 16) new_h = 16;
+      resolution_ = std::to_string(new_w) + "x" + std::to_string(new_h);
+      std::cout << "  resolution set to: " << resolution_ << std::endl;
+    } else {
+      std::cerr << "  invalid resolution ignored (keep current): " << resolution << std::endl;
+      new_w = new_h = 0;
+    }
   }
   if (fps != -1) {
     framerate_ = fps;
@@ -556,8 +608,12 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
     std::cout << "  format changed to: " << video_format_ << std::endl;
   }
 
-  // 如果 fps 和 bitrate 都没变，无需重配置
-  if (fps == -1 && bitrate == -1) {
+  bool resolution_changed = (new_w > 0 && new_h > 0 &&
+                             (new_w != encoder_out_width_ || new_h != encoder_out_height_));
+
+  // 如果 fps、bitrate、分辨率都没变，无需重配置
+  // （旧实现只看 fps/bitrate，导致"只改分辨率"时直接 return，分辨率切换永远不生效）
+  if (fps == -1 && bitrate == -1 && !resolution_changed) {
     std::cout << "No encoder parameters changed, skipping reconfiguration" << std::endl;
     return;
   }
@@ -569,15 +625,27 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
     return;
   }
 
-  // 解析当前分辨率获取宽高
-  int width = 640, height = 480;
-  sscanf(resolution_.c_str(), "%dx%d", &width, &height);
+  // 解析目标分辨率获取宽高（未指定时用当前编码器输出尺寸）
+  int width = new_w, height = new_h;
+  if (width <= 0 || height <= 0) {
+    width = encoder_out_width_;
+    height = encoder_out_height_;
+  }
+  if (width <= 0 || height <= 0) {
+    sscanf(resolution_.c_str(), "%dx%d", &width, &height);
+  }
+  if (width <= 0 || height <= 0) {
+    width = 640;
+    height = 480;
+  }
   if (width < height) {
     std::swap(width, height);
   }
 
   int actual_fps = (fps != -1) ? fps : framerate_;
-  int actual_bitrate = (bitrate != -1) ? bitrate : 0;
+  // 关键修复：bitrate=-1（保持）时复用上一次显式下发的码率。
+  // 旧实现传 0，会触发编码器自动码率，把用户设置的码率悄悄清掉。
+  int64_t actual_bitrate = (bitrate != -1) ? (last_bitrate_ = bitrate) : last_bitrate_;
 
   std::cout << "Reconfiguring encoder: " << width << "x" << height
             << " " << actual_fps << "fps " << actual_bitrate << "bps" << std::endl;
@@ -589,6 +657,11 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
   decode_queue_.clear();
   encode_queue_.clear();
   send_queue_.clear();
+
+  // 分辨率变化后，帧池里的旧尺寸帧全部失效，必须清空重建
+  if (resolution_changed) {
+    clear_frame_pool();
+  }
 
   // ===== 关键修复：持有 encoder_mutex_ 保护编码器关闭/重开 =====
   // 防止 encode_loop 线程正在使用 encoder 时被 close_encoder 破坏上下文
@@ -613,14 +686,14 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
       return;
     }
 
-    bool resolution_changed = (encoder_out_width_ != encoder_context->width ||
-                               encoder_out_height_ != encoder_context->height ||
-                               encoder_out_pix_fmt_ != encoder_context->pix_fmt);
+    bool out_dims_changed = (encoder_out_width_ != encoder_context->width ||
+                             encoder_out_height_ != encoder_context->height ||
+                             encoder_out_pix_fmt_ != encoder_context->pix_fmt);
     encoder_out_width_ = encoder_context->width;
     encoder_out_height_ = encoder_context->height;
     encoder_out_pix_fmt_ = encoder_context->pix_fmt;
 
-    if (resolution_changed && codec_context_) {
+    if (out_dims_changed && codec_context_) {
       // 只有在分辨率变化时才重建 SwsContext
       if (sws_context_) {
         sws_freeContext(sws_context_);
@@ -639,11 +712,17 @@ void VideoCapturer::reconfigure(const std::string &resolution, int fps, int bitr
   } // encoder_mutex_ 释放
 
   // ===== 关键修复：持有 filter_mutex_ 保护 FPS 滤镜重建 =====
-  // 防止 filter_loop 线程正在使用 fps_buffer_* 时被清理
-  if (fps != -1) {
+  // 防止 filter_loop 线程正在使用 fps_buffer_* 时被清理。
+  // 分辨率变化时必须重建：scale 滤镜的目标尺寸变了（旧实现只在 fps != -1 时重建）。
+  if (fps != -1 || resolution_changed) {
     std::lock_guard<std::mutex> lock(filter_mutex_);
-    if (!init_fps_filter(encoder_out_width_, encoder_out_height_, actual_fps,
-                         codec_context_ ? codec_context_->pix_fmt : AV_PIX_FMT_YUV420P)) {
+    // buffer src 用解码器实际输出尺寸，scale 目标用编码器实际输出尺寸
+    // （硬编可能对尺寸取整，故用 encoder_out_* 而非请求的 width/height）
+    int in_w = codec_context_ ? codec_context_->width : encoder_out_width_;
+    int in_h = codec_context_ ? codec_context_->height : encoder_out_height_;
+    AVPixelFormat in_pix = codec_context_ ? codec_context_->pix_fmt : AV_PIX_FMT_YUV420P;
+    if (!init_fps_filter(in_w, in_h, actual_fps, in_pix,
+                         encoder_out_width_, encoder_out_height_)) {
       std::cout << "Warning: FPS filter re-init failed, using raw framerate" << std::endl;
     }
   }

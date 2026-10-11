@@ -1,5 +1,7 @@
 .vs/
 out/
+# 本地专用同步脚本（内含明文 SSH 信息，禁止提交）
+sync.sh
 .mp4
 build/
 .vscode/

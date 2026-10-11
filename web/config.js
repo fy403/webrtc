@@ -20,9 +20,11 @@ const ConfigManager = {
             rtcpMuxPolicy: 'require',
             encodedInsertableStreams: false,
             // 视频参数配置
+            // resolution: '-1' 表示保持设备当前分辨率；可填 '1920x1080' 这类具体值
             videoConfig: {
                 fps: 30,
-                bitrate: 8000000
+                bitrate: 8000000,
+                resolution: '-1'
             }
         },
         // 数据连接配置

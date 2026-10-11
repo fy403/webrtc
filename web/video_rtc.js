@@ -189,6 +189,8 @@ window.addEventListener('load', () => {
     const bitrateSelect = document.getElementById('bitrateSelect');
     const fpsCustomInput = document.getElementById('fpsCustomInput');
     const bitrateCustomInput = document.getElementById('bitrateCustomInput');
+    const resolutionSelect = document.getElementById('resolutionSelect');
+    const resolutionCustomInput = document.getElementById('resolutionCustomInput');
 
     // 获取当前FPS值（预设或自定义）
     function getCurrentFps() {
@@ -208,6 +210,19 @@ window.addEventListener('load', () => {
         return bitrateSelect ? parseInt(bitrateSelect.value) : 8000000;
     }
 
+    // 设备端是否支持下发具体分辨率（由 DataChannel 的 video_caps 能力协商决定）。
+    // 未收到能力通告前一律按 '-1' 处理，保证连接旧固件时不会把画面搞花。
+    let deviceSupportsResolutionSwitch = false;
+
+    // 获取当前分辨率（'1920x1080' 或 '-1' 表示保持设备当前值）
+    function getCurrentResolution() {
+        if (!resolutionSelect || !deviceSupportsResolutionSwitch) return KEEP_RESOLUTION;
+        const raw = (resolutionSelect.value == '__custom__') ?
+            (resolutionCustomInput ? resolutionCustomInput.value : '') :
+            resolutionSelect.value;
+        return normalizeResolution(raw);
+    }
+
     // 自定义输入框显隐切换
     function toggleCustomInputs() {
         if (fpsCustomInput) {
@@ -216,35 +231,99 @@ window.addEventListener('load', () => {
         if (bitrateCustomInput) {
             bitrateCustomInput.style.display = (bitrateSelect && bitrateSelect.value == '__custom__') ? 'block' : 'none';
         }
+        if (resolutionCustomInput) {
+            resolutionCustomInput.style.display = (resolutionSelect && resolutionSelect.value == '__custom__') ? 'block' : 'none';
+        }
     }
 
     if (fpsSelect) fpsSelect.addEventListener('change', toggleCustomInputs);
     if (bitrateSelect) bitrateSelect.addEventListener('change', toggleCustomInputs);
+    if (resolutionSelect) resolutionSelect.addEventListener('change', toggleCustomInputs);
 
     // ==================== 画质挡位 (V键切换) ====================
     const PRESETS_KEY = 'webrtc_quality_presets';
+    // 分辨率格式：宽x高（大小写 x 均可）。'-1' 表示保持设备当前分辨率不变。
+    const RESOLUTION_RE = /^(\d{2,4})[xX](\d{2,4})$/;
+    const KEEP_RESOLUTION = '-1';
+    // 下拉里预置的分辨率选项（不在此列则落到自定义输入）
+    const PRESET_RESOLUTIONS = ['640x480', '1280x720', '1920x1080'];
+
+    // 归一化分辨率字符串：非法返回 '-1'（保持），避免把脏数据发给设备
+    function normalizeResolution(raw) {
+        const m = RESOLUTION_RE.exec(String(raw == null ? '' : raw).trim());
+        if (!m) return KEEP_RESOLUTION;
+        let w = parseInt(m[1], 10);
+        let h = parseInt(m[2], 10);
+        if (w < h) {
+            const t = w;
+            w = h;
+            h = t;
+        }
+        w = Math.floor(w / 2) * 2; // 编码器要求偶数
+        h = Math.floor(h / 2) * 2;
+        if (w < 160 || w > 4096 || h < 120 || h > 4096) return KEEP_RESOLUTION;
+        return `${w}x${h}`;
+    }
+
+    // 把分辨率写入下拉控件（不在预置列表则切到自定义）
+    function setResolutionControl(value) {
+        if (!resolutionSelect) return;
+        const res = normalizeResolution(value);
+        if (res === KEEP_RESOLUTION) {
+            resolutionSelect.value = KEEP_RESOLUTION;
+        } else if (PRESET_RESOLUTIONS.includes(res)) {
+            resolutionSelect.value = res;
+        } else {
+            resolutionSelect.value = '__custom__';
+            if (resolutionCustomInput) resolutionCustomInput.value = res;
+        }
+    }
+
     const defaultPresets = {
         low: {
             fps: 15,
             bitrate: 1000000,
+            resolution: '640x480',
             label: '低画质'
         },
         medium: {
             fps: 30,
             bitrate: 4000000,
+            resolution: '1280x720',
             label: '中画质'
         },
         high: {
             fps: 60,
             bitrate: 8000000,
+            resolution: '1920x1080',
             label: '高画质'
         }
     };
+
+    // 兼容老版本 localStorage 数据：老数据没有 resolution 字段，
+    // 按档位补默认值；已有但非法的分辨率回落默认值。
+    function migratePresets(saved) {
+        const out = JSON.parse(JSON.stringify(defaultPresets));
+        if (!saved || typeof saved !== 'object') return out;
+        Object.keys(out).forEach(key => {
+            const src = saved[key];
+            if (!src || typeof src !== 'object') return;
+            if (Number.isFinite(Number(src.fps))) out[key].fps = Number(src.fps);
+            if (Number.isFinite(Number(src.bitrate))) out[key].bitrate = Number(src.bitrate);
+            if (typeof src.resolution === 'string') {
+                const res = normalizeResolution(src.resolution);
+                out[key].resolution = (res === KEEP_RESOLUTION) ? defaultPresets[key].resolution : res;
+            }
+            if (typeof src.label === 'string' && src.label) out[key].label = src.label;
+        });
+        return out;
+    }
+
     // 从 localStorage 同步 config 中用户保存的 preset 值
     let qualityPresets;
     try {
-        const saved = localStorage.getItem(PRESETS_KEY);
-        qualityPresets = saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(defaultPresets));
+        const savedRaw = localStorage.getItem(PRESETS_KEY);
+        qualityPresets = migratePresets(savedRaw ? JSON.parse(savedRaw) : null);
     } catch (e) {
         qualityPresets = JSON.parse(JSON.stringify(defaultPresets));
     }
@@ -257,6 +336,7 @@ window.addEventListener('load', () => {
             if (btn && qualityPresets[key]) {
                 btn.dataset.fps = qualityPresets[key].fps;
                 btn.dataset.bitrate = qualityPresets[key].bitrate;
+                btn.dataset.resolution = qualityPresets[key].resolution;
                 btn.textContent = qualityPresets[key].label;
             }
         });
@@ -282,6 +362,8 @@ window.addEventListener('load', () => {
             bitrateSelect.value = '__custom__';
             if (bitrateCustomInput) bitrateCustomInput.value = (preset.bitrate / 1000000).toFixed(1);
         }
+        // 更新分辨率（缺省/非法时保持设备当前分辨率，即 '-1'）
+        setResolutionControl(preset.resolution || KEEP_RESOLUTION);
         toggleCustomInputs();
         highlightQualityPreset(presetKey);
         showQualityToast(preset);
@@ -329,7 +411,10 @@ window.addEventListener('load', () => {
             toast.classList.add('warning');
         } else {
             const mbps = (preset.bitrate / 1000000).toFixed(1);
-            toast.innerHTML = `<span class="toast-label">${preset.label}</span><span class="toast-info">${preset.fps}fps · ${mbps}Mbps</span>`;
+            const res = normalizeResolution(preset.resolution);
+            // 设备不支持分辨率切换时（旧固件）实际保持原分辨率
+            const resText = (res === KEEP_RESOLUTION || !deviceSupportsResolutionSwitch) ? '分辨率保持' : res;
+            toast.innerHTML = `<span class="toast-label">${preset.label}</span><span class="toast-info">${resText} · ${preset.fps}fps · ${mbps}Mbps</span>`;
             toast.classList.remove('warning');
         }
         toast.classList.add('show');
@@ -376,10 +461,14 @@ window.addEventListener('load', () => {
         showQualityDisplay(presetOrder[nextIdx]);
     });
 
-    // 根据当前 fps/bitrate 匹配画质挡位
-    function matchQualityPreset(fps, bitrate) {
+    // 根据当前 fps/bitrate/resolution 匹配画质挡位
+    // resolution 为 undefined 时（老配置）只按 fps+bitrate 匹配，保证向后兼容
+    function matchQualityPreset(fps, bitrate, resolution) {
+        const res = (resolution === undefined || resolution === null) ? null : normalizeResolution(resolution);
         for (const [key, preset] of Object.entries(qualityPresets)) {
-            if (preset.fps === fps && preset.bitrate === bitrate) return key;
+            if (preset.fps !== fps || preset.bitrate !== bitrate) continue;
+            if (res !== null && res !== normalizeResolution(preset.resolution)) continue;
+            return key;
         }
         return null;
     }
@@ -415,10 +504,20 @@ window.addEventListener('load', () => {
             }
         }
 
+        // 设置分辨率（'-1'/空/缺省 表示保持设备当前分辨率）
+        if (resolutionSelect) {
+            const savedRes = videoParams.resolution;
+            if (savedRes === undefined || savedRes === null || savedRes === '' || savedRes === KEEP_RESOLUTION) {
+                resolutionSelect.value = KEEP_RESOLUTION;
+            } else {
+                setResolutionControl(savedRes);
+            }
+        }
+
         toggleCustomInputs();
 
-        // 匹配画质挡位
-        const mp = matchQualityPreset(videoParams.fps || 30, videoParams.bitrate || 8000000);
+        // 匹配画质挡位（老配置无 resolution 字段时按 fps+bitrate 匹配）
+        const mp = matchQualityPreset(videoParams.fps || 30, videoParams.bitrate || 8000000, videoParams.resolution);
         highlightQualityPreset(mp); // 无匹配不高亮假 preset
     }
 
@@ -428,15 +527,20 @@ window.addEventListener('load', () => {
     // 发送视频参数到设备
     function sendVideoParams(dataChannel, paramsToSend = null) {
         // 如果传入了参数则使用传入的参数，否则从界面获取当前值
-        // resolution 和 format 传递 -1 表示保持设备当前值不变
+        // resolution 传 '-1' 表示保持设备当前值不变（兼容旧设备端逻辑），
+        // 传 '1920x1080' 这类具体值时设备端会缩放编码分辨率。
+        // format 固定传 '-1'（暂不支持动态切换采集格式）
         const videoParamsToSend = paramsToSend || {
             fps: getCurrentFps(),
             bitrate: getCurrentBitrate()
         };
+        // 未显式传入 resolution 时取界面当前值
+        const resolutionToSend = (paramsToSend && paramsToSend.resolution !== undefined) ?
+            normalizeResolution(paramsToSend.resolution) : getCurrentResolution();
 
         const configMsg = {
             type: 'video_config',
-            resolution: '-1',
+            resolution: resolutionToSend,
             fps: videoParamsToSend.fps || 30,
             bitrate: videoParamsToSend.bitrate || 8000000,
             format: '-1'
@@ -445,7 +549,7 @@ window.addEventListener('load', () => {
         try {
             dataChannel.send(JSON.stringify(configMsg));
             console.log('Sent video params:', configMsg);
-            updateStatus(`Video config sent: ${configMsg.fps}fps, ${configMsg.bitrate}bps`);
+            updateStatus(`Video config sent: ${configMsg.resolution}, ${configMsg.fps}fps, ${configMsg.bitrate}bps`);
             return true;
         } catch (e) {
             console.error('Error sending video params:', e);
@@ -474,7 +578,8 @@ window.addEventListener('load', () => {
             // 从界面获取当前配置值并发送
             const currentParams = {
                 fps: getCurrentFps(),
-                bitrate: getCurrentBitrate()
+                bitrate: getCurrentBitrate(),
+                resolution: getCurrentResolution()
             };
 
             // 发送配置到设备（index.html 不持久化，配置由 config.html 管理）
@@ -1667,6 +1772,10 @@ window.addEventListener('load', () => {
                 // 处理服务端推送的 E2E 延时数据
                 if (msg.type === 'e2e_backend' || msg.type === 'latency_report') {
                     PerformanceOptimizer.onBackendLatency(msg);
+                } else if (msg.type === 'video_caps') {
+                    // 设备端能力协商：只有明确声明支持时才下发具体分辨率
+                    deviceSupportsResolutionSwitch = msg.resolution_switch === true;
+                    console.log(`Device video caps: resolution_switch=${deviceSupportsResolutionSwitch}`);
                 } else {
                     console.log(`Message from ${id}:`, msg.type || e.data.substring(0, 50));
                 }

@@ -106,9 +106,9 @@
                 视频参数配置
             </div>
             <div class="quality-preset-bar" id="qualityPresetBar">
-                <button class="quality-preset-btn active" data-preset="medium" data-fps="30" data-bitrate="4000000" tabindex="0">中画质</button>
-                <button class="quality-preset-btn" data-preset="low" data-fps="15" data-bitrate="1000000" tabindex="-1">低画质</button>
-                <button class="quality-preset-btn" data-preset="high" data-fps="60" data-bitrate="8000000" tabindex="-1">高画质</button>
+                <button class="quality-preset-btn active" data-preset="medium" data-fps="30" data-bitrate="4000000" data-resolution="1280x720" tabindex="0">中画质</button>
+                <button class="quality-preset-btn" data-preset="low" data-fps="15" data-bitrate="1000000" data-resolution="640x480" tabindex="-1">低画质</button>
+                <button class="quality-preset-btn" data-preset="high" data-fps="60" data-bitrate="8000000" data-resolution="1920x1080" tabindex="-1">高画质</button>
             </div>
             <div class="config-grid">
                 <div class="form-group">
@@ -134,6 +134,18 @@
                     </select>
                     <input type="number" class="form-input form-custom-input" id="videoBitrateCustom"
                            placeholder="Mbps" min="0.1" max="100" step="0.1" style="display:none; margin-top:6px;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">分辨率 (WxH)</label>
+                    <select class="form-select" id="videoResolution">
+                        <option value="-1">自动 (保持设备)</option>
+                        <option value="640x480">640x480</option>
+                        <option value="1280x720">1280x720</option>
+                        <option value="1920x1080">1920x1080</option>
+                        <option value="__custom__">自定义...</option>
+                    </select>
+                    <input type="text" class="form-input form-custom-input" id="videoResolutionCustom"
+                           placeholder="1920x1080" maxlength="9" style="display:none; margin-top:6px;">
                 </div>
             </div>
         </div>
@@ -430,12 +442,46 @@
             document.getElementById('currentConfigName').textContent = name;
         }
 
+        // 分辨率格式校验（宽x高）；'-1' 表示保持设备当前分辨率
+        const RESOLUTION_RE = /^(\d{2,4})[xX](\d{2,4})$/;
+        const KEEP_RESOLUTION = '-1';
+        const PRESET_RESOLUTIONS = ['640x480', '1280x720', '1920x1080'];
+
+        function normalizeResolution(raw) {
+            const m = RESOLUTION_RE.exec(String(raw == null ? '' : raw).trim());
+            if (!m) return KEEP_RESOLUTION;
+            let w = parseInt(m[1], 10);
+            let h = parseInt(m[2], 10);
+            if (w < h) { const t = w; w = h; h = t; }
+            w = Math.floor(w / 2) * 2;   // 编码器要求偶数
+            h = Math.floor(h / 2) * 2;
+            if (w < 160 || w > 4096 || h < 120 || h > 4096) return KEEP_RESOLUTION;
+            return `${w}x${h}`;
+        }
+
+        // 把分辨率写入下拉控件（不在预置列表则切到自定义）
+        function setResolutionControl(value) {
+            const sel = document.getElementById('videoResolution');
+            if (!sel) return;
+            const res = normalizeResolution(value);
+            if (res === KEEP_RESOLUTION) {
+                sel.value = KEEP_RESOLUTION;
+            } else if (PRESET_RESOLUTIONS.includes(res)) {
+                sel.value = res;
+            } else {
+                sel.value = '__custom__';
+                document.getElementById('videoResolutionCustom').value = res;
+            }
+        }
+
         // 自定义输入显隐
         function configToggleCustomInputs() {
             const fpsSel = document.getElementById('videoFps');
             const brSel = document.getElementById('videoBitrate');
+            const resSel = document.getElementById('videoResolution');
             document.getElementById('videoFpsCustom').style.display = (fpsSel && fpsSel.value == '__custom__') ? 'block' : 'none';
             document.getElementById('videoBitrateCustom').style.display = (brSel && brSel.value == '__custom__') ? 'block' : 'none';
+            document.getElementById('videoResolutionCustom').style.display = (resSel && resSel.value == '__custom__') ? 'block' : 'none';
         }
         
         function configGetFps() {
@@ -456,22 +502,49 @@
             return sel ? parseInt(sel.value) : 8000000;
         }
         
+        function configGetResolution() {
+            const sel = document.getElementById('videoResolution');
+            if (sel && sel.value == '__custom__') {
+                return normalizeResolution(document.getElementById('videoResolutionCustom').value);
+            }
+            return normalizeResolution(sel ? sel.value : KEEP_RESOLUTION);
+        }
+        
         document.getElementById('videoFps').addEventListener('change', configToggleCustomInputs);
         document.getElementById('videoBitrate').addEventListener('change', configToggleCustomInputs);
+        document.getElementById('videoResolution').addEventListener('change', configToggleCustomInputs);
         
         // ==================== 画质挡位 ====================
         const PRESETS_KEY = 'webrtc_quality_presets';
         const defaultPresets = {
-            low:    { fps: 15, bitrate: 1000000, label: '低画质' },
-            medium: { fps: 30, bitrate: 4000000, label: '中画质' },
-            high:   { fps: 60, bitrate: 8000000, label: '高画质' }
+            low:    { fps: 15, bitrate: 1000000, resolution: '640x480',   label: '低画质' },
+            medium: { fps: 30, bitrate: 4000000, resolution: '1280x720',  label: '中画质' },
+            high:   { fps: 60, bitrate: 8000000, resolution: '1920x1080', label: '高画质' }
         };
+
+        // 兼容老版本 localStorage 数据：老数据没有 resolution 字段，按档位补默认值
+        function migratePresets(saved) {
+            const out = JSON.parse(JSON.stringify(defaultPresets));
+            if (!saved || typeof saved !== 'object') return out;
+            Object.keys(out).forEach(key => {
+                const src = saved[key];
+                if (!src || typeof src !== 'object') return;
+                if (Number.isFinite(Number(src.fps))) out[key].fps = Number(src.fps);
+                if (Number.isFinite(Number(src.bitrate))) out[key].bitrate = Number(src.bitrate);
+                if (typeof src.resolution === 'string') {
+                    const res = normalizeResolution(src.resolution);
+                    out[key].resolution = (res === KEEP_RESOLUTION) ? defaultPresets[key].resolution : res;
+                }
+                if (typeof src.label === 'string' && src.label) out[key].label = src.label;
+            });
+            return out;
+        }
 
         // 从 localStorage 恢复用户之前保存的 preset 值
         let qualityPresets = {};
         try {
-            const saved = localStorage.getItem(PRESETS_KEY);
-            qualityPresets = saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(defaultPresets));
+            const savedRaw = localStorage.getItem(PRESETS_KEY);
+            qualityPresets = migratePresets(savedRaw ? JSON.parse(savedRaw) : null);
         } catch (e) {
             qualityPresets = JSON.parse(JSON.stringify(defaultPresets));
         }
@@ -485,24 +558,28 @@
                 if (btn && qualityPresets[key]) {
                     btn.dataset.fps = qualityPresets[key].fps;
                     btn.dataset.bitrate = qualityPresets[key].bitrate;
+                    btn.dataset.resolution = qualityPresets[key].resolution;
                     btn.textContent = qualityPresets[key].label;
                 }
             });
         }
 
         // 保存后将当前画质值持久化到当前激活的 preset 和 localStorage
-        function persistPresetAfterSave(fps, bitrate) {
+        function persistPresetAfterSave(fps, bitrate, resolution) {
+            const res = (resolution === undefined || resolution === null) ? KEEP_RESOLUTION : normalizeResolution(resolution);
             // 优先更新当前高亮的 preset（用户选中的那个）
             const active = getActivePreset();
             if (active && qualityPresets[active]) {
                 qualityPresets[active].fps = fps;
                 qualityPresets[active].bitrate = bitrate;
+                qualityPresets[active].resolution = res;
             } else {
                 // fallback: 更新匹配的 preset
-                const matched = matchQualityPreset(fps, bitrate);
+                const matched = matchQualityPreset(fps, bitrate, res);
                 if (matched) {
                     qualityPresets[matched].fps = fps;
                     qualityPresets[matched].bitrate = bitrate;
+                    qualityPresets[matched].resolution = res;
                 }
             }
             // 持久化到 localStorage
@@ -511,12 +588,15 @@
             applyPresetsToButtons();
         }
 
-        // 将已保存的 fps/bitrate 同步回 preset（页面加载时用）
-        function syncPresetsFromSavedConfig(fps, bitrate) {
-            const matched = matchQualityPreset(fps, bitrate);
+        // 将已保存的 fps/bitrate/resolution 同步回 preset（页面加载时用）
+        function syncPresetsFromSavedConfig(fps, bitrate, resolution) {
+            const matched = matchQualityPreset(fps, bitrate, resolution);
             if (matched) {
                 qualityPresets[matched].fps = fps;
                 qualityPresets[matched].bitrate = bitrate;
+                if (resolution !== undefined && resolution !== null) {
+                    qualityPresets[matched].resolution = normalizeResolution(resolution);
+                }
                 localStorage.setItem(PRESETS_KEY, JSON.stringify(qualityPresets));
             }
         }
@@ -545,6 +625,9 @@
                 brSel.value = '__custom__';
                 document.getElementById('videoBitrateCustom').value = (preset.bitrate / 1000000).toFixed(1);
             }
+
+            // 更新分辨率
+            setResolutionControl(preset.resolution || KEEP_RESOLUTION);
             
             configToggleCustomInputs();
             highlightQualityPreset(presetKey);
@@ -577,7 +660,9 @@
             const toast = document.getElementById('qualityToast');
             if (!toast) { console.warn('qualityToast element not found'); return; }
             const mbps = (preset.bitrate / 1000000).toFixed(1);
-            toast.innerHTML = `<span class="toast-label">${preset.label}</span><span class="toast-info">${preset.fps}fps · ${mbps}Mbps</span>`;
+            const res = normalizeResolution(preset.resolution);
+            const resText = (res === KEEP_RESOLUTION) ? '分辨率保持' : res;
+            toast.innerHTML = `<span class="toast-label">${preset.label}</span><span class="toast-info">${resText} · ${preset.fps}fps · ${mbps}Mbps</span>`;
             toast.classList.add('show');
             if (qualityToastTimer) clearTimeout(qualityToastTimer);
             qualityToastTimer = setTimeout(() => toast.classList.remove('show'), 2000);
@@ -599,12 +684,14 @@
             applyQualityPreset(nextKey);
         });
         
-        // 根据当前 fps/bitrate 匹配画质挡位
-        function matchQualityPreset(fps, bitrate) {
+        // 根据当前 fps/bitrate/resolution 匹配画质挡位
+        // resolution 为 undefined 时（老配置）只按 fps+bitrate 匹配，保证向后兼容
+        function matchQualityPreset(fps, bitrate, resolution) {
+            const res = (resolution === undefined || resolution === null) ? null : normalizeResolution(resolution);
             for (const [key, preset] of Object.entries(qualityPresets)) {
-                if (preset.fps === fps && preset.bitrate === bitrate) {
-                    return key;
-                }
+                if (preset.fps !== fps || preset.bitrate !== bitrate) continue;
+                if (res !== null && res !== normalizeResolution(preset.resolution)) continue;
+                return key;
             }
             return null;
         }
@@ -628,6 +715,9 @@
             const videoConfig = config.video.videoConfig || {};
             const fpsValue = videoConfig.fps || 30;
             const bitrateValue = videoConfig.bitrate || 8000000;
+            // 老配置没有 resolution 字段：缺省即 '-1'（保持设备当前分辨率）
+            const resolutionValue = (videoConfig.resolution === undefined || videoConfig.resolution === null || videoConfig.resolution === '')
+                ? KEEP_RESOLUTION : String(videoConfig.resolution);
             
             // 设置FPS（预设或自定义）
             const fpsSelectEl = document.getElementById('videoFps');
@@ -649,11 +739,14 @@
                 document.getElementById('videoBitrateCustom').value = (bitrateValue / 1000000).toFixed(1);
             }
             
+            // 设置分辨率（'-1' 或非法值 → 自动/保持）
+            setResolutionControl(resolutionValue);
+
             configToggleCustomInputs();
             
             // 同步画质挡位：用已保存的配置更新 preset 值，不写死
-            syncPresetsFromSavedConfig(fpsValue, bitrateValue);
-            const matchedPreset = matchQualityPreset(fpsValue, bitrateValue);
+            syncPresetsFromSavedConfig(fpsValue, bitrateValue, resolutionValue);
+            const matchedPreset = matchQualityPreset(fpsValue, bitrateValue, resolutionValue);
             highlightQualityPreset(matchedPreset);  // 无匹配时不高亮 fake preset
 
             // 视频 ICE 服务器
@@ -1090,12 +1183,14 @@
                     encodedInsertableStreams: document.getElementById('videoEncodedInsertableStreams').value === 'true',
                     videoConfig: {
                         fps: configGetFps(),
-                        bitrate: configGetBitrate()
+                        bitrate: configGetBitrate(),
+                        resolution: configGetResolution()
                     }
                 };
 
                 // 持久化画质挡位值回 preset（不写死）
-                persistPresetAfterSave(videoConfig.videoConfig.fps, videoConfig.videoConfig.bitrate);
+                persistPresetAfterSave(videoConfig.videoConfig.fps, videoConfig.videoConfig.bitrate,
+                                       videoConfig.videoConfig.resolution);
 
                 // 收集数据配置
                 const dataConfig = {
@@ -1160,12 +1255,14 @@
                     encodedInsertableStreams: document.getElementById('videoEncodedInsertableStreams').value === 'true',
                     videoConfig: {
                         fps: configGetFps(),
-                        bitrate: configGetBitrate()
+                        bitrate: configGetBitrate(),
+                        resolution: configGetResolution()
                     }
                 };
 
                 // 持久化画质挡位值回 preset
-                persistPresetAfterSave(videoConfig.videoConfig.fps, videoConfig.videoConfig.bitrate);
+                persistPresetAfterSave(videoConfig.videoConfig.fps, videoConfig.videoConfig.bitrate,
+                                       videoConfig.videoConfig.resolution);
 
                 const dataConfig = {
                     signalingUrl: document.getElementById('dataSignalingUrl').value.trim(),

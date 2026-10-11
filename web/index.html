@@ -725,11 +725,11 @@
             </div>
             <div class="quality-preset-bar" id="qualityPresetBar" style="margin-bottom:10px; gap:6px;">
                 <button class="quality-preset-btn active" data-preset="medium" data-fps="30" data-bitrate="4000000"
-                    tabindex="0">中画质</button>
+                    data-resolution="1280x720" tabindex="0">中画质</button>
                 <button class="quality-preset-btn" data-preset="low" data-fps="15" data-bitrate="1000000"
-                    tabindex="-1">低画质</button>
+                    data-resolution="640x480" tabindex="-1">低画质</button>
                 <button class="quality-preset-btn" data-preset="high" data-fps="60" data-bitrate="8000000"
-                    tabindex="-1">高画质</button>
+                    data-resolution="1920x1080" tabindex="-1">高画质</button>
                 <span class="quality-hint" title="按 V 键快速切换画质">V</span>
             </div>
             <div class="config-row">
@@ -756,6 +756,20 @@
                     </select>
                     <input type="number" class="config-custom-input" id="bitrateCustomInput" placeholder="Mbps"
                         min="0.1" max="100" step="0.1" style="display:none;">
+                </div>
+            </div>
+            <div class="config-row">
+                <div class="config-group">
+                    <label class="config-label">RESOLUTION (WxH)</label>
+                    <select class="config-select" id="resolutionSelect">
+                        <option value="-1">AUTO (保持设备)</option>
+                        <option value="640x480">640x480</option>
+                        <option value="1280x720">1280x720</option>
+                        <option value="1920x1080">1920x1080</option>
+                        <option value="__custom__">Custom...</option>
+                    </select>
+                    <input type="text" class="config-custom-input" id="resolutionCustomInput" placeholder="1920x1080"
+                        maxlength="9" style="display:none;">
                 </div>
             </div>
         </div>

@@ -23,6 +23,36 @@ template <class T> weak_ptr<T> make_weak_ptr(shared_ptr<T> ptr) {
   return weak_ptr<T>(ptr);
 }
 
+// ====== 分辨率字符串校验/归一化（来自不可信 DataChannel，必须白名单化）======
+// 合法输入形如 "1920x1080"（x 大小写均可）。返回归一化后的 "WxH"；
+// 返回空串表示"不合法/保持原值"，调用方应回退为 "-1"。
+// 约束：纯数字、2~4 位、范围 160~4096、统一横向、宽高取偶数（H.264 要求）。
+static std::string normalizeResolution(const std::string &in) {
+  if (in.empty() || in == "-1") return "";
+
+  size_t pos = in.find_first_of("xX");
+  if (pos == std::string::npos || pos == 0 || pos + 1 >= in.size()) return "";
+
+  std::string ws = in.substr(0, pos);
+  std::string hs = in.substr(pos + 1);
+  auto all_digits = [](const std::string &s) {
+    if (s.empty() || s.size() > 4) return false;
+    for (char c : s) {
+      if (c < '0' || c > '9') return false;
+    }
+    return true;
+  };
+  if (!all_digits(ws) || !all_digits(hs)) return "";
+
+  int w = std::stoi(ws);
+  int h = std::stoi(hs);
+  if (w < h) std::swap(w, h);
+  if (w < 160 || w > 4096 || h < 120 || h > 4096) return "";
+  w &= ~1;  // H.264/H.265 要求偶数
+  h &= ~1;
+  return std::to_string(w) + "x" + std::to_string(h);
+}
+
 // Helper function to generate a random ID
 std::string randomId(size_t length) {
   using std::chrono::high_resolution_clock;
@@ -329,6 +359,20 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
 
     dc->onOpen([id, dc]() {
       std::cout << "DataChannel from " << id << " open" << std::endl;
+
+      // 能力协商：告知前端本端支持的动态配置项。
+      // 旧前端不认识此消息（无 type 分支匹配，走默认日志分支），不受影响；
+      // 新前端只有在收到 resolution_switch=true 时才会下发具体分辨率，
+      // 避免旧固件"改编码器尺寸但不缩放"导致花屏。
+      json caps;
+      caps["type"] = "video_caps";
+      caps["resolution_switch"] = true;   // 支持 "1920x1080" 形式的编码分辨率切换
+      caps["format_switch"] = false;      // 暂不支持动态切换采集格式
+      try {
+        dc->send(caps.dump());
+      } catch (const std::exception &e) {
+        std::cerr << "Failed to send video caps: " << e.what() << std::endl;
+      }
     });
 
     dc->onMessage([id, dc, wws, this](auto data) {
@@ -344,10 +388,41 @@ shared_ptr<rtc::PeerConnection> WebRTCPublisher::createPeerConnection(
               std::cout << "Received video config from " << id << std::endl;
 
               if (video_capturer_) {
-                std::string resolution = msg.value("resolution", "-1");
-                int fps = msg.value("fps", -1);
-                int bitrate = msg.value("bitrate", -1);
-                std::string format = msg.value("format", "-1");
+                // 兼容旧客户端：resolution 缺失或非字符串时一律按 "-1"（保持）处理
+                std::string resolution = "-1";
+                if (msg.contains("resolution") && msg["resolution"].is_string()) {
+                  std::string normalized = normalizeResolution(msg["resolution"].get<std::string>());
+                  if (normalized.empty()) {
+                    std::cerr << "Invalid resolution ignored: "
+                              << msg["resolution"].get<std::string>() << std::endl;
+                  } else {
+                    resolution = normalized;
+                  }
+                }
+                // 兼容：数值字段可能是 int / float / 数字字符串，解析失败按 "-1"(保持) 处理，
+                // 避免旧/异构客户端因类型不匹配导致整条消息被丢弃。
+                auto readInt = [&msg](const char *key) -> int {
+                  auto it = msg.find(key);
+                  if (it == msg.end()) return -1;
+                  if (it->is_number_integer()) return it->get<int>();
+                  if (it->is_number_float()) return static_cast<int>(it->get<double>());
+                  if (it->is_string()) {
+                    try {
+                      return std::stoi(it->get<std::string>());
+                    } catch (const std::exception &) {
+                      return -1;
+                    }
+                  }
+                  return -1;
+                };
+                auto readStr = [&msg](const char *key) -> std::string {
+                  auto it = msg.find(key);
+                  if (it != msg.end() && it->is_string()) return it->get<std::string>();
+                  return "-1";
+                };
+                int fps = readInt("fps");
+                int bitrate = readInt("bitrate");
+                std::string format = readStr("format");
 
                 std::cout << "Video config: ";
                 if (resolution != "-1") std::cout << resolution << ", ";
@@ -996,6 +1071,12 @@ void WebRTCPublisher::startWsHeartbeat() {
                 {"timestamp", now}
               };
               ws_->send(heartbeat.dump());
+              // 关键修复：发送成功即说明 socket 仍可用，必须刷新活动时间。
+              // 旧实现只把"收到消息"算作活动，而服务端是纯中继——ping 能否回显
+              // 取决于服务端 clients[id] 是否存在。一旦回显丢失（服务端 close
+              // 竞态把注册删了），lastWsActivity_ 永不更新，就会每 10s 误判超时、
+              // 重置 ws_ 进而把已建立的 PeerConnection/DataChannel 全部踢掉。
+              lastWsActivity_.store(static_cast<uint64_t>(now));
               // std::cout << "Sent heartbeat, last activity: " << elapsed << "s ago" << std::endl;
             } catch (const std::exception &e) {
               std::cerr << "Failed to send heartbeat: " << e.what() << std::endl;
